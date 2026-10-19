@@ -243,7 +243,7 @@ L0 = shrinkage_loss(synthetic_md(ρ=0.0), Date(2015,1,2), Date(2018,12,31))
 @test shrinkage_loss(perturb_after(synthetic_md(ρ=0.8), Date(2018,12,31)), Date(2015,1,2), Date(2018,12,31)) == L8
 ```
 
-`synthetic_md(; ρ, seed=5660)` is a test helper in `code/test/helpers.jl` (later tasks reuse it), along with `perturb_after(md, d)`, which doubles every price after date `d`. It builds a `MyMarketData` for 2014–2018 with 4 sectors of 12 names, β = 1, residual correlation ρ within each sector, and SPY as the market factor.
+`synthetic_md(; ρ, seed=5660)` is a test helper in `code/test/helpers.jl` (later tasks reuse it), along with `perturb_after(md, d)`, which doubles every price after date `d`. It builds a `MyMarketData` for 2014–2019 (the extra year exists so the look-ahead canary has data to perturb) with 4 sectors of 12 names, β = 1, residual correlation ρ within each sector, and SPY as the market factor.
 
 - [ ] **Step 2: Run the tests and confirm they fail.** `julia --project=code code/test/test_covariance.jl` → FAIL.
 - [ ] **Step 3: Implement `Covariance.jl`.**
