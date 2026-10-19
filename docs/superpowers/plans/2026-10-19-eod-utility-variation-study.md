@@ -384,6 +384,10 @@ b = project_gbm([1.,2.],[50.,60.],10.,[.1,.2],[9. 2; 2 16],.04; rng=MersenneTwis
 @test a.μ == b.μ && a.σ == b.σ
 ```
 
+- **Correlated two-asset check through `project_gbm` (added after review).** Use n = [1, −1] (and [1, 1]) with a non-zero off-diagonal Σ_g. Compare μ[T] and σ[T] against exact lognormal moments, with V = T·Δt²·Σ_g:
+  - m_i = S_i·exp(μ_i·TΔt + ½V_ii)
+  - E[S_iS_j] = S_iS_j·exp((μ_i + μ_j)·TΔt + ½(V_ii + V_jj + 2V_ij))
+  This catches transposition or scaling errors in the multi-asset loop.
 - [ ] **Step 2: Run them and confirm they fail.** `julia --project=code code/test/test_projection.jl` → FAIL.
 - [ ] **Step 3: Implement `Projection.jl`.**
 - [ ] **Step 4: Run them and confirm they pass.**
