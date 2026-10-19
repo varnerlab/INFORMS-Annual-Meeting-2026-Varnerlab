@@ -36,6 +36,7 @@
   - Scripts activate `code/` and contain only a `main()` plus constants. Every reusable function lives in `code/src`.
 - **CHEME-5660 conventions:**
   - Every type is a `mutable struct My…` with an empty `new()` constructor and a `build(::Type{T}, data::NamedTuple)` factory, following the pattern in 5660 `Factory.jl`.
+  - A type whose fields have defaults in this plan, such as `MyLongShortCDRule()` or `MyMPCSpec()`, also gets a zero-argument (or keyword) outer constructor that calls `build` with those defaults.
   - Unicode math names.
   - Every function has a docstring that states units.
   - Seeded RNGs, with default seed 5660.
@@ -235,7 +236,7 @@ c2(λ) = growth_covariance(build(MyShrunkResidualCovariance, (λ=λ, window=126)
 
 ### Task 4: Shared constraint set and the utility rules (CD, CES, Stone–Geary)
 
-**Files:** Create `code/src/Allocators.jl`, `code/test/test_allocators_utility.jl`, `scripts/dev/make_engine_fixture.jl`, `code/test/fixtures/engine_cd_case.jld2`
+**Files:** Create `code/src/Allocators.jl`, `code/test/test_allocators_utility.jl`, `code/test/helpers.jl` (the `P` and `P5` builders, shared with Task 5), `scripts/dev/make_engine_fixture.jl`, `code/test/fixtures/engine_cd_case.jld2`
 
 **Interfaces:**
 - Consumes: `MySIMParameterEstimate`, Σ_g from Task 3.
@@ -441,12 +442,13 @@ b = project_gbm([1.,2.],[50.,60.],10.,[.1,.2],[9. 2; 2 16],.04; rng=MersenneTwis
     - `trades::DataFrame` (`date`, `ticker`, `qty`, `price`, `cost`)
     - `decisions::DataFrame` (`date`, `reason`, `status`, `n_names`, `invested_frac`, `μ_T`, `σ_T`)
     - `targets::Dict{Date,Dict{String,Float64}}`
+    - `projections::Dict{Date,MyProjection}`: the full μ_τ and σ_τ vectors from each decision, needed for Task 16 fig4
   - `run_backtest(md::MyMarketData, cfg::MyRunConfig)::MyBacktestResult`
 - **The daily loop at day t:**
   1. Fill pending orders at `open[t]`: whole shares, `trunc(target − held)`, with costs.
   2. Accrue g_f on positive cash, and charge the borrow fee on short notional.
   3. Mark equity at `close[t]`.
-  4. Update EWLS for **every universe ticker** from day t's growth. When `σ_m_mode == :ewls`, also update σ_m from SPY growth. With `ewls_calendar`, apply one update per calendar entry equal to t, using the latest two trading-day closes on or before that date.
+  4. Update EWLS for every ticker in `keys(cfg.base_sim) ∩ md.tickers` from day t's growth. Every basket name must be in `base_sim`; otherwise `run_backtest` throws an `ArgumentError`. When `σ_m_mode == :ewls`, also update σ_m from SPY growth. With `ewls_calendar`, apply one update per calendar entry equal to t, using the latest two trading-day closes on or before that date.
   5. Compute `market_state`, γ, μ_g and Σ_g for the current basket.
   6. Run `check_trigger`.
   7. On a fire:
@@ -523,7 +525,7 @@ td = Date.(["2026-05-28","2026-05-29","2026-06-01","2026-07-01","2026-07-02","20
   - start 2026-05-20, stop 2026-09-04
   - `forced_dates` = [05-29, 06-29, 07-28, 08-26, 09-01], `natural_triggers=false`, `ewls_calendar` from the log
 
-  It writes `results/validation/allocation_check.csv` (`date`, `pass`, `max_abs_diff`, `worst`, `only_sim`, `only_trial`). It also writes `results/validation/equity_check.csv`: simulated equity next to the trial's `V_t`, with the −$882 options P&L noted.
+  It writes `results/validation/allocation_check.csv` (`date`, `pass`, `max_abs_diff`, `worst`, `only_sim`, `only_trial`) and `results/validation/targets_compare.csv` (`date`, `ticker`, `w_sim`, `w_trial`), which Task 16 fig5 uses. It also writes `results/validation/equity_check.csv`: simulated equity next to the trial's `V_t`, with the −$882 options P&L noted.
   - Expected: `pass = true` on all 5 dates.
   - **If any date fails: STOP.** Write a per-name γ comparison table and report it to the user before going further. Likely causes are IEX vs consolidated closes, and the 08-21 10:43 intraday bar. Do not loosen `tol` without the user's sign-off.
 - [ ] **Step 6: Run the band check (informational).** Rerun with `natural_triggers=true` and the forced dates removed, once with C1 and once with C2 (λ = 0.5 placeholder until Task 13). Write `results/validation/band_check.csv`, with the trigger dates and reasons next to the trial's.
@@ -538,12 +540,14 @@ td = Date.(["2026-05-28","2026-05-29","2026-06-01","2026-07-01","2026-07-02","20
 - Produces:
   - `assign_quotas(sector_groups::Dict{String,Vector{Int}}, K::Int)::Dict{String,Int}`: port of engine `Bandit.jl:6-21`.
   - `beat_spy_reward(arm::Vector{Int}, day::Int, md::MyMarketData, α::Vector, β::Vector, g_m::Vector, λ::Vector; horizon=21)::Int`: 1 if the closed-form-CD-weighted buy-and-hold log return of `arm` over [day, day+21] is greater than log(SPY_{day+21}/SPY_day), else 0.
+    - Closed form: nᵢ = B·(γᵢ/Σ_{γ>0}γ)/Sᵢ for γᵢ > 0, and 0 otherwise. If no γ is positive, the arm holds cash, with return 0.
   - `train_sector_bandit(sector_idx::Vector{Int}, q::Int, train_days::UnitRange{Int}, md, α, β, g_m, λ; seed::Int, ε_floor=0.05)::NamedTuple{(:best_arm, :wins, :losses, :n_unique)}`: engine ε schedule; arm value (1+wins)/(2+wins+losses).
   - `quarter_starts(md, start::Date, stop::Date)::Vector{Date}`: the first trading day of each calendar quarter.
   - `bandit_basket_schedule(md::MyMarketData, retrain_dates::Vector{Date}; K=33, seed::Int)::Vector{Pair{Date,Vector{String}}}`
     - At each retrain date R, fit an OLS SIM per ticker on [2014-01-03, R).
     - `train_days` = every d with `md.dates[d+21] < R`.
     - Combine the sector winners into one basket.
+  - `random_sector_basket(md::MyMarketData, K::Int; seed::Int)::Vector{String}`: a random draw that meets the `assign_quotas` quotas. `random_matched_schedule` uses it for its first entry, and Task 14 uses it for the Stage 0 baskets.
   - `random_matched_schedule(bandit::Vector{Pair{Date,Vector{String}}}, md; seed::Int)::Vector{Pair{Date,Vector{String}}}`: the first entry is a random draw with the same quotas. Each later entry swaps, per sector, as many names as the bandit swapped, with the new names chosen at random.
 
 - [ ] **Step 1: Write the failing tests.**
@@ -588,7 +592,12 @@ td = Date.(["2026-05-28","2026-05-29","2026-06-01","2026-07-01","2026-07-02","20
 
 **Files:** Create `scripts/01_calibrate.jl`; outputs `config/frozen/base_sim_2014_2015.csv`, `config/frozen/base_sim_2014_2024.csv` (`ticker, α, β, σ_ε, r²`) and `config/frozen/calibration.toml` (`σ_m_2014_2015`, `σ_m_2014_2024`, `λ_shrink`)
 
-- [ ] **Step 1: Write `scripts/01_calibrate.jl`.** It runs `fit_base_sim` for each window, then `choose_shrinkage(md, Date(2014,1,3), Date(2024,12,31))`.
+- [ ] **Step 1: Add the base-fit I/O to `code/src/SIM.jl`, test first.**
+  - `write_base_sim(path::String, fit::NamedTuple{(:params,:σ_m)})` writes the CSV (`ticker, α, β, σ_ε, r²`).
+  - `read_base_sim(path::String)::Dict{String,MySIMParameterEstimate}` reads it back.
+  - Test: a round trip in `code/test/test_sim.jl` returns identical values.
+  - σ_m is stored in `calibration.toml`.
+- [ ] **Step 1b: Write `scripts/01_calibrate.jl`.** It runs `fit_base_sim` for each window, then `choose_shrinkage(md, Date(2014,1,3), Date(2024,12,31))`.
 - [ ] **Step 2: Run it.** `julia -t 24 --project=code scripts/01_calibrate.jl`. Expected:
   - both CSVs list every universe ticker
   - 1.5 ≤ σ_m ≤ 4.0 yr⁻¹ (SPY annualized vol 9–25%)
