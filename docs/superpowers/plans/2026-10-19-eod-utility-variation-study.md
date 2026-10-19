@@ -378,7 +378,7 @@ p = project_gbm([10.0], [100.0], 0.0, [0.10], Σg, 0.0; T=21, N=200_000, rng=Mer
 m21 = 1000 * exp(0.10*21Δt + 0.5*0.04*21Δt); s21 = m21 * sqrt(exp(0.04*21Δt) - 1)
 @test isapprox(p.μ[21], m21; rtol=0.005)
 @test isapprox(p.σ[21], s21; rtol=0.02)
-@test project_gbm([-10.0],[100.0],2000.0,[0.10],Σg,0.0; rng=MersenneTwister(1)).μ[21] < 1000.0
+@test isapprox(project_gbm([-10.0],[100.0],2000.0,[0.10],Σg,0.0; N=200_000, rng=MersenneTwister(1)).μ[21], 2000 - 1000*exp(0.10*21Δt + 0.5*0.04*21Δt); rtol=0.002)
 a = project_gbm([1.,2.],[50.,60.],10.,[.1,.2],[9. 2; 2 16],.04; rng=MersenneTwister(7))
 b = project_gbm([1.,2.],[50.,60.],10.,[.1,.2],[9. 2; 2 16],.04; rng=MersenneTwister(7))
 @test a.μ == b.μ && a.σ == b.σ
