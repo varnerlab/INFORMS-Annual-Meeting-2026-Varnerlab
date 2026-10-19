@@ -1,1 +1,4 @@
 .superpowers/
+data/
+results/runs/
+*.tmp
