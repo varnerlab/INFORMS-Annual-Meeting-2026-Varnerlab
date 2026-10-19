@@ -37,19 +37,6 @@ function _gbm_chol(Σ_g::Matrix{Float64})
 end
 
 """
-    simulate_growth_step(μ_g, Σ_g, N, rng)::Matrix{Float64}
-
-Simulate N one-step growth rates (yr⁻¹) from the GBM: g = (Δt·μ_g + √Δt·L·Z)/Δt with LLᵀ = Δt·Σ_g.
-Returns a K×N matrix with sample mean ≈ μ_g (yr⁻¹) and sample covariance ≈ Σ_g (yr⁻²). Test helper
-for the growth-rate reproduction check.
-"""
-function simulate_growth_step(μ_g::Vector{Float64}, Σ_g::Matrix{Float64}, N::Int, rng::AbstractRNG)::Matrix{Float64}
-    Δt = _PROJ_DT; L = _gbm_chol(Σ_g)
-    Z = randn(rng, length(μ_g), N)
-    return (Δt .* μ_g .+ sqrt(Δt) .* (L * Z)) ./ Δt
-end
-
-"""
     project_gbm(n, prices, cash, μ_g, Σ_g, g_f; T=21, N=1000, rng)::MyProjection
 
 Multi-asset GBM forward projection of a portfolio (CHEME-5660 growth-rate MA-GBM):
