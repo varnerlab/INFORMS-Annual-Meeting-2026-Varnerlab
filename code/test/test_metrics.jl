@@ -39,4 +39,13 @@ curve(r) = 100.0 .* vcat(1.0, cumprod(1 .+ r))
     @test isnan(scorecard([100.0, 101, 102.01, 103.0301], [100.0, 101, 99, 102], zeros(4)).sharpe)
     @test_throws ArgumentError scorecard([1.0, 2, 3], [1.0, 2], zeros(3))
     @test_throws ArgumentError scorecard([1.0, 2], [1.0, 2], zeros(2))
+    @test_throws ArgumentError scorecard([1.0, 2, 3], [1.0, 2, 3], zeros(3))
+    @test_throws ArgumentError scorecard([1.0, 2, 0, 3], [1.0, 2, 3, 4], zeros(4))
+    @test_throws ArgumentError scorecard([1.0, 2, 3, 4], [1.0, 2, -3, 4], zeros(4))
+
+    # Perfect fit with g_f > 0: degenerate SE -> alpha_t NaN.
+    s6 = scorecard(spy, spy, fill(0.03, 5))
+    @test isnan(s6.alpha_t)
+    @test s6.alpha_ann ≈ 0 atol = 1e-10
+    @test s6.beta ≈ 1
 end

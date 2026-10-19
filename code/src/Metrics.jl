@@ -16,14 +16,18 @@ Conventions (Δt = 1/252 yr):
   homoskedastic SE `sqrt(s²·(1/n + x̄²/Sxx))`, `s² = SSR/(n-2)`; `beta` is the slope.
 - `ann_return = (V_end/V_start)^(252/n_days) - 1` (geometric, yr⁻¹); `ann_vol = √252·std(r)` (yr⁻¹ᐟ²).
 
-Throws `ArgumentError` if lengths differ or fewer than 3 points are given. If SPY returns have
-zero variance, `beta`, `alpha_ann`, `alpha_t` are `NaN`.
+Throws `ArgumentError` if lengths differ, fewer than 4 points are given (the regression needs at
+least 3 returns so that n-2 ≥ 1 residual degrees of freedom), or any equity/SPY value is ≤ 0.
+If SPY returns have zero variance, `beta`, `alpha_ann`, `alpha_t` are `NaN`. If the regression
+fits (numerically) perfectly, i.e. SSR ≤ 1e-20·Syy (e.g. equity identical to SPY), the standard
+error is degenerate and `alpha_t = NaN`.
 """
 function scorecard(equity::Vector{Float64}, spy_close::Vector{Float64}, g_f::Vector{Float64})
     N = length(equity)
     (length(spy_close) == N && length(g_f) == N) ||
         throw(ArgumentError("equity, spy_close, g_f must have equal length; got $N, $(length(spy_close)), $(length(g_f))"))
-    N >= 3 || throw(ArgumentError("need at least 3 points, got $N"))
+    N >= 4 || throw(ArgumentError("need at least 4 points (3 returns), got $N"))
+    (all(>(0), equity) && all(>(0), spy_close)) || throw(ArgumentError("equity and spy_close must be > 0"))
     Δt = 1 / 252
     r = equity[2:end] ./ equity[1:end-1] .- 1
     rs = spy_close[2:end] ./ spy_close[1:end-1] .- 1
@@ -45,10 +49,14 @@ function scorecard(equity::Vector{Float64}, spy_close::Vector{Float64}, g_f::Vec
     else
         beta = sum((x .- x̄) .* (y .- ȳ)) / Sxx
         a = ȳ - beta * x̄
-        s² = sum(abs2, y .- a .- beta .* x) / (n - 2)
-        se = sqrt(s² * (1 / n + x̄^2 / Sxx))
+        ssr = sum(abs2, y .- a .- beta .* x)
+        Syy = sum(abs2, y .- ȳ)
         alpha_ann = 252 * a
-        alpha_t = se == 0 ? (a == 0 ? NaN : copysign(Inf, a)) : a / se
+        if ssr <= 1e-20 * Syy
+            alpha_t = NaN
+        else
+            alpha_t = a / sqrt(ssr / (n - 2) * (1 / n + x̄^2 / Sxx))
+        end
     end
 
     ann_return = (equity[end] / equity[1])^(252 / n) - 1
