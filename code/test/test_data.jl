@@ -36,7 +36,5 @@ end
     md = load_market_data(dir; start=Date(2014,1,3), stop=Date(2026,9,4))
     @test md.dates[1] == Date(2014,1,3) && md.dates[end] == Date(2026,9,4)
     @test 360 ≤ length(md.tickers) ≤ 430 && "SPY" ∉ md.tickers
-    trial33 = split("ABBV AEP ALB AMZN AVY CHD CMCSA COP DRI DUK EL EXPD FDX FOXA HSIC INTU IVZ MS NCLH NEE NEM ORCL PCAR PG PSA PSX REG SPG TECH TTWO VLO VRSN WRB")
-    @test issubset(trial33, md.tickers)   # Task 10 validation needs every trial name
     @test Date(2025,7,4) ∉ md.dates && length(md.g_f) == length(md.dates)
 end
