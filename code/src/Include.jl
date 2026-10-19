@@ -18,6 +18,8 @@ include("Data.jl")
 include("SIM.jl")
 include("Covariance.jl")
 include("Allocators.jl")
+include("AllocatorsMeanVariance.jl")
+include("AllocatorsLongShort.jl")
 
 export MyMarketData, build, load_market_data, growth_rates, index_of, DATA_FILES,
     MySIMParameterEstimate, MyEWLSState, MyEWVarState, estimate_sim, fit_base_sim, ewls_init, ewls_update!,
@@ -26,3 +28,4 @@ export AbstractCovarianceModel, MySIMCovariance, MyShrunkResidualCovariance, gro
     residual_matrix, shrinkage_loss, choose_shrinkage
 export AbstractPortfolioRule, MyCobbDouglasRule, MyCESRule, MyStoneGearyRule, MyConstraintSet,
     MyAllocationProblem, MyAllocationResult, allocate, add_shared_constraints!
+export MyMinVarRule, MyTangentRule, MyLongShortCDRule, max_investable, expected_growth
