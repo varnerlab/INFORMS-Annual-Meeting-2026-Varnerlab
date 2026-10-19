@@ -8,15 +8,21 @@ using Downloads
 using DataFrames
 using CSV
 using JLD2
+using JuMP
+using Clarabel
+using SCS
 
 include("Types.jl")
 include("Factory.jl")
 include("Data.jl")
 include("SIM.jl")
 include("Covariance.jl")
+include("Allocators.jl")
 
 export MyMarketData, build, load_market_data, growth_rates, index_of, DATA_FILES,
     MySIMParameterEstimate, MyEWLSState, MyEWVarState, estimate_sim, fit_base_sim, ewls_init, ewls_update!,
     ewvar_init, ewvar_update!, market_state, preference_weights
 export AbstractCovarianceModel, MySIMCovariance, MyShrunkResidualCovariance, growth_covariance,
     residual_matrix, shrinkage_loss, choose_shrinkage
+export AbstractPortfolioRule, MyCobbDouglasRule, MyCESRule, MyStoneGearyRule, MyConstraintSet,
+    MyAllocationProblem, MyAllocationResult, allocate, add_shared_constraints!
