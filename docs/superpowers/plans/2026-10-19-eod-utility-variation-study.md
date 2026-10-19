@@ -479,7 +479,7 @@ b = project_gbm([1.,2.],[50.,60.],10.,[.1,.2],[9. 2; 2 16],.04; rng=MersenneTwis
     - `projections::Dict{Date,MyProjection}`: the full μ_τ and σ_τ vectors from each decision, needed for Task 16 fig4
   - `run_backtest(md::MyMarketData, cfg::MyRunConfig)::MyBacktestResult`
 - **The daily loop at day t:**
-  1. Fill pending orders at `open[t]`: whole shares, `trunc(target − held)`, with costs.
+  1. Fill pending orders at `open[t]`: whole shares, q = trunc(Int, target) − held (R27: round the TARGET toward zero, then take the difference, so |position| ≤ |target| and ε-pinned names fully exit), with costs. Sells and short sales go first, then buys scaled per R25.
   2. Accrue g_f on positive cash, and charge the borrow fee on short notional.
   3. Mark equity at `close[t]`.
   4. Update EWLS for every ticker in `keys(cfg.base_sim) ∩ md.tickers` from day t's growth. Every basket name must be in `base_sim`; otherwise `run_backtest` throws an `ArgumentError`. When `σ_m_mode == :ewls`, also update σ_m from SPY growth. With `ewls_calendar`, apply one update per calendar entry equal to t, using the latest two trading-day closes on or before that date.
@@ -510,6 +510,10 @@ r = run_backtest(crash_md(), cfg); @test count(==(:drawdown), r.decisions.reason
 ```
 
   `held_value`, `perturb_after`, `crash_md` (−40% over 5 days, then flat) and `with` are test helpers.
+  - **Regression tests (added after review):**
+    - Every position is 0 the day after a `:no_preferred` fill.
+    - |position| ≤ |target shares| after every fill.
+    - A name entering the basket at a quarterly swap gets the weight implied by EWLS state maintained daily for the whole base_sim universe (R6). Use an uncapped w_max so the result is not hidden by the cap.
 - [ ] **Step 2: Run them and confirm they fail.** `julia --project=code code/test/test_backtest.jl` → FAIL.
 - [ ] **Step 3: Implement `Backtest.jl`.**
 - [ ] **Step 4: Run them and confirm they pass**, then run the full suite: `julia --project=code -e 'using Pkg; Pkg.test()'` → all pass.
