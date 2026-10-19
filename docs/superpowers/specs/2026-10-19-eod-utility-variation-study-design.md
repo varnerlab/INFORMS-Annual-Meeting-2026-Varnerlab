@@ -100,7 +100,7 @@ Port this from the engine's `solve_constrained_cd` (`modified_cobb_douglas_examp
   - In effect, every stock gets a 1% core position (33% for a 33-stock basket), and the preferences γ split the remaining 67%.
   - A baseline the size of CD's floor (ε ≈ 0.001 shares) would make Stone–Geary a copy of CD.
   - The 1% core also directly limits the concentration found on 10-19.
-  - If the baselines plus the caps leave no room to invest, the allocator falls back to holding the baselines only and logs it.
+  - If the baselines plus the limits leave no feasible allocation, the allocator keeps the previous holdings and records status `:infeasible`, the same as every other rule (ruling made during the build, 2026-10-19).
   - Tier 2 tests baselines of 0.5% and 2%.
 - **Min-variance:** minimize wᵀΣ_g w, as in L6b/L7a, under the shared constraints.
 - **Tangent (max Sharpe):** maximize (μ_gᵀw − g_f)/√(wᵀΣ_g w). This uses L7a's excess-growth form, with e = μ_g − g_f·1 and g_f the risk-free growth rate.

@@ -36,7 +36,7 @@
   - Scripts activate `code/` and contain only a `main()` plus constants. Every reusable function lives in `code/src`.
 - **CHEME-5660 conventions:**
   - Every type is a `mutable struct My…` with an empty `new()` constructor and a `build(::Type{T}, data::NamedTuple)` factory, following the pattern in 5660 `Factory.jl`.
-  - A type whose fields have defaults in this plan, such as `MyLongShortCDRule()` or `MyMPCSpec()`, also gets a zero-argument (or keyword) outer constructor that calls `build` with those defaults.
+  - A type whose fields have defaults in this plan, such as `MyLongShortCDRule()` or `MyMPCSpec()`, gets an **inner** zero-argument constructor that fills those defaults. Its `build` starts from that constructor and overrides the fields it is given. (Julia 1.12 does not allow an outer zero-argument constructor next to the empty inner `new()`.)
   - Unicode math names.
   - Every function has a docstring that states units.
   - Seeded RNGs, with default seed 5660.
@@ -472,7 +472,7 @@ b = project_gbm([1.,2.],[50.,60.],10.,[.1,.2],[9. 2; 2 16],.04; rng=MersenneTwis
      - Queue orders for t+1.
      - Run `project_gbm` on the targets, with `rng = MersenneTwister(hash((cfg.seed, t)))`.
      - Reset τ = 0.
-     - Set `last_alloc_was_cash = all(n .≤ ε + eps())`.
+     - Set `last_alloc_was_cash = (result.status == :no_preferred)`. Using the status rather than share counts matters because Stone–Geary's `:no_preferred` holds its 1% baselines, not ε. Min-variance and tangent never set it.
 
   EWLS starts from `ewls_init` using `base_sim`. C2 residuals use the trailing 126 days of basket growth.
 
