@@ -192,6 +192,12 @@ d = Date(2025,5,1); spy2 = copy(spy); spy2[findfirst(==(d), dates)+1:end] .*= 2
 @test market_state(spy, dates, d) == market_state(spy2, dates, d)
 ```
 
+- **Value tests (added after review).** These use trading-day dates (weekdays only) so that the 105-day window crosses weekends:
+  - `estimate_sim` on a hand-computable case asserts σ_ε with the N−2 denominator, and r².
+  - `market_state` asserts λ against a hand-computed EMA ratio.
+  - It asserts that ḡ_M equals the mean of exactly the last 252 growth rates when more than 252 exist, and of all of them when fewer exist.
+  - It asserts that the EMA window starts at the first close with a date after d − 105 days.
+- **Performance:** `market_state` slices only the last ≤ 253 closes for ḡ_M. It must not rebuild the full history on each call.
 - [ ] **Step 2: Run them and confirm they fail.** `julia --project=code code/test/test_sim.jl` → FAIL (undefined).
 - [ ] **Step 3: Implement `SIM.jl`.**
 - [ ] **Step 4: Run them and confirm they pass.**
