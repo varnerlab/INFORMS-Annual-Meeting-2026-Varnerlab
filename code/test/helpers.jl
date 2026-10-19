@@ -52,3 +52,80 @@ function problem_from_engine(fx::AbstractDict; Δt::Float64=1/252)
     return build(MyAllocationProblem, (γ=fx["γ"], μ_g=zeros(K), Σ_g=fx["Σ"] ./ Δt, prices=fx["p"],
         W=fx["B"], g_f=0.0, constraints=cs))
 end
+
+# ---- Backtest fixtures (Task 9; reused by Task 12) ----
+
+# Prices after trading day k (an index into md.dates) doubled.
+perturb_after(md::MyMarketData, k::Int) = perturb_after(md, md.dates[k])
+
+# Synthetic market for the backtest tests: `n` weekdays from 2025-01-02, three stocks AAA/BBB/CCC
+# (sectors S1, S2, S2) plus SPY, on deterministic geometric paths. log S = log S₀ + drift·t (t in yr)
+# + βᵢ·(SPY wiggle) + own wiggle; the wiggles are sinusoids (no RNG) so growth rates vary from day to
+# day, and AAA/BBB share a wiggle frequency (correlated SIM residuals for C2). Opens are the geometric
+# midpoints of consecutive closes; volume varies by day around 2e4 shares/day (so ADV and impact
+# matter); g_f varies by day around 0.04 yr⁻¹.
+function bt_md(; n::Int=120, drift=[0.30, 0.15, -0.10], spy_drift=0.12, logS=nothing, logspy=nothing)
+    dates = first(filter(d -> dayofweek(d) <= 5, collect(Date(2025,1,2):Day(1):Date(2027,12,31))), n)
+    k = collect(0:n-1); t = k ./ 252
+    spy_wig = 0.02 .* sin.(0.35 .* k)
+    lspy = something(logspy, log(500.0) .+ spy_drift .* t .+ spy_wig)
+    β = [1.0, 0.8, 1.2]; S0 = [50.0, 120.0, 80.0]; ω = [0.5, 0.5, 0.9]; φ = [0.3, 0.4, 1.7]
+    L = something(logS, hcat([log(S0[i]) .+ drift[i] .* t .+ β[i] .* spy_wig .+ 0.015 .* sin.(ω[i] .* k .+ φ[i])
+        for i in 1:3]...))
+    cl = exp.(L); spy = exp.(lspy)
+    op = vcat(cl[1:1, :], sqrt.(cl[1:end-1, :] .* cl[2:end, :]))
+    spy_op = vcat(spy[1], sqrt.(spy[1:end-1] .* spy[2:end]))
+    return build(MyMarketData, (dates=dates, tickers=["AAA", "BBB", "CCC"], open=op, close=cl,
+        volume=[2e4 * (1 + 0.5 * sin(0.2 * i + j)) for i in 1:n, j in 1:3], spy_open=spy_op, spy_close=spy, sector=["S1", "S2", "S2"],
+        g_f=[0.04 + 0.01 * sin(0.1 * i) for i in 1:n]))
+end
+
+# bt_md's market with a crash: gentle growth to day 40, then stocks and SPY fall 40% over days 41–45
+# (geometrically), then stay flat.
+function crash_md(; n::Int=120)
+    lvl(i) = i <= 40 ? 0.0005 * i : (i <= 45 ? 0.02 + (i - 40) / 5 * log(0.6) : 0.02 + log(0.6))
+    path = [lvl(i) for i in 1:n]
+    S0 = [50.0, 120.0, 80.0]
+    return bt_md(; n=n, logS=hcat([log(S0[j]) .+ path for j in 1:3]...), logspy=log(500.0) .+ path)
+end
+
+# Base SIM fit for bt_md's tickers (α yr⁻¹, β, σ_ε yr⁻¹); `α` overrides the intercepts.
+function bt_base_sim(; α=[0.2, 0.05, -0.1])
+    return Dict(t => build(MySIMParameterEstimate, (α=α[i], β=[1.0, 0.8, 1.2][i], σ_ε=[1.5, 2.0, 2.5][i], r²=0.5))
+        for (i, t) in enumerate(["AAA", "BBB", "CCC"]))
+end
+
+# Run config on bt_md: CD, C1, w_max 0.4, trial σ_g_max, default MPC, start at day 21, stop at the
+# last day, whole basket; keyword arguments override any field.
+function bt_cfg(md::MyMarketData; kw...)
+    defaults = (rule=MyCobbDouglasRule(), covariance=MySIMCovariance(), w_max=0.4, s_max=1.0,
+        σ_g_max=0.12 * sqrt(252), mpc=MyMPCSpec(), start=md.dates[21], stop=md.dates[end], W0=100_000.0,
+        seed=5660, basket_schedule=[md.dates[21] => copy(md.tickers)], forced_dates=Date[],
+        natural_triggers=true, ewls_calendar=nothing, base_sim=bt_base_sim(), σ_m=2.0, σ_m_mode=:ewls,
+        K_turnover_frac=0.10, borrow_rate=0.0075, label="bt")
+    return build(MyRunConfig, merge(defaults, NamedTuple(kw)))
+end
+
+# Copy of a run config with some fields replaced.
+with(cfg::MyRunConfig; kw...) =
+    build(MyRunConfig, merge((; (f => getfield(cfg, f) for f in fieldnames(MyRunConfig))...), NamedTuple(kw)))
+
+# Share positions (ticker => shares) after every trade dated on or before each of res.dates.
+function positions_by_day(res)
+    pos = Dict{String,Int}(); out = Vector{Dict{String,Int}}(undef, length(res.dates)); k = 1
+    tr = res.trades
+    for (t, d) in enumerate(res.dates)
+        while k <= length(tr.date) && tr.date[k] <= d
+            pos[tr.ticker[k]] = get(pos, tr.ticker[k], 0) + tr.qty[k]; k += 1
+        end
+        out[t] = copy(pos)
+    end
+    return out
+end
+
+# Value (USD) of the positions rebuilt from res.trades, at each day's close.
+function held_value(res, md::MyMarketData)
+    col = Dict(t => j for (j, t) in enumerate(md.tickers))
+    return [sum((n * md.close[index_of(md, d), col[tk]] for (tk, n) in pos); init=0.0)
+        for (d, pos) in zip(res.dates, positions_by_day(res))]
+end
