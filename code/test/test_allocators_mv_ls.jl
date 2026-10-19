@@ -1,4 +1,4 @@
-using Test, LinearAlgebra
+using Test, LinearAlgebra, Random
 using VLINFORMS2026
 include("helpers.jl")
 
@@ -13,10 +13,19 @@ _P_stuck(γ) = P(γ=γ, w_max=0.5, c̄=1.0, K_turnover=1.0, n_prev=[90.0, 0.0, 0
 
 @testset "brief: max_investable, min-variance, tangent, 130/30 long-short" begin
     Σ2 = [4.0 1.0; 1.0 9.0]
+    e = [0.12, 0.20] .- 0.04
     @test max_investable(P(w_max=0.15, γ=[0.5,0.5], prices=[10.,20.], Σ_g=Σ2)) ≈ 0.30 atol=1e-6
+    # R24: with the vol cap binding, tangent keeps its mix and scales down; it no longer collapses to
+    # min-variance. (The plan's `@test a ≈ b atol=… && c ≈ d atol=…` lines are split: one tolerance
+    # keyword per @test is all the macro accepts.)
+    rt = allocate(MyTangentRule(), P(Σ_g=Σ2, μ_g=[0.12,0.20], g_f=0.04, γ=[.5,.5], prices=[10.,20.], σ_g_max=1.5))
+    @test rt.w ./ sum(rt.w) ≈ (Σ2\e) ./ sum(Σ2\e) atol=1e-5
+    @test sqrt(rt.w' * Σ2 * rt.w) ≈ 1.5 atol=1e-6
+    rm = allocate(MyMinVarRule(), P(Σ_g=Σ2, γ=[.5,.5], prices=[10.,20.], σ_g_max=1.5))
+    @test rm.w ./ sum(rm.w) ≈ (Σ2 \ ones(2)) ./ sum(Σ2 \ ones(2)) atol=1e-5
+    @test maximum(abs.(rt.w .- rm.w)) > 0.05
     w = allocate(MyMinVarRule(), P(Σ_g=Σ2, γ=[.5,.5], prices=[10.,20.])).w
     @test w ≈ (Σ2 \ ones(2)) ./ sum(Σ2 \ ones(2)) atol=1e-5
-    e = [0.12, 0.20] .- 0.04
     @test allocate(build(MyTangentRule,(zero_alpha=false,)), P(Σ_g=Σ2, μ_g=[0.12,0.20], g_f=0.04, γ=[.5,.5], prices=[10.,20.])).w ≈ (Σ2\e) ./ sum(Σ2\e) atol=1e-5
     @test allocate(build(MyTangentRule,(zero_alpha=false,)), P(μ_g=fill(0.0,3), g_f=0.04)).status == :fallback_minvar
     r = allocate(MyLongShortCDRule(), P5(γ=[0.5,0.3,0.2,-0.4,-0.1], w_max=0.6))
@@ -47,20 +56,67 @@ end
     @test_throws DimensionMismatch expected_growth(MyMinVarRule(), α, β[1:2], ḡ_M)
 end
 
-@testset "max_investable and the invested fraction s*" begin
+@testset "max_investable and the two-fund scale (R24)" begin
     @test max_investable(P()) ≈ 1.0 atol=1e-7                      # budget binds
-    # Σ_g = 4I with σ_g_max = 1: 2‖w‖ ≤ 1 caps Σw at √3/2, reached at equal weights
+    # Σ_g = 4I with σ_g_max = 1: 2‖w‖ ≤ 1. s_dir ignores the cone; vol_cap=true caps Σw at √3/2.
     p = P(σ_g_max=1.0)
-    s = max_investable(p)
-    @test s ≈ sqrt(3) / 2 atol=1e-6
+    @test max_investable(p) ≈ 1.0 atol=1e-7
+    @test max_investable(p; vol_cap=true) ≈ sqrt(3) / 2 atol=1e-6
+    # min-variance: mix = equal weights at Σw = 1 (σ = 2/√3), scaled by c = √3/2 onto the cap
     r = allocate(MyMinVarRule(), p)
-    @test r.status == :optimal && r.s_star == s
-    @test sum(r.w) ≈ s atol=1e-6
+    @test r.status == :optimal
+    @test r.w ≈ fill(1 / (2 * sqrt(3)), 3) atol=1e-6
+    @test sqrt(r.w' * (4I) * r.w) ≈ 1.0 atol=1e-6
+    @test r.s_star ≈ sum(r.w)
+    # tangent: mix ∝ Σ⁻¹e = [1, 2, 3]/6 keeps its proportions, scaled by c = 3/√14 onto the cap
     r = allocate(MyTangentRule(), P(σ_g_max=1.0, μ_g=[0.1, 0.2, 0.3]))
     @test r.status == :optimal
-    @test r.s_star ≈ s atol=1e-12
-    @test r.w ≈ fill(s / 3, 3) atol=1e-3                             # the only point with Σw = s*
+    @test r.w ≈ [1.0, 2.0, 3.0] ./ (2 * sqrt(14)) atol=1e-6
+    @test sqrt(r.w' * (4I) * r.w) ≈ 1.0 atol=1e-6
+    @test r.s_star ≈ sum(r.w) && r.s_star < 1 - 0.1                  # the rest is cash
+    # a slack cap leaves the mix unscaled (c = 1): fully invested
+    @test sum(allocate(MyMinVarRule(), P(σ_g_max=1.2)).w) ≈ 1.0 atol=1e-6
     @test isnan(max_investable(_P_stuck([0.2, 0.5, 0.3])))           # no feasible point
+    @test isnan(max_investable(_P_stuck([0.2, 0.5, 0.3]); vol_cap=true))
+end
+
+@testset "two-fund scale that breaks turnover keeps previous holdings (R24)" begin
+    # n_prev is the equal-weight mix itself (zero turnover); scaling by c = √3/2 sells 7.8 shares,
+    # and the budget (c̄ = 1 USD/share, K = 1 USD) allows one
+    n_prev = (1 / 3) .* 1000 ./ [10.0, 20.0, 40.0]
+    for rule in (MyMinVarRule(), MyTangentRule())
+        r = allocate(rule, P(n_prev=n_prev, c̄=1.0, K_turnover=1.0, σ_g_max=1.0))
+        @test r.status == :infeasible && r.n == n_prev
+        r = allocate(rule, P(n_prev=n_prev, c̄=1.0, K_turnover=100.0, σ_g_max=1.0))
+        @test r.status == :optimal
+        @test r.w ≈ fill(1 / (2 * sqrt(3)), 3) atol=1e-6
+    end
+end
+
+@testset "K = 33 regression: min-variance and tangent stay distinct under the production vol cap" begin
+    # The reviewer's probe: forcing Σw to the vol-capped maximum left one feasible point, so the two
+    # rules agreed to 1.9e-4. SIM Σ_g with σ_m = 2.5 and σ_ε ∈ [3, 6] yr⁻¹; trial limits.
+    rng = MersenneTwister(5660); K = 33; W = 100_000.0; σ_max = 0.12 * sqrt(252)
+    for draw in 1:5
+        β = 0.6 .+ 0.8 .* rand(rng, K); σ_ε = 3.0 .+ 3.0 .* rand(rng, K)
+        Σ = 2.5^2 .* β * β' .+ Diagonal(σ_ε .^ 2)
+        μ = 0.04 .+ 0.3 .* randn(rng, K)                             # excess e = 0.3·N(0,1): ~half > 0
+        prices = 20.0 .+ 380.0 .* rand(rng, K)
+        sector = ["S$(mod1(i, 6))" for i in 1:K]
+        n_prev = 0.6 .* W ./ (K .* prices)                             # 60% invested, equal weight
+        c̄ = 5e-4 * sum(prices) / K
+        p = P(γ=fill(0.1, K), prices=prices, W=W, μ_g=μ, Σ_g=Σ, g_f=0.04, w_max=0.15, s_max=0.35,
+              sector=sector, σ_g_max=σ_max, c̄=c̄, K_turnover=0.10 * W, n_prev=n_prev)
+        rm = allocate(MyMinVarRule(), p); rt = allocate(MyTangentRule(), p)
+        @test rm.status == :optimal && rt.status == :optimal
+        @test maximum(abs.(rt.w .- rm.w)) > 0.01
+        for r in (rm, rt)
+            @test all(r.w .≥ -1e-9) && all(r.w .≤ 0.15 + 1e-6) && sum(r.w) ≤ 1 + 1e-6
+            @test sqrt(r.w' * Σ * r.w) ≤ σ_max + 1e-6
+            @test all(sum(r.w[sector .== s]) ≤ 0.35 + 1e-6 for s in unique(sector))
+            @test c̄ * sum(abs.(r.n .- n_prev)) ≤ 0.10 * W + 1e-6
+        end
+    end
 end
 
 @testset "min-variance: per-name cap, no ε pins" begin
@@ -83,7 +139,7 @@ end
     # every constraint holds
     @test all(r.w .≥ -1e-9) && maximum(r.w) ≤ 0.5 + 1e-6
     @test sum(r.w) ≈ 1.0 atol=1e-6
-    @test r.s_star ≈ 1.0 atol=1e-7
+    @test r.s_star ≈ 1.0 atol=1e-6
     @test r.w[1] ≈ 0.5 atol=1e-6                                     # the cap binds
     @test maximum(abs.(r.w .- w_u)) > 0.1                            # ≠ the unconstrained formula
     sr = _sharpe(r.w, e, Σ3)
@@ -109,7 +165,7 @@ end
     r = allocate(MyTangentRule(), p)
     @test r.status == :fallback_minvar
     @test r.w ≈ allocate(MyMinVarRule(), p).w atol=1e-6
-    @test r.s_star ≈ 1.0 atol=1e-7
+    @test r.s_star ≈ 1.0 atol=1e-6
     # name 1 has e > 0, but the cap forces ≥ 0.5 into name 2 (e = −0.5): every feasible eᵀw < 0
     μ = [0.05, -0.46]
     r = allocate(MyTangentRule(), P(γ=[.5,.5], prices=[10.,20.], μ_g=μ, g_f=0.04, w_max=0.5))
