@@ -70,7 +70,8 @@ Notation:
 | W | equity |
 | wᵢ = nᵢSᵢ/W | dollar weight |
 | γᵢ | preference weight, from the trial's formula `compute_preference_weights` (engine `SIM.jl:135`): γᵢ = tanh(αᵢ/\|βᵢ\|^λ + \|βᵢ\|^(1−λ)·g_m) |
-| Σ | covariance from the selected model (§6) |
+| Σ_g | **growth-rate covariance** in yr⁻², from the selected SIM model (§6). Defined as in CHEME-5660 L6b/L7a and the nomenclature notebook, with g = Δlog S/Δt and Δt = 1/252. The covariance rate is C = Δt·Σ_g, in yr⁻¹. |
+| μ_g | expected growth rate, μ_g,i = αᵢ + βᵢ·ḡ_M, in yr⁻¹ (L7a) |
 
 ### Shared constraint set (all five long-only rules)
 
@@ -80,7 +81,10 @@ Port this from the engine's `solve_constrained_cd` (`modified_cobb_douglas_examp
 - **Long-only:** nᵢ ≥ 0.
 - **Per-stock cap:** wᵢ ≤ w_max.
 - **Sector cap:** Σ_{i∈s} wᵢ ≤ s_max for each GICS sector s. This is new; "none" means s_max = 1.
-- **Volatility cap:** annualized portfolio volatility ≤ σ_max, in the same units as the trial after the 05-21 Σ-units fix.
+- **Volatility cap:** wᵀΣ_g w ≤ σ²_g,max, a cap on the portfolio's growth-rate standard deviation in yr⁻¹.
+  - The equivalent annualized volatility is σ_g,max·√Δt. So the trial's 0.12 annualized equals σ_g,max = 0.12·√252 ≈ 1.90 yr⁻¹.
+  - The trial's engine applied the cap to C = Δt·Σ_g, which is the same constraint after rescaling.
+  - The rest of this doc writes σ_max as shorthand for σ_g,max.
 - **Turnover budget:** copied exactly from the trial: c̄·Σ|Δnᵢ| ≤ 0.10·W, with c̄ = 5 bps × the basket's mean price. This caps estimated trading cost, not trade size, and it rarely binds **(builder's call, accepted)**.
 - **Floor for the log utilities:** stocks with γ ≤ 0 are held at the floor ε. This matches the engine.
 - **How much to invest (my call):** every rule invests up to 100% of equity and holds cash only when the caps or σ_max stop it.
@@ -98,8 +102,8 @@ Port this from the engine's `solve_constrained_cd` (`modified_cobb_douglas_examp
   - The 1% core also directly limits the concentration found on 10-19.
   - If the baselines plus the caps leave no room to invest, the allocator falls back to holding the baselines only and logs it.
   - Tier 2 tests baselines of 0.5% and 2%.
-- **Min-variance:** minimize wᵀΣw.
-- **Tangent (max Sharpe):** maximize (μᵀw − r_f)/√(wᵀΣw).
+- **Min-variance:** minimize wᵀΣ_g w, as in L6b/L7a, under the shared constraints.
+- **Tangent (max Sharpe):** maximize (μ_gᵀw − g_f)/√(wᵀΣ_g w). This uses L7a's excess-growth form, with e = μ_g − g_f·1 and g_f the risk-free growth rate.
   - Solve it with the standard homogenization that turns it into a cone program. CHEME-5660 `Sharpe.jl` has a COSMO SOCP version.
   - If no feasible portfolio has μᵀw > r_f, fall back to min-variance and log that it happened **(my call)**.
   - Expected growth: μᵢ = αᵢ + βᵢ·ḡ_m, where ḡ_m is the trailing 252-day mean market growth rate **(my call)**.
@@ -127,19 +131,35 @@ Port this from the engine's `solve_constrained_cd` (`modified_cobb_douglas_examp
 
 ## 6. Covariance options
 
-The selected model must be used consistently in three places: (a) the σ_max constraint, (b) the min-variance and tangent objectives, and (c) the GBM forward projection that sets the rebalance band (§6a). Because the GBM draws directly from Σ, (c) follows automatically.
+The selected model must be used consistently in three places: (a) the σ_max constraint, (b) the min-variance and tangent objectives, and (c) the GBM forward projection that sets the rebalance band (§6a). Because the GBM draws directly from Σ_g, (c) follows automatically.
 
-- **C1, single-index:** σ_m²ββᵀ + diag(σ_ε²). This is the trial's model.
-- **C2, single-index plus within-sector residual covariance:**
-  - Estimate residual covariance within each GICS sector block over a trailing 126 days, shrunk toward diagonal with Ledoit–Wolf. Covariance across sectors stays zero **(my call)**.
+Both options use the SIM growth covariance of the CHEME-5660 notes, in yr⁻² (user's decision).
+
+- **C1, SIM (L6b/L7a):**
+  - Σ̂_g,SIM = s²_g,M·β̂β̂ᵀ + D̂_g, where D̂_g = diag(s²_g,ε,i).
+  - The parameters are the online EWLS estimates of β and σ_ε at each decision, plus s²_g,M from SPY growth rates.
+  - This is the trial's model, without its extra ×Δt factor.
+- **C2, SIM with shrunk residual covariance:**
+  - This follows the extension in CHEME-5660 `lectures/week-7/L7a/SIM-RESIDUAL-CORRELATION-DISCUSSION.md` (2026-10-06): Σ_g = s²_g,M·ββᵀ + Ω_ε,λ, with Ω_ε,λ = (1−λ)Ω̂_ε + λ·diag(Ω̂_ε).
+  - Ω̂_ε is the sample covariance of the basket's SIM residual growth rates over a trailing 126 trading days **(my call)**.
+  - **Choosing λ (my call):** λ is picked once on 2014–2024, before Stage 0, by a rolling forecast check.
+    - At each month-end, fit Ω̂_ε on the trailing 126 days.
+    - Predict the next 21 days' variance for random long-only portfolios, drawn from random sector baskets.
+    - Choose the λ in {0, 0.1, …, 1} that minimizes the forecast error, then freeze it.
+    - The note itself says to choose λ on training data and keep the test period for evaluation.
+  - λ = 1 reproduces C1.
   - This targets the specific failure found on 10-19.
 
 ## 6a. Forward projection: multi-asset GBM (replaces JumpHMM)
 
 After each rebalance, project the new holdings forward T trading days to get the band μ_τ ± zσ_τ for τ = 1…T. This is the role of the trial's `forward_project`.
 
-- **Model:** correlated geometric Brownian motion on the basket's stocks. Each path draws daily log-price increments x ~ N(m·Δt, Σ·Δt), with Δt = 1/252, so prices are exp of the cumulative sum. Σ is the run's selected covariance (C1 or C2).
-- **Drift:** m holds each stock's mean log-growth, mᵢ = αᵢ + βᵢ·ḡ_m. These are the same expected-growth inputs as the tangent rule (§5), in the growth-rate units of CHEME-5660. Because m is already a log-growth, no extra −σ²/2 correction is applied. The builder confirms this matches how α, β and g are defined.
+- **Model:** the multi-asset GBM in CHEME-5660's growth-rate form.
+  - Each step, log Sₖ₊₁ = log Sₖ + Δt·μ_g + √Δt·L·Zₖ, with Zₖ ~ N(0, I) and LLᵀ = C = Δt·Σ_g.
+  - The log-price shock covariance over a step is therefore Δt·C = Δt²·Σ_g.
+  - The simulated growth rates g = Δlog S/Δt reproduce μ_g and Σ_g, which is the notes' own check.
+  - Σ_g is the run's selected covariance (C1 or C2).
+- **Drift:** μ_g,i = αᵢ + βᵢ·ḡ_M, the same expected-growth input as the tangent rule (§5). Because g is a log-growth rate, no −σ²/2 correction is applied.
 - **Portfolio value per path:** shares × simulated prices + cash (cash earns r_f). μ_τ and σ_τ are the mean and standard deviation across paths at each τ.
 - **Paths:** N = 1000, as in the trial. Seeded from the run seed, so runs are reproducible.
 - **Short side:** for the 130/30 rule, short positions enter the portfolio value with negative share counts.
@@ -204,7 +224,7 @@ After each rebalance, project the new holdings forward T trading days to get the
   - Fit base SIM parameters on 2014–2015 (warm-up).
   - Tune on 2016-01 → 2024-12, with walk-forward EWLS updates.
   - This prevents the tuning from being fooled by SIM parameters that were fit on the same days.
-- **Grid:** σ_max ∈ {0.08, 0.10, 0.12, 0.15, 0.20} × w_max ∈ {0.05, 0.10, 0.15, 0.20}, which is 20 pairs.
+- **Grid:** σ_g,max ∈ {1.27, 1.59, 1.90, 2.38, 3.17} yr⁻¹ (annualized 0.08, 0.10, 0.12, 0.15, 0.20) × w_max ∈ {0.05, 0.10, 0.15, 0.20}, which is 20 pairs.
 - **Baskets:** random-within-sector, 5 seeds. The bandit is not used, because it was trained on the same years.
 - **Covariance:** tuned separately for C1 and C2. The same σ_max is a tighter limit under C2, because C2 sees more risk.
 - **Selection:**
@@ -259,6 +279,7 @@ Each run writes one result row (config, seed, metrics) plus its daily equity ser
 
 | Need | Source |
 |---|---|
+| SIM growth covariance Σ̂_g,SIM, min-var and tangent in growth-rate form, multi-asset GBM in growth-rate form | CHEME-5660 L6b/L7a lectures, the nomenclature notebook, and `lectures/week-7/L7a/SIM-RESIDUAL-CORRELATION-DISCUSSION.md` (C2) |
 | Type/build pattern, SIM fit, EWLS, CD/CES closed forms (oracles), tangent SOCP, min-var, data loaders, scorecard | CHEME-5660 `code/src` (`Types.jl`, `Factory.jl`, `AdaptivePortfolio.jl`, `Sharpe.jl`, `Files.jl`) |
 | Constrained solver constraint set, γ and λ, MPC trigger logic, closed-form projection reference, costs, backtest loop reference | `modified_cobb_douglas_example/code/src` (`Allocator.jl`, `SIM.jl`, `MPC.jl`, `Costs.jl`, `Backtest.jl`). Its JumpHMM projection is **not** ported; the GBM projection (§6a) is new code. |
 | Per-sector bandit | eCornell S4 `per_sector_bandit.jl`, which is the same as engine `Bandit.jl` |
