@@ -130,15 +130,14 @@ Causal market state at decision date `d` (uses data through `d` only).
 min(252, i−1) SPY growth rates ending at `d`.
 """
 function market_state(spy_close::AbstractVector, dates::Vector{Date}, d::Date)
-    i = findfirst(==(d), dates)
-    i === nothing && throw(ArgumentError("date $(d) is not a trading date"))
+    i = searchsortedfirst(dates, d)
+    (i > length(dates) || dates[i] != d) && throw(ArgumentError("date $(d) is not a trading date"))
     i > 1 || throw(ArgumentError("market_state needs a previous trading day; $(d) is the first date"))
     g_m = growth_rates(spy_close[(i-1):i])[1]
-    lo = findfirst(x -> x > d - Day(105), dates)
+    lo = searchsortedfirst(dates, d - Day(104))
     w = spy_close[lo:i]
     λ = -20.0 * (ema_series(w; span = 21)[end] / ema_series(w; span = 63)[end] - 1.0)
-    g = growth_rates(spy_close[1:i])
-    ḡ_M = mean(g[max(1, length(g) - 251):end])
+    ḡ_M = mean(growth_rates(spy_close[max(1, i - 252):i]))
     return (g_m = g_m, λ = λ, ḡ_M = ḡ_M)
 end
 

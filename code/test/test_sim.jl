@@ -34,4 +34,36 @@ using VLINFORMS2026
         @test fit.params["B"].β ≈ 0.5 atol=0.02
         @test fit.σ_m ≈ std(growth_rates(spy_c[11:250]))
     end
+
+    @testset "estimate_sim hand case" begin
+        x = [0.0, 1.0, 2.0, 3.0, 4.0]; y = [1.0, 3.0, 2.0, 5.0, 4.0]
+        e = estimate_sim(x, y)   # OLS: β = 0.8, α = 1.4
+        @test e.β ≈ 0.8; @test e.α ≈ 1.4
+        res = y .- (1.4 .+ 0.8 .* x); ssr = sum(abs2, res)
+        @test ssr ≈ 3.6
+        @test e.σ_ε ≈ sqrt(ssr / 3)
+        @test e.r² ≈ 1 - ssr / sum(abs2, y .- mean(y))
+    end
+
+    @testset "market_state values (weekday dates)" begin
+        wd = filter(x -> dayofweek(x) <= 5, collect(Date(2024,1,1):Day(1):Date(2025,12,31)))
+        spy = 100 .+ 0.1 .* (1:length(wd)) .+ 3 .* sin.(0.3 .* (1:length(wd)))
+        ema(p, n) = (a = 2/(n+1); e = p[1]; for k in 2:length(p); e = a*p[k] + (1-a)*e; end; e)
+        d = Date(2025,3,14); i = findfirst(==(d), wd)
+        ms = market_state(spy, wd, d)
+        lo = findfirst(x -> x > d - Day(105), wd)
+        @test wd[lo] > d - Day(105) && wd[lo-1] <= d - Day(105)
+        w = spy[lo:i]
+        @test ms.λ ≈ -20 * (ema(w, 21) / ema(w, 63) - 1)
+        # window start matters: a window starting one day earlier gives a different λ
+        w2 = spy[lo-1:i]
+        @test !isapprox(ms.λ, -20 * (ema(w2, 21) / ema(w2, 63) - 1); rtol=1e-12)
+        # ḡ_M: more than 253 closes -> last 252 growth rates
+        @test i > 253
+        g = 252 .* diff(log.(spy[1:i]))
+        @test ms.ḡ_M ≈ mean(g[end-251:end])
+        # fewer closes -> all available growth rates
+        d2 = wd[100]; ms2 = market_state(spy, wd, d2)
+        @test ms2.ḡ_M ≈ mean(252 .* diff(log.(spy[1:100])))
+    end
 end
