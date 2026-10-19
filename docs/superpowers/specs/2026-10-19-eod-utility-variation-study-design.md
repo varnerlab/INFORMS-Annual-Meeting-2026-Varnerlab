@@ -93,7 +93,7 @@ Port this from the engine's `solve_constrained_cd` (`modified_cobb_douglas_examp
     - First choose the **mix** at the largest investment the per-name cap, sector cap and turnover allow, ignoring the volatility cap. This is usually 100%.
     - Then **scale** that mix down by c = min(1, σ_g,max/σ(mix)), holding the rest in cash.
     - An earlier version forced Σw to the largest investment the volatility cap allowed. That left a single feasible portfolio whenever the cap bound, so min-variance and tangent were identical across most of the Stage 0 grid.
-  - This keeps the comparison about the utility, not about different investment levels.
+  - Every rule faces the same limits. How much each one ends up investing follows from its own objective under those limits: when the volatility cap binds, min-variance and tangent hold cash per R24, while the utility rules decide composition and investment level jointly. Report the invested fraction next to every scorecard.
 
 ### Objectives
 
