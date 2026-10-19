@@ -137,7 +137,10 @@ Both options use the SIM growth covariance of the CHEME-5660 notes, in yr⁻² (
 
 - **C1, SIM (L6b/L7a):**
   - Σ̂_g,SIM = s²_g,M·β̂β̂ᵀ + D̂_g, where D̂_g = diag(s²_g,ε,i).
-  - The parameters are the online EWLS estimates of β and σ_ε at each decision, plus s²_g,M from SPY growth rates.
+  - The parameters are the online EWLS estimates of β and σ_ε at each decision.
+  - The market variance σ²_g,M is also updated online (user's decision, 2026-10-19). It is an exponentially weighted variance of SPY growth, with the same half-life (63) and prior weight (63) as EWLS, seeded from the base fit.
+  - The trial kept σ_m fixed at its 2014–2024 value. That value (≈17% annualized) overstated the 2026 market (≈10%), which is consistent with the trial's band being too wide before 09-01.
+  - Only the §9 validation replay keeps σ_m fixed, to reproduce the trial's inputs.
   - This is the trial's model, without its extra ×Δt factor.
 - **C2, SIM with shrunk residual covariance:**
   - This follows the extension in CHEME-5660 `lectures/week-7/L7a/SIM-RESIDUAL-CORRELATION-DISCUSSION.md` (2026-10-06): Σ_g = s²_g,M·ββᵀ + Ω_ε,λ, with Ω_ε,λ = (1−λ)Ω̂_ε + λ·diag(Ω̂_ε).

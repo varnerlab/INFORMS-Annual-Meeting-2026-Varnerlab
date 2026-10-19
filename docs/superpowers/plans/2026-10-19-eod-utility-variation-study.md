@@ -47,7 +47,9 @@
 - **SIM covariance:**
   - Σ_g = σ_m²ββᵀ + D_g, where D_g = diag(σ_ε²).
   - β and σ_ε are the EWLS estimates at the decision date.
-  - σ_m is the static SD of SPY growth from the run's base SIM fit window, for both C1 and C2. This matches the trial and keeps C1 vs C2 a pure residual-covariance comparison **(plan decision)**.
+  - σ_m is updated online (user's decision): an exponentially weighted SD of SPY growth with `half_life=63.0` and `prior_weight=63.0`, seeded from the base-fit σ_m, using data through day t only.
+  - C1 and C2 share the same σ_m, so they still differ only in residual covariance.
+  - The validation replay (Task 10) uses `σ_m_mode = :fixed` to reproduce the trial.
 - **C2 covariance:** σ_m²ββᵀ + D_g^{1/2}·R_λ·D_g^{1/2}, where R_λ = (1−λ)·cor(residuals over the trailing 126 trading days) + λ·I.
   - This is the 5660 note's shrinkage, applied on the correlation scale. λ = 1 equals C1 exactly, and the result is always positive semidefinite **(plan decision)**.
 - **Data:**
@@ -162,6 +164,7 @@ end
   - `estimate_sim(g_m::AbstractVector, g_i::AbstractVector)::MySIMParameterEstimate`: OLS, with σ_ε using the N−2 denominator (5660).
   - `fit_base_sim(md::MyMarketData, start::Date, stop::Date)::NamedTuple{(:params, :σ_m)}`: `params::Dict{String,MySIMParameterEstimate}`; `σ_m` is the SD of SPY growth.
   - `MyEWLSState`, `ewls_init(α₀, β₀, σ_ε₀; half_life=63.0, prior_weight=63.0)`, `ewls_update!(s, g_i, g_m)::Tuple{Float64,Float64,Float64}`: port engine `modified_cobb_douglas_example/code/src/SIM.jl:161-208` unchanged.
+  - `MyEWVarState`, `ewvar_init(σ₀; half_life=63.0, prior_weight=63.0)::MyEWVarState`, `ewvar_update!(s, g_m)::Float64` (returns the updated σ_m in yr⁻¹): an exponentially weighted variance around the exponentially weighted mean, with the same η = 2^(−1/half_life) as EWLS and the prior seeding the sufficient statistics.
   - `market_state(spy_close::AbstractVector, dates::Vector{Date}, d::Date)::NamedTuple{(:g_m, :λ, :ḡ_M)}`: g_m and λ exactly as in Global Constraints; `ḡ_M` is the mean of the last 252 SPY growth rates up to d.
   - `preference_weights(α::Vector, β::Vector, g_m::Float64, λ::Float64)::Vector{Float64}`.
 
@@ -174,6 +177,9 @@ s = ewls_init(0.1, 1.1, 2.0); @test (s.α, s.β, s.σ_ε) == (0.1, 1.1, 2.0)
 s = ewls_init(0.0, 0.0, 1.0; half_life=1e12, prior_weight=1e-12)
 foreach(t -> ewls_update!(s, gi[t], gm[t]), 1:2000)
 @test s.β ≈ estimate_sim(gm, gi).β rtol=1e-6
+v = ewvar_init(2.7); @test ewvar_update!(v, 0.0) < 2.7          # a calm day lowers σ_m
+v = ewvar_init(1.0; half_life=1e12, prior_weight=1e-12); foreach(x -> ewvar_update!(v, x), gm)
+@test ewvar_update!(v, gm[end]) ≈ std(vcat(gm, gm[end]); corrected=false) rtol=1e-3
 @test preference_weights([0.2], [0.5], 1.0, 0.0) ≈ [tanh(0.2 + 0.5)]
 @test preference_weights([0.2], [0.5], 1.0, 1.0) ≈ [tanh(0.2/0.5 + 1.0)]
 # market_state is causal: perturbing prices after d changes nothing
@@ -425,7 +431,8 @@ b = project_gbm([1.,2.],[50.,60.],10.,[.1,.2],[9. 2; 2 16],.04; rng=MersenneTwis
     | `forced_dates::Vector{Date}` | forced decision dates |
     | `natural_triggers::Bool` (= true) | whether natural triggers can fire |
     | `ewls_calendar::Union{Nothing,Vector{Date}}` (= nothing) | validation only |
-    | `base_sim::Dict{String,MySIMParameterEstimate}`, `σ_m::Float64` | base SIM fit |
+    | `base_sim::Dict{String,MySIMParameterEstimate}`, `σ_m::Float64` | base SIM fit; σ_m is the initial value |
+    | `σ_m_mode::Symbol` (= `:ewls`) | `:ewls` updates σ_m daily with `ewvar_update!`; `:fixed` holds it constant |
     | `K_turnover_frac` (= 0.10), `borrow_rate` (= 0.0075) | turnover budget, borrow fee |
     | `label::String` | run label |
 
@@ -439,7 +446,7 @@ b = project_gbm([1.,2.],[50.,60.],10.,[.1,.2],[9. 2; 2 16],.04; rng=MersenneTwis
   1. Fill pending orders at `open[t]`: whole shares, `trunc(target − held)`, with costs.
   2. Accrue g_f on positive cash, and charge the borrow fee on short notional.
   3. Mark equity at `close[t]`.
-  4. Update EWLS for **every universe ticker** from day t's growth. With `ewls_calendar`, apply one update per calendar entry equal to t, using the latest two trading-day closes on or before that date.
+  4. Update EWLS for **every universe ticker** from day t's growth. When `σ_m_mode == :ewls`, also update σ_m from SPY growth. With `ewls_calendar`, apply one update per calendar entry equal to t, using the latest two trading-day closes on or before that date.
   5. Compute `market_state`, γ, μ_g and Σ_g for the current basket.
   6. Run `check_trigger`.
   7. On a fire:
@@ -510,7 +517,7 @@ td = Date.(["2026-05-28","2026-05-29","2026-06-01","2026-07-01","2026-07-02","20
   - copies of the artifacts, the log and residuals.csv in `data/validation/`
 - [ ] **Step 4: Run the tests and confirm they pass.**
 - [ ] **Step 5: Implement and run `scripts/02_validate_trial.jl`.** Settings:
-  - CD, C1, σ_m = `sigma_market`, `base_sim` built from `sim_base`
+  - CD, C1, σ_m = `sigma_market` with `σ_m_mode = :fixed` (as in the trial), `base_sim` built from `sim_base`
   - σ_g_max = 0.12·√252, w_max = 0.15, s_max = 1
   - basket = the frozen 33
   - start 2026-05-20, stop 2026-09-04
