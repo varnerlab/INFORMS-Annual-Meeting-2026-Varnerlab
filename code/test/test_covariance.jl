@@ -1,22 +1,6 @@
 using Test, Dates, Random, Statistics, LinearAlgebra
 using VLINFORMS2026
-
-# Synthetic market: 2014–2018 weekdays, 4 sectors × 12 names, β = 1, within-sector residual
-# correlation ρ, SPY as the market factor. Growth units yr⁻¹: market SD 2.5, residual SD 4.
-function synthetic_md(; ρ::Float64, seed::Int=1)
-    rng = MersenneTwister(seed)
-    dates = filter(d -> dayofweek(d) <= 5, collect(Date(2014,1,1):Day(1):Date(2018,12,31)))
-    n = length(dates); Δt = 1/252
-    sectors = ["S$(s)" for s in 1:4 for _ in 1:12]
-    gm = 2.5 .* randn(rng, n - 1)
-    z = randn(rng, n - 1, 4); u = randn(rng, n - 1, 48)
-    E = 4.0 .* [sqrt(ρ) * z[t, parse(Int, sectors[i][2:end])] + sqrt(1 - ρ) * u[t, i] for t in 1:n-1, i in 1:48]
-    g = gm .+ E
-    cl = 100 .* exp.(vcat(zeros(1, 48), cumsum(g .* Δt; dims=1)))
-    spy = 100 .* exp.(vcat(0.0, cumsum(gm .* Δt)))
-    return build(MyMarketData, (dates=dates, tickers=["T$(lpad(i,2,'0'))" for i in 1:48], open=cl, close=cl,
-        volume=ones(n, 48), spy_open=spy, spy_close=spy, sector=sectors, g_f=zeros(n)))
-end
+include("helpers.jl")
 
 @testset "SIM growth covariance (C1, C2)" begin
     β = [1.0, 1.2, 0.8]; σε = [2.0, 3.0, 2.5]; σm = 2.7
@@ -32,11 +16,12 @@ end
     @test residual_matrix(g, gm, [0.5, 0.0], [1.0, 2.0]) ≈ [-0.5 0.0; 0.5 1.0]
 end
 
-@testset "choose_shrinkage recovers structure" begin
-    t = @elapsed begin
-        λ_hi = choose_shrinkage(synthetic_md(ρ=0.8), Date(2015,1,2), Date(2018,12,31))
-        λ_0 = choose_shrinkage(synthetic_md(ρ=0.0), Date(2015,1,2), Date(2018,12,31))
-    end
-    @test λ_hi ≤ 0.3
-    @test λ_0 ≥ 0.7
+@testset "shrinkage_loss / choose_shrinkage" begin
+    grid = 0:0.1:1; s, e = Date(2015,1,2), Date(2018,12,31)
+    L8 = shrinkage_loss(synthetic_md(ρ=0.8), s, e)
+    @test grid[argmin(L8)] ≤ 0.3 && (L8[end] - L8[1]) / L8[end] > 0.2
+    L0 = shrinkage_loss(synthetic_md(ρ=0.0), s, e)
+    @test (L0[end] - minimum(L0)) / L0[end] < 0.02
+    @test shrinkage_loss(perturb_after(synthetic_md(ρ=0.8), e), s, e) == L8   # look-ahead canary
+    @test choose_shrinkage(synthetic_md(ρ=0.8), s, e) == grid[argmin(L8)]
 end

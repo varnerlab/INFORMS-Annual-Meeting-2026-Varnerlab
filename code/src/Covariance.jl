@@ -76,46 +76,62 @@ function _draw_basket(rng, sector_idx::Vector{Vector{Int}}, n::Int)::Vector{Int}
 end
 
 """
-    choose_shrinkage(md, start, stop; grid=0:0.1:1, n_portfolios=200, seed=5660)::Float64
+    shrinkage_loss(md, start, stop; grid=0:0.1:1, n_portfolios=200, seed=5660)::Vector{Float64}
 
-Pick the C2 shrinkage λ ∈ `grid` minimizing mean QLIKE (r/p − log(r/p) − 1) of 21-day-ahead
-realized portfolio variance r vs. predicted p = wᵀΣ_g(λ)w, over monthly (21-trading-day) anchors
-from `start` + 252 trading days through `stop` − 21. At each anchor β, σ_ε come from OLS on the
-trailing 252 days, σ_m is the sample SD of SPY growth over the same days, and the residual
-correlation uses the trailing 126 days. Baskets: up to 33 names, Dirichlet(1) weights.
-Ties go to the larger λ.
+Mean QLIKE (r/p − log(r/p) − 1) per λ ∈ `grid` of the RESIDUAL-portfolio variance: predicted
+p = wᵀD^{1/2}R_λD^{1/2}w (D = diag(σ_ε²) from the anchor's OLS), realized r = sample variance over
+the next 21 trading days of wᵀε_t (ε from the anchor's OLS α, β). Monthly (21-trading-day) anchors
+run from `start` + 252 trading days through `stop` − 21. At each anchor β, α, σ_ε come from OLS on
+the trailing 252 days and the residual correlation from the trailing 126 days. Baskets: up to 33
+names (round-robin across sectors), Dirichlet(1) weights. Portfolios with non-finite or
+non-positive r are skipped. Uses data through `stop` only.
 """
-function choose_shrinkage(md::MyMarketData, start::Date, stop::Date;
-        grid=0:0.1:1, n_portfolios::Int=200, seed::Int=5660)::Float64
+function shrinkage_loss(md::MyMarketData, start::Date, stop::Date;
+        grid=0:0.1:1, n_portfolios::Int=200, seed::Int=5660)::Vector{Float64}
     rng = MersenneTwister(seed)
     g = growth_rates(md.close); g_m = growth_rates(md.spy_close)    # g[k] is the return into dates[k+1]
     nt = size(g, 2)
     i0 = searchsortedfirst(md.dates, start); i1 = searchsortedlast(md.dates, stop)
     anchors = collect((i0 + 252):21:(i1 - 21))
     isempty(anchors) && throw(ArgumentError("window too short: need at least 252 + 21 trading days"))
-    secs = unique(md.sector)
-    sector_idx = [findall(==(s), md.sector) for s in secs]
+    sector_idx = [findall(==(s), md.sector) for s in unique(md.sector)]
     λs = collect(Float64, grid)
     loss = zeros(length(λs)); count = 0
     for a in anchors
         tr = (a - 252):(a - 1); tr126 = (a - 126):(a - 1); fw = a:(a + 20)
         fits = [estimate_sim(g_m[tr], g[tr, j]) for j in 1:nt]
         α = [f.α for f in fits]; β = [f.β for f in fits]; σε = [f.σ_ε for f in fits]
-        σm = std(g_m[tr])
         E = residual_matrix(g[tr126, :], g_m[tr126], α, β)
-        Σs = [growth_covariance(build(MyShrunkResidualCovariance, (λ=λ, window=126)), β, σε, σm; residuals=E) for λ in λs]
+        Ef = residual_matrix(g[fw, :], g_m[fw], α, β)
+        C = cor(E); C[isnan.(C)] .= 0.0; C[diagind(C)] .= 1.0
+        D = Diagonal(σε)
+        Σs = [D * ((1 - λ) .* C .+ λ .* Matrix(I, nt, nt)) * D for λ in λs]
         for _ in 1:n_portfolios
             idx = _draw_basket(rng, sector_idx, 33)
-            w = -log.(rand(rng, length(idx))); w ./= sum(w)       # Dirichlet(1)
-            r = var(g[fw, idx] * w)
+            w = randexp(rng, length(idx)); w ./= sum(w)       # Dirichlet(1)
+            r = var(Ef[:, idx] * w)
+            (isfinite(r) && r > 0) || continue
             count += 1
             for (k, Σ) in enumerate(Σs)
-                p = dot(w, Σ[idx, idx] * w); q = r / p
+                q = r / dot(w, Σ[idx, idx] * w)
                 loss[k] += q - log(q) - 1
             end
         end
     end
+    count > 0 || throw(ArgumentError("no valid portfolios"))
     loss ./= count
-    best = minimum(loss)
-    return λs[findlast(l -> l <= best, loss)]
+    all(isfinite, loss) || error("non-finite shrinkage loss")
+    return loss
+end
+
+"""
+    choose_shrinkage(md, start, stop; grid=0:0.1:1, n_portfolios=200, seed=5660)::Float64
+
+The λ ∈ `grid` with the lowest `shrinkage_loss`; ties go to the larger λ.
+"""
+function choose_shrinkage(md::MyMarketData, start::Date, stop::Date;
+        grid=0:0.1:1, n_portfolios::Int=200, seed::Int=5660)::Float64
+    L = shrinkage_loss(md, start, stop; grid=grid, n_portfolios=n_portfolios, seed=seed)
+    λs = collect(Float64, grid)
+    return λs[findlast(l -> l <= minimum(L), L)]
 end
