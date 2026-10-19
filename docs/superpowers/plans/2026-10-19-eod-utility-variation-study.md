@@ -149,6 +149,9 @@ end
 end
 ```
 
+  - The fixture's timestamps use **varying hours** (04:00 in some files or tickers, 05:00 in others), and a test asserts that AAA and SPY rows still align by `Date`.
+  - A second fixture variant includes a `DTB3.csv` whose first observation falls after the first trading day and which has a missing (empty) row. The test asserts the leading value, the forward-filled values and g_f = log(1 + DTB3/100).
+  - The real-data test also asserts that `open`, `close`, `volume`, `spy_open`, `spy_close` and `g_f` are all finite, and that `dates` is strictly increasing.
 - [ ] **Step 3: Run the tests and confirm they fail.** Run: `julia --project=code code/test/test_data.jl`. Expected: FAIL, because `load_market_data` is not defined.
 - [ ] **Step 4: Implement `Types.jl` (`MyMarketData`), `Factory.jl` and `Data.jl`, with the dependencies above in `code/Project.toml`.**
 - [ ] **Step 5: Run the tests and confirm they pass.** Same command. Expected: all pass.
