@@ -145,8 +145,6 @@ end
     md = load_market_data(dir; start=Date(2014,1,3), stop=Date(2026,9,4))
     @test md.dates[1] == Date(2014,1,3) && md.dates[end] == Date(2026,9,4)
     @test 360 ≤ length(md.tickers) ≤ 430 && "SPY" ∉ md.tickers
-    trial33 = split("ABBV AEP ALB AMZN AVY CHD CMCSA COP DRI DUK EL EXPD FDX FOXA HSIC INTU IVZ MS NCLH NEE NEM ORCL PCAR PG PSA PSX REG SPG TECH TTWO VLO VRSN WRB")
-    @test issubset(trial33, md.tickers)   # Task 10 validation needs every trial name
     @test Date(2025,7,4) ∉ md.dates && length(md.g_f) == length(md.dates)
 end
 ```
@@ -523,7 +521,7 @@ td = Date.(["2026-05-28","2026-05-29","2026-06-01","2026-07-01","2026-07-02","20
 - [ ] **Step 5: Implement and run `scripts/02_validate_trial.jl`.** Settings:
   - CD, C1, σ_m = `sigma_market` with `σ_m_mode = :fixed` (as in the trial), `base_sim` built from `sim_base`
   - σ_g_max = 0.12·√252, w_max = 0.15, s_max = 1
-  - basket = the frozen 33
+  - basket = the trial's frozen 33. This is the only place they are used. Any name missing from the universe is dropped and listed in `allocation_check.csv`.
   - start 2026-05-20, stop 2026-09-04
   - `forced_dates` = [05-29, 06-29, 07-28, 08-26, 09-01], `natural_triggers=false`, `ewls_calendar` from the log
 
@@ -633,16 +631,15 @@ td = Date.(["2026-05-28","2026-05-29","2026-06-01","2026-07-01","2026-07-02","20
 
 **Runs:**
 - 6 rules × {C1, C2} × baskets:
-  - the frozen 33, from `data/validation/frozen_basket.jld2`; any ticker missing from the universe is dropped and listed in the output
   - bandit seeds 1–10
   - random-matched seeds 1–10
-- That is 252 runs, using base SIM 2014–2024 and the `stage0.toml` settings per covariance option.
+- That is 240 runs, using base SIM 2014–2024 and the `stage0.toml` settings per covariance option.
 - Bandit retrain dates: `quarter_starts(md, 2025-01-02, 2026-09-04)`. Each seed's schedule is computed once and cached at `data/cache/bandit_seed<k>.jld2`.
 
 - [ ] **Step 1: Write `scripts/04_tier1.jl`.** It builds the schedules, runs the grid, and runs `rebuild_summary`. It also writes:
   - `tier1_table.csv`: for each (rule, covariance, basket_kind), the median and IQR of Sharpe, max drawdown and alpha_ann, plus the paired win-rate of bandit over random-matched on Sharpe, by seed.
   - `benchmarks.csv`: the `scorecard` of SPY and of an equal-dollar buy-and-hold of the whole universe bought at the 2025-01-02 open.
-- [ ] **Step 2: Run it.** `julia -t 24 --project=code scripts/04_tier1.jl`. Expected: 252 rows, no `:solver_failed` count above 1% of decisions (print it), and the benchmark row for SPY shows positive `ann_return` for 2025–26.
+- [ ] **Step 2: Run it.** `julia -t 24 --project=code scripts/04_tier1.jl`. Expected: 240 rows, no `:solver_failed` count above 1% of decisions (print it), and the benchmark row for SPY shows positive `ann_return` for 2025–26.
 - [ ] **Step 3: Commit.** `git add results/tier1_*.csv results/benchmarks.csv config/experiments/tier1.toml scripts/04_tier1.jl && git commit -m "results: Tier 1"`
 
 ### Task 16: Talk figures
@@ -650,8 +647,8 @@ td = Date.(["2026-05-28","2026-05-29","2026-06-01","2026-07-01","2026-07-02","20
 **Files:** Create `scripts/05_figures.jl`; outputs `talk/figures/*.pdf` and matching `.png`
 
 - [ ] **Step 1: Write the script. It produces:**
-  1. `fig1_scorecard.pdf`: a table of median [IQR] Sharpe, max drawdown and alpha by rule × covariance, for the frozen-33 and bandit baskets.
-  2. `fig2_equity.pdf`: frozen-33, C2 equity curves for all six rules, plus SPY.
+  1. `fig1_scorecard.pdf`: a table of median [IQR] Sharpe, max drawdown and alpha by rule × covariance, for the bandit and random-matched baskets.
+  2. `fig2_equity.pdf`: for each of the six rules under C2, the median equity path across the 10 bandit seeds, plus SPY.
   3. `fig3_bandit_vs_random.pdf`: paired Sharpe differences by seed.
   4. `fig4_band_calibration.pdf`: realized/projected σ ratio for each segment between decisions, C1 vs C2. This is the 10-19 finding, shown in the replay.
   5. `fig5_validation.pdf`: simulated vs trial target weights on the 5 dates.

@@ -185,13 +185,12 @@ After each rebalance, project the new holdings forward T trading days to get the
   - Retrain at the first trading day of each quarter in the out-of-sample window, using only data before that day. SIM parameters for γ are refit on trailing data, not the full sample **(my call)**.
   - A basket change forces a rebalance, with the new trigger reason `basket_change`.
 - **Basket size:** K = 33, the same as the trial **(my call)**.
-- **Pairing:** within a seed, all six portfolio rules use the same bandit basket, so their comparisons are paired. Because the bandit's reward is CD-weighted, the baskets may slightly favor CD; the frozen-33 and random-pick baselines control for this.
+- **Pairing:** within a seed, all six portfolio rules use the same bandit basket, so their comparisons are paired. Because the bandit's reward is CD-weighted, the baskets may slightly favor CD; the random-pick baseline controls for this.
 - **Baselines:**
   - **Random pick within each sector, with matched turnover (my call).**
     - The first draw is random, with the bandit's quotas.
     - At each quarterly retrain, it swaps out the same number of names per sector that the bandit swapped, choosing the replacements at random.
     - Rotation costs are therefore equal, so "the bandit beats random" measures stock-picking alone.
-  - The trial's frozen 33 (from `artifacts/frozen_basket.jld2`).
 - **Passive benchmarks, reported but not run through the allocators:** SPY, and an equal-weight portfolio of the whole universe.
 
 ## 8. Simulation, data and variation plan
@@ -242,8 +241,9 @@ After each rebalance, project the new holdings forward T trading days to get the
   - The §9 validation replay.
   - Stage 0 tuning, as above.
   - All 6 rules × {C1, C2}, using each covariance option's Stage 0 pair (σ_max, w_max). Otherwise: no sector cap, z 1.96, T 21, D_max 0.08.
-  - Each combination runs on three baskets: the frozen 33, the bandit (10 seeds), and the random-within-sector baseline (10 seeds).
-  - About 250 backtests in total.
+  - Each combination runs on two kinds of basket: the bandit (10 seeds) and the random-within-sector baseline (10 seeds).
+  - Baskets are newly picked. The trial's 33 stocks are not used in scoring (user's decision, 2026-10-19); they appear only in the §9 code check.
+  - 240 backtests in total.
 - **Tier 2, one setting at a time around the Stage 0 settings, for both C1 and C2, 30 seeds.** Tier 1's results are not used to choose the covariance option, because that would be choosing on the scored window. These sweeps run on the **2014–2024 window**, so they choose settings without touching the scored window. The chosen settings are then rescored on 2025-01 → 2026-09-04:
   - z ∈ {1.96, 2.5, no band}
   - T ∈ {21, 63}
