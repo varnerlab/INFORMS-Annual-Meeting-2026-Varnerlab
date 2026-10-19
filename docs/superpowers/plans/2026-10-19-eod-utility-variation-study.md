@@ -338,9 +338,11 @@ fx = JLD2.load(joinpath(@__DIR__, "fixtures", "engine_cd_case.jld2"))
 @test max_investable(P(w_max=0.15, γ=[0.5,0.5], prices=[10.,20.], Σ_g=Σ2)) ≈ 0.30 atol=1e-6
 # R24: with the vol cap binding, tangent keeps its mix and scales down; it no longer collapses to min-variance
 rt = allocate(MyTangentRule(), P(Σ_g=Σ2, μ_g=[0.12,0.20], g_f=0.04, γ=[.5,.5], prices=[10.,20.], σ_g_max=1.5))
-@test rt.w ./ sum(rt.w) ≈ (Σ2\e) ./ sum(Σ2\e) atol=1e-5 && sqrt(rt.w' * Σ2 * rt.w) ≈ 1.5 atol=1e-6
+@test rt.w ./ sum(rt.w) ≈ (Σ2\e) ./ sum(Σ2\e) atol=1e-5
+@test sqrt(rt.w' * Σ2 * rt.w) ≈ 1.5 atol=1e-6
 rm = allocate(MyMinVarRule(), P(Σ_g=Σ2, γ=[.5,.5], prices=[10.,20.], σ_g_max=1.5))
-@test rm.w ./ sum(rm.w) ≈ (Σ2 \ ones(2)) ./ sum(Σ2 \ ones(2)) atol=1e-5 && maximum(abs.(rt.w .- rm.w)) > 0.05
+@test rm.w ./ sum(rm.w) ≈ (Σ2 \ ones(2)) ./ sum(Σ2 \ ones(2)) atol=1e-5
+@test maximum(abs.(rt.w .- rm.w)) > 0.05
 w = allocate(MyMinVarRule(), P(Σ_g=Σ2, γ=[.5,.5], prices=[10.,20.])).w
 @test w ≈ (Σ2 \ ones(2)) ./ sum(Σ2 \ ones(2)) atol=1e-5
 e = [0.12, 0.20] .- 0.04
