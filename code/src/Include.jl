@@ -23,6 +23,7 @@ include("AllocatorsLongShort.jl")
 include("Projection.jl")
 include("Costs.jl")
 include("Triggers.jl")
+include("Metrics.jl")
 
 export MyMarketData, build, load_market_data, growth_rates, index_of, DATA_FILES,
     MySIMParameterEstimate, MyEWLSState, MyEWVarState, estimate_sim, fit_base_sim, ewls_init, ewls_update!,
@@ -34,3 +35,4 @@ export AbstractPortfolioRule, MyCobbDouglasRule, MyCESRule, MyStoneGearyRule, My
 export MyMinVarRule, MyTangentRule, MyLongShortCDRule, max_investable, expected_growth
 export MyProjection, project_gbm
 export trade_cost, borrow_fee, MyMPCSpec, MyTriggerState, check_trigger
+export scorecard
