@@ -197,22 +197,33 @@ After each rebalance, project the new holdings forward T trading days to get the
 - **Calibration, 2014-01-02 → 2024-12-31:** base SIM fit (α, β, σ_ε, σ_m) and initial bandit training. GBM inputs are recomputed at each decision from trailing data, so the GBM needs no separate calibration.
 - **Scored out-of-sample window, 2025-01-02 → 2026-09-04** (user's decision). This gives about 420 trading days and 6 quarterly bandit retrains.
 - **Validation window:** the live-trial overlap that falls inside the data, 2026-05-29 → 09-04 (§9).
-- **Settings caveat (my call):**
-  - Tier 1 runs all six rules on the trial's settings: σ_max 0.12, w_max 0.15, the turnover budget and cash_revisit 21. Those values were chosen in the engine repo's sweeps over 2025-01 → 2026-04, which overlaps the scored window. All six rules share them, but they were tuned for CD.
-  - The talk states this.
-  - For the paper, Tier 2 re-picks the settings by sweeping on **2014–2024 only**, then rescores 2025-01 → 2026-09-04 with those values frozen.
+- **σ_max and w_max are chosen from 2014–2024 (user's decision).** The trial's values (0.12 and 0.15) were picked by sweeps over 2025-01 → 2026-04, which overlaps the scored window. They are used only in the §9 validation. The other settings are the trial's defaults and were never tuned on the scored window: z 1.96, T 21, D_max 0.08, cash_revisit 21, and the turnover budget, which rarely binds.
+
+**Stage 0: tune σ_max and w_max (runs before Tier 1).** All choices below are **(my call)**.
+- **Window:**
+  - Fit base SIM parameters on 2014–2015 (warm-up).
+  - Tune on 2016-01 → 2024-12, with walk-forward EWLS updates.
+  - This prevents the tuning from being fooled by SIM parameters that were fit on the same days.
+- **Grid:** σ_max ∈ {0.08, 0.10, 0.12, 0.15, 0.20} × w_max ∈ {0.05, 0.10, 0.15, 0.20}, which is 20 pairs.
+- **Baskets:** random-within-sector, 5 seeds. The bandit is not used, because it was trained on the same years.
+- **Covariance:** tuned separately for C1 and C2. The same σ_max is a tighter limit under C2, because C2 sees more risk.
+- **Selection:**
+  - One shared (σ_max, w_max) pair per covariance option, consistent with "same constraints for all rules".
+  - Pick the pair with the highest median Sharpe across all six rules; ties go to lower median max drawdown.
+  - Tuning on CD alone is avoided, because it would favor CD.
+- **Size:** 2 × 20 × 6 × 5 = 1,200 backtests.
+- **Freeze:** the chosen pairs are written to a config file and frozen **before any run touches 2025**.
 
 **Variation plan** (tiers, run in order):
 - **Tier 1, needed for the talk:**
   - The §9 validation replay.
-  - All 6 rules × {C1, C2}, with the trial's settings otherwise: σ_max 0.12, w_max 0.15, no sector cap, z 1.96, T 21, D_max 0.08.
+  - Stage 0 tuning, as above.
+  - All 6 rules × {C1, C2}, using each covariance option's Stage 0 pair (σ_max, w_max). Otherwise: no sector cap, z 1.96, T 21, D_max 0.08.
   - Each combination runs on three baskets: the frozen 33, the bandit (10 seeds), and the random-within-sector baseline (10 seeds).
   - About 250 backtests in total.
-- **Tier 2, one setting at a time around Tier 1's best covariance, 30 seeds.** These sweeps run on the **2014–2024 window**, so they choose settings without touching the scored window. The chosen settings are then rescored on 2025-01 → 2026-09-04:
+- **Tier 2, one setting at a time around the Stage 0 settings, for both C1 and C2, 30 seeds.** Tier 1's results are not used to choose the covariance option, because that would be choosing on the scored window. These sweeps run on the **2014–2024 window**, so they choose settings without touching the scored window. The chosen settings are then rescored on 2025-01 → 2026-09-04:
   - z ∈ {1.96, 2.5, no band}
   - T ∈ {21, 63}
-  - σ_max ∈ {0.12, 0.20}
-  - w_max ∈ {0.10, 0.15}
   - s_max ∈ {none, 0.30}
   - CES η ∈ {0.5, 2, 5}
   - Stone–Geary baseline ∈ {0.5%, 1%, 2%}
