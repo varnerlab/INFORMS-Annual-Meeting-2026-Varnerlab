@@ -315,11 +315,17 @@ fx = JLD2.load(joinpath(@__DIR__, "fixtures", "engine_cd_case.jld2"))
 - Consumes: `MyAllocationProblem`, `add_shared_constraints!`, `allocate` (Task 4).
 - Produces:
   - `MyMinVarRule`; `MyTangentRule` (`zero_alpha::Bool`); `MyLongShortCDRule` (`long_cap=1.30`, `short_cap=0.30`, `net_cap=1.00`).
-  - `max_investable(p::MyAllocationProblem)::Float64`: s* = min(1, max Σw subject to the shared constraints).
+  - `max_investable(p::MyAllocationProblem; vol_cap::Bool=false)::Float64`: s_dir = min(1, max Σw subject to the per-name cap, sector cap and turnover). With `vol_cap=true` the volatility cone is also included.
+  - **Two-fund rule (R24)** for min-variance and tangent:
+    1. Choose the mix at Σw = s_dir, without the volatility cone.
+    2. Scale it by c = min(1, σ_g,max/√(mixᵀΣ_g mix)) and hold the rest as cash.
+    3. If the scaled portfolio violates turnover (not expected at trial constants), keep n_prev with status `:infeasible`.
+    - `s_star` = Σw of the returned portfolio.
   - `expected_growth(rule::AbstractPortfolioRule, α::Vector, β::Vector, ḡ_M::Float64)::Vector{Float64}`: α + β·ḡ_M, or β·ḡ_M when `zero_alpha`.
-- **Min-variance:** minimize wᵀΣ_g w with Σw = s*.
+- **Min-variance:** the mix minimizes wᵀΣ_g w with Σw = s_dir; then scale per R24.
 - **Tangent:**
-  - Maximize (μ_g − g_f)ᵀw / √(wᵀΣ_g w) with Σw = s*, via homogenization (y = κw; every shared constraint stays linear or SOC in (y, κ)).
+  - The mix maximizes (μ_g − g_f)ᵀw / √(wᵀΣ_g w) with Σw = s_dir, via homogenization (y = κw, Σy = s_dir·κ; the caps, sector and turnover rows are homogenized, without the volatility cone). Then scale per R24.
+  - A homogenized solve that fails after positive excess was found returns `:solver_failed` with n_prev, not `:fallback_minvar`.
   - If no feasible point has a positive excess return, return the min-variance solution with status `:fallback_minvar`.
 - **Long-short CD:**
   - Long side L = {γ > 0}, short side S = {γ < 0}, names with γ = 0 held at 0.
@@ -330,6 +336,11 @@ fx = JLD2.load(joinpath(@__DIR__, "fixtures", "engine_cd_case.jld2"))
 
 ```julia
 @test max_investable(P(w_max=0.15, γ=[0.5,0.5], prices=[10.,20.], Σ_g=Σ2)) ≈ 0.30 atol=1e-6
+# R24: with the vol cap binding, tangent keeps its mix and scales down; it no longer collapses to min-variance
+rt = allocate(MyTangentRule(), P(Σ_g=Σ2, μ_g=[0.12,0.20], g_f=0.04, γ=[.5,.5], prices=[10.,20.], σ_g_max=1.5))
+@test rt.w ./ sum(rt.w) ≈ (Σ2\e) ./ sum(Σ2\e) atol=1e-5 && sqrt(rt.w' * Σ2 * rt.w) ≈ 1.5 atol=1e-6
+rm = allocate(MyMinVarRule(), P(Σ_g=Σ2, γ=[.5,.5], prices=[10.,20.], σ_g_max=1.5))
+@test rm.w ./ sum(rm.w) ≈ (Σ2 \ ones(2)) ./ sum(Σ2 \ ones(2)) atol=1e-5 && maximum(abs.(rt.w .- rm.w)) > 0.05
 w = allocate(MyMinVarRule(), P(Σ_g=Σ2, γ=[.5,.5], prices=[10.,20.])).w
 @test w ≈ (Σ2 \ ones(2)) ./ sum(Σ2 \ ones(2)) atol=1e-5
 e = [0.12, 0.20] .- 0.04

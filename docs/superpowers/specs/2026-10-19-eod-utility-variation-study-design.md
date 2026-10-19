@@ -89,7 +89,10 @@ Port this from the engine's `solve_constrained_cd` (`modified_cobb_douglas_examp
 - **Floor for the log utilities:** stocks with γ ≤ 0 are held at the floor ε. This matches the engine.
 - **How much to invest (my call):** every rule invests up to 100% of equity and holds cash only when the caps or σ_max stop it.
   - CD does this naturally, because its log utility keeps buying until a limit binds. The trial sat at 60% when only 4 stocks had γ > 0 and each was capped at 15%.
-  - Min-variance would otherwise go to all cash, and tangent has no defined size. So both rules first find the largest fraction of equity s* ≤ 1 that the constraints allow, then solve with Σwᵢ = s*.
+  - Min-variance would otherwise go to all cash, and tangent has no defined size. Both rules therefore follow two-fund separation (ruling made during the build, 2026-10-19):
+    - First choose the **mix** at the largest investment the per-name cap, sector cap and turnover allow, ignoring the volatility cap. This is usually 100%.
+    - Then **scale** that mix down by c = min(1, σ_g,max/σ(mix)), holding the rest in cash.
+    - An earlier version forced Σw to the largest investment the volatility cap allowed. That left a single feasible portfolio whenever the cap bound, so min-variance and tangent were identical across most of the Stage 0 grid.
   - This keeps the comparison about the utility, not about different investment levels.
 
 ### Objectives
