@@ -147,7 +147,8 @@ Both options use the SIM growth covariance of the CHEME-5660 notes, in yr⁻² (
   - Ω̂_ε is the sample covariance of the basket's SIM residual growth rates over a trailing 126 trading days **(my call)**.
   - **Choosing λ (my call):** λ is picked once on 2014–2024, before Stage 0, by a rolling forecast check.
     - At each month-end, fit Ω̂_ε on the trailing 126 days.
-    - Predict the next 21 days' variance for random long-only portfolios, drawn from random sector baskets.
+    - Predict the next 21 days' **residual** variance, var(wᵀε), for random long-only portfolios drawn from random sector baskets. The prediction is wᵀD^{1/2}R_λD^{1/2}w.
+    - Scoring residual variance rather than total variance keeps market-variance forecast errors out of the choice of λ (ruling made during the build, 2026-10-19).
     - Choose the λ in {0, 0.1, …, 1} that minimizes the forecast error, then freeze it.
     - The note itself says to choose λ on training data and keep the test period for evaluation.
   - λ = 1 reproduces C1.

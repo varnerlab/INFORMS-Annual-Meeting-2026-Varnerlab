@@ -217,8 +217,11 @@ d = Date(2025,5,1); spy2 = copy(spy); spy2[findfirst(==(d), dates)+1:end] .*= 2
     - Run monthly anchors from `start` + 252 trading days through `stop` − 21.
     - At each anchor, fit an OLS SIM on the trailing 252 days and residual correlations on the trailing 126 days.
     - Draw `n_portfolios` random 33-name baskets (3 names per sector where possible) with Dirichlet(1) weights.
-    - Predicted variance p = wᵀΣ_g(λ)w. Realized variance r = sample variance of the portfolio's growth over the next 21 days.
-    - Loss = mean QLIKE, r/p − log(r/p) − 1. Return the λ in `grid` with the lowest loss.
+    - Predicted **residual** variance p = wᵀD^{1/2}R_λD^{1/2}w, with D = diag(σ_ε²).
+    - Realized r = sample variance of wᵀε_t over the next 21 days. The residuals use the anchor's OLS α and β, so the market-variance forecast stays out of the choice of λ.
+    - Loss = mean QLIKE, r/p − log(r/p) − 1. Portfolios with r that is non-positive or not finite are skipped.
+  - `shrinkage_loss(md, start, stop; grid=0:0.1:1, n_portfolios=200, seed=5660)::Vector{Float64}` returns the mean loss for each λ.
+  - `choose_shrinkage(...)::Float64` returns the argmin of `shrinkage_loss`, with ties going to the larger λ.
 
 - [ ] **Step 1: Write the failing tests.**
 
@@ -232,11 +235,15 @@ c2(λ) = growth_covariance(build(MyShrunkResidualCovariance, (λ=λ, window=126)
 @test isposdef(c2(0.0)) && c2(0.0)[1,2] - Σ1[1,2] ≈ cor(E)[1,2] * σε[1] * σε[2]
 @test sqrt((1/252) * ([.5,.5,0]' * Σ1 * [.5,.5,0])) < 0.5   # annualized vol is sensible
 # choose_shrinkage recovers structure on synthetic markets
-@test choose_shrinkage(synthetic_md(ρ=0.8), Date(2015,1,2), Date(2018,12,31)) ≤ 0.3
-@test choose_shrinkage(synthetic_md(ρ=0.0), Date(2015,1,2), Date(2018,12,31)) ≥ 0.7
+L8 = shrinkage_loss(synthetic_md(ρ=0.8), Date(2015,1,2), Date(2018,12,31))
+@test (0:0.1:1)[argmin(L8)] ≤ 0.3 && (L8[end] - L8[1]) / L8[end] > 0.2     # strong correlation: shrinking hurts
+L0 = shrinkage_loss(synthetic_md(ρ=0.0), Date(2015,1,2), Date(2018,12,31))
+@test (L0[end] - minimum(L0)) / L0[end] < 0.02                            # no correlation: un-shrinking gains nothing material
+# look-ahead canary: prices after `stop` cannot change the loss
+@test shrinkage_loss(perturb_after(synthetic_md(ρ=0.8), Date(2018,12,31)), Date(2015,1,2), Date(2018,12,31)) == L8
 ```
 
-`synthetic_md(; ρ)` is a test helper. It builds a `MyMarketData` for 2014–2018 with 4 sectors of 12 names, β = 1, residual correlation ρ within each sector, and SPY as the market factor.
+`synthetic_md(; ρ, seed=5660)` is a test helper in `code/test/helpers.jl` (later tasks reuse it), along with `perturb_after(md, d)`, which doubles every price after date `d`. It builds a `MyMarketData` for 2014–2018 with 4 sectors of 12 names, β = 1, residual correlation ρ within each sector, and SPY as the market factor.
 
 - [ ] **Step 2: Run the tests and confirm they fail.** `julia --project=code code/test/test_covariance.jl` → FAIL.
 - [ ] **Step 3: Implement `Covariance.jl`.**
