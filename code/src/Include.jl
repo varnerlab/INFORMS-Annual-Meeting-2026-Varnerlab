@@ -20,6 +20,7 @@ include("Covariance.jl")
 include("Allocators.jl")
 include("AllocatorsMeanVariance.jl")
 include("AllocatorsLongShort.jl")
+include("Projection.jl")
 
 export MyMarketData, build, load_market_data, growth_rates, index_of, DATA_FILES,
     MySIMParameterEstimate, MyEWLSState, MyEWVarState, estimate_sim, fit_base_sim, ewls_init, ewls_update!,
@@ -29,3 +30,4 @@ export AbstractCovarianceModel, MySIMCovariance, MyShrunkResidualCovariance, gro
 export AbstractPortfolioRule, MyCobbDouglasRule, MyCESRule, MyStoneGearyRule, MyConstraintSet,
     MyAllocationProblem, MyAllocationResult, allocate, add_shared_constraints!
 export MyMinVarRule, MyTangentRule, MyLongShortCDRule, max_investable, expected_growth
+export MyProjection, project_gbm
