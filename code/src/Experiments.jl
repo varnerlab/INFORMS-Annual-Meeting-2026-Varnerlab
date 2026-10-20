@@ -61,17 +61,49 @@ function run_and_save(md::MyMarketData, cfg::MyRunConfig; outdir::AbstractString
     return h
 end
 
-function _write_error(runs::AbstractString, h::AbstractString, cfg::MyRunConfig, err, bt)
+function _write_error(runs::AbstractString, h::AbstractString, label::AbstractString, key_repr::AbstractString, err, bt)
     path = joinpath(runs, h * ".error.txt"); tmp = path * ".tmp"
     open(tmp, "w") do io
-        println(io, "label: ", cfg.label)
+        println(io, "label: ", label)
         println(io, "hash: ", h)
-        println(io, "config_key: ", repr(config_key(cfg)))
+        println(io, "config_key: ", key_repr)
         println(io, "exception: ")
         showerror(io, err, bt)
         println(io)
     end
     mv(tmp, path; force=true)
+end
+
+"""
+    _run_items(todo::Vector{<:Tuple{String,Any}}, run_one::Function; outdir, label_of::Function, key_repr::Function)
+
+Shared loop of `run_grid` and `run_study_grid`. For each `(hash, item)` in `todo`, calls
+`run_one(hash, item)` under `Threads.@threads :dynamic` (BLAS limited to one thread when
+`Threads.nthreads() > 1`). A success deletes a stale `<hash>.error.txt`; a failure writes it (label
+from `label_of(item)`, key repr from `key_repr(item)`, exception, stacktrace), logs `@warn "run failed"`
+and the loop continues. Returns `(ran, skipped=String[], errors)` with sorted hash vectors.
+"""
+function _run_items(todo::Vector{<:Tuple{String,Any}}, run_one::Function; outdir::AbstractString,
+        label_of::Function, key_repr::Function)
+    Threads.nthreads() > 1 && BLAS.set_num_threads(1)
+    runs = _runs_dir(outdir); mkpath(runs)
+    ran = String[]; errors = String[]; lk = ReentrantLock()
+    Threads.@threads :dynamic for k in eachindex(todo)
+        h, item = todo[k]
+        try
+            run_one(h, item)
+            rm(joinpath(runs, h * ".error.txt"); force=true)
+            lock(() -> push!(ran, h), lk)
+        catch err
+            bt = catch_backtrace()
+            _write_error(runs, h, label_of(item), key_repr(item), err, bt)
+            lock(lk) do
+                push!(errors, h)
+                @warn "run failed" hash = h label = label_of(item) exception = (err, bt)
+            end
+        end
+    end
+    return (ran=sort!(ran), skipped=String[], errors=sort!(errors))
 end
 
 """
@@ -86,7 +118,6 @@ retried on the next call, and a success deletes the stale error file. Returns
 `(ran, skipped, errors)`, each a sorted `Vector{String}` of hashes (deterministic across thread counts).
 """
 function run_grid(md::MyMarketData, cfgs::Vector{MyRunConfig}; outdir::AbstractString="results")
-    Threads.nthreads() > 1 && BLAS.set_num_threads(1)
     runs = _runs_dir(outdir); mkpath(runs)
     seen = Set{String}(); todo = Tuple{String,MyRunConfig}[]; skipped = String[]
     for c in cfgs
@@ -95,23 +126,9 @@ function run_grid(md::MyMarketData, cfgs::Vector{MyRunConfig}; outdir::AbstractS
         push!(seen, h)
         isfile(joinpath(runs, h * ".jld2")) ? push!(skipped, h) : push!(todo, (h, c))
     end
-    ran = String[]; errors = String[]; lk = ReentrantLock()
-    Threads.@threads :dynamic for k in eachindex(todo)
-        h, c = todo[k]
-        try
-            run_and_save(md, c; outdir=outdir)
-            rm(joinpath(runs, h * ".error.txt"); force=true)
-            lock(() -> push!(ran, h), lk)
-        catch err
-            bt = catch_backtrace()
-            _write_error(runs, h, c, err, bt)
-            lock(lk) do
-                push!(errors, h)
-                @warn "run failed" hash = h label = c.label exception = (err, bt)
-            end
-        end
-    end
-    return (ran=sort!(ran), skipped=sort!(skipped), errors=sort!(errors))
+    r = _run_items(todo, (h, c) -> run_and_save(md, c; outdir=outdir); outdir=outdir,
+        label_of=c -> c.label, key_repr=c -> repr(config_key(c)))
+    return (ran=r.ran, skipped=sort!(skipped), errors=r.errors)
 end
 
 # Rule name with its parameters, e.g. "MyCESRule(η=2.0)"; parameter-free rules give just the type name.
