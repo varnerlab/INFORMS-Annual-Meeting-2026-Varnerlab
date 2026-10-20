@@ -18,6 +18,7 @@ function main(args=ARGS)
     calib = load_calibration(CALIB)
     if smoke
         runs = filter(r -> r.allocator == "CD" && r.screen == :gamma, tier1_runs(s, grid))
+        length(runs) == 2 || error("smoke filter must yield exactly 2 runs, got ", length(runs))
         outdir, experiment = SMOKE_DIR, "smoke"
     elseif fixed
         runs, outdir, experiment = fixed_schedule_runs(s, grid), OUT_DIR, "fixed"
@@ -30,6 +31,7 @@ function main(args=ARGS)
     println("ran=", length(res.ran), " skipped=", length(res.skipped), " errors=", length(res.errors))
     ok = df[string.(df.status) .== "ok", :]
     isempty(ok) || println("mean wall seconds per run: ", mean(skipmissing(ok.wall_seconds)))
+    isempty(res.errors) || (println(stderr, "study finished with ", length(res.errors), " errors"); exit(1))
     return nothing
 end
 

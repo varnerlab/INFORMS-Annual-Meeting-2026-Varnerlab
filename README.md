@@ -25,11 +25,34 @@ Tests: `julia --project=code code/test/runtests.jl`. Settings live in `config/st
 
 ## Plan decisions
 
-Choices the plan makes where the spec is open (marked **(plan decision)** in the docstrings):
+Choices the plan or the build makes where the spec is open (marked **(plan decision)** in the docstrings).
 
-- Growth rates only: bandit reward, Sharpe, alpha and every table column use g.
-- Calibration window 2014-01-03 → 2024-12-31; run window 2025-01-02 → 2026-09-04; no look-ahead (orders fill at the next open).
-- λ (residual shrinkage) and the volatility cap (SPY growth volatility, annualized) are calibrated on the training window.
-- The deterministic γ screen runs one seed; bandit and random screens run `n_seeds` seeds (base seed 5660).
-- An infeasible allocation keeps previous holdings; the hedge pool and β cap are described in the `HedgePool.jl` and `StudyBacktest.jl` docstrings.
-- Every window, lag, limit and cost comes from `config/study.toml`.
+Plan:
+
+- Config field names are ASCII, so `config/study.toml` keys equal `MyStudySettings` field names.
+- The hedge-pool tie-break: a hedge name holds more than its floor only when a binding limit (β cap or vol cap) makes it worth its budget.
+- "Share of days the β cap binds" is counted over decision days (`cap_bind_share`), the only days the cap is enforced.
+- The figures use Plots.jl in a separate scripts environment.
+- The old 10-19 `run_backtest` stays; `run_study` reuses its fill and cost helpers.
+
+Spec "my call" items the code implements:
+
+- The ξ gain G is L8b's calibrated gain (|ξ| ≤ 1 on 99% of 2014–2024 days), not the trial's fixed 20.
+- The vol cap is SPY's 2014–2024 growth-rate SD (annualized ≈ 17%).
+- γ uses the signed numerator with |β| floored at β_floor = 0.1 in the denominator.
+- The online β prior uses SPY's 2014–2024 mean and variance (CHEME-5660 `ewls_init`).
+- The β cap is β_max = max(β_min, β_ref − κ_β·ξ), which is max(0, 1 − ξ) by default.
+- The hedge pool holds up to 5 names whose online β and down-day β are both ≤ 0, most negative down-day β first, and pool names are never shorted.
+- Hedge-off control: every run has a paired twin without the cap or pool.
+
+Rulings made during the build, each of which changes behavior:
+
+- Hedge names are minimized in a second, lexicographic solve (utility names fixed), because a 1e-6 tie-break alone is below the solver's accuracy.
+- CES with η < 1 uses a rescaled power cone (same optimum, accurate at large equity).
+- Stone–Geary with no γ > 0 still meets the β cap (buys the least hedge, or keeps holdings with `:infeasible`).
+- On an `:infeasible` or `:solver_failed` decision, `run_study` places no orders and keeps every holding, and the band and stats describe the kept book.
+- After a decision that leaves the book all cash, no band is set, so only cash revisit, horizon or drawdown can trigger the next decision (as in the trial).
+- An empty 130/30 problem records `:no_preferred` and goes to cash instead of erroring.
+- A study context that fails to build writes error files for its runs, and the sweep continues.
+
+Throughout, performance is measured by growth rates g = ln(S_end/S_start)/(k·Δt) in 1/yr, with no simple or log returns.

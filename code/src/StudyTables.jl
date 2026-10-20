@@ -142,3 +142,21 @@ function passive_references(md::MyMarketData, start::Date, stop::Date; W0::Real=
         merge((name="equal-weight universe",), growth_scorecard(Float64.(ew), spy, gf))]
     return DataFrame(rows)
 end
+
+"""
+    markdown_table(df::DataFrame)::String
+
+GitHub-style Markdown table of `df`: a header row, a `|---|` separator row and one row per line, each
+ending in a newline. Floats print with 4 significant digits; other values print with `string`.
+"""
+function markdown_table(df::DataFrame)::String
+    cols = names(df)
+    cell(x) = x isa AbstractFloat ? string(round(x; sigdigits=4)) : string(x)
+    io = IOBuffer()
+    println(io, "| ", join(cols, " | "), " |")
+    println(io, "|", join(fill("---", length(cols)), "|"), "|")
+    for r in eachrow(df)
+        println(io, "| ", join((cell(x) for x in r), " | "), " |")
+    end
+    return String(take!(io))
+end

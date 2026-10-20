@@ -58,7 +58,7 @@ export assign_quotas, beat_spy_reward, train_sector_bandit, quarter_starts, band
     random_sector_basket, random_matched_schedule
 export config_key, config_hash, run_and_save, run_grid, rebuild_summary, run_stats, load_experiment
 export xi_gain, xi_series, gtilde_series, gamma_weights
-export MyCalibration, calibrate, save_calibration, load_calibration
+export MyCalibration, calibrate, save_calibration, load_calibration, calibration_summary
 export MyOnlineSIM, online_sim
 export down_day_beta, hedge_pool, beta_cap
 export AbstractScreen, MyBanditScreen, MyGammaScreen, MyRandomScreen, excess_growth_windows,
@@ -68,4 +68,4 @@ export growth_scorecard
 export MyStudyRun, MyStudyResult, make_rule, make_screen, run_study
 export study_key, study_hash, study_stats, run_and_save_study, run_study_grid, tier1_runs, fixed_schedule_runs,
     rebuild_study_summary
-export group_summary, paired_win_rate, gamma_percentile, hedge_effect, long_vs_short_hedge, passive_references
+export group_summary, paired_win_rate, gamma_percentile, hedge_effect, long_vs_short_hedge, passive_references, markdown_table

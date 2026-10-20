@@ -21,4 +21,7 @@ include("helpers.jl")
         repick_on_band_exit=trues(4), seed=[1, 1, 2, 2], sharpe=[0.5, 0.3, 0.2, 0.4], status=fill("ok", 4))
     l = long_vs_short_hedge(d2; metric=:sharpe)
     @test only(l.screen) == :bandit && only(l.n_pairs) == 2 && only(l.win_rate) == 0.5 && only(l.median_diff) ≈ 0.0
+    mt = markdown_table(DataFrame(a=[1, 2], b=[0.123456, 2.5]))
+    ls = split(mt, "\n"; keepempty=false)
+    @test ls[1] == "| a | b |" && ls[2] == "|---|---|" && ls[3] == "| 1 | 0.1235 |" && length(ls) == 4
 end

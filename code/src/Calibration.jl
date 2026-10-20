@@ -66,3 +66,27 @@ Read the `"calibration"` entry of the JLD2 file at `path`.
 function load_calibration(path::AbstractString)::MyCalibration
     return load(path, "calibration")
 end
+
+"""
+    calibration_summary(md::MyMarketData, c::MyCalibration, s)::Dict{String,Any}
+
+Summary of `c` for `results/calibration_summary.toml`. `s` is a `MyStudySettings` (untyped here because
+`StudySettings.jl` is included after this file); it supplies `xi_short`, `xi_long` and `xi_quantile`.
+Keys: `lambda` (dimensionless), `sigma_m` (yr⁻¹), `vol_cap_annual` (yr⁻¹, `σ_m·√Δt` with Δt = 1/252 yr),
+`m_m` (yr⁻¹), `v_m` (yr⁻²), `xi_short`, `xi_long` (trading days), `xi_quantile`, `G` (dimensionless ξ gain on
+the SPY closes of the training window), `train_start`, `train_stop` (ISO dates), `universe_size` (count) and
+`sector_counts` (name => count). Print a TOML file with `TOML.print(io, d; sorted=true)` for a stable key order.
+"""
+function calibration_summary(md::MyMarketData, c::MyCalibration, s)::Dict{String,Any}
+    Δt = 1 / 252    # yr
+    i0, i1 = index_of(md, c.train_start), index_of(md, c.train_stop)
+    G = xi_gain(md.spy_close[i0:i1]; short=s.xi_short, long=s.xi_long, q=s.xi_quantile)
+    sectors = Dict{String,Int}()
+    for x in md.sector
+        sectors[x] = get(sectors, x, 0) + 1
+    end
+    return Dict{String,Any}("lambda" => c.λ, "sigma_m" => c.σ_m, "vol_cap_annual" => c.σ_m * sqrt(Δt),
+        "m_m" => c.m_m, "v_m" => c.v_m, "xi_short" => s.xi_short, "xi_long" => s.xi_long,
+        "xi_quantile" => s.xi_quantile, "G" => G, "train_start" => string(c.train_start),
+        "train_stop" => string(c.train_stop), "universe_size" => length(md.tickers), "sector_counts" => sectors)
+end

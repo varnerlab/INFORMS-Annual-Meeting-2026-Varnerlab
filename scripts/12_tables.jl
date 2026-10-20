@@ -8,16 +8,6 @@ const DATA_DIR = joinpath(REPO, "data")
 const CONFIG = joinpath(REPO, "config", "study.toml")
 const MD_START, MD_STOP = Date(2014, 1, 3), Date(2026, 9, 4)
 
-function md_table(name, df)
-    println("\n### ", name, "\n")
-    cols = names(df)
-    println("| ", join(cols, " | "), " |")
-    println("|", join(fill("---", length(cols)), "|"), "|")
-    for r in eachrow(df)
-        println("| ", join([x isa AbstractFloat ? string(round(x; sigdigits=4)) : string(x) for x in r], " | "), " |")
-    end
-end
-
 function main(args=ARGS)
     smoke = "--smoke" in args
     pos = filter(a -> !startswith(a, "--"), args)
@@ -40,7 +30,7 @@ function main(args=ARGS)
         "passive" => passive_references(md, s.start, s.stop; W0=s.W0)]
     for (name, t) in tables
         CSV.write(joinpath(outdir, name * ".csv"), t)
-        md_table(name, t)
+        println("\n### ", name, "\n\n", markdown_table(t))
     end
     return nothing
 end
