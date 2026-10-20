@@ -66,7 +66,9 @@ Output of `run_backtest`, one entry per trading day of the window in `dates`, `e
 close), `cash` (USD, at the close) and `borrow_fees` (USD charged that day). Also:
 - `trades::DataFrame`: `date` (fill day), `ticker`, `qty` (signed whole shares), `price` (the fill
   day's open, USD/share), `cost` (USD), `scale` (the R25 buy scale factor applied on that fill; 1.0
-  for sells and for unscaled buys).
+  for sells and for unscaled buys). When cash cannot pay for even one share of any buy, each dropped
+  buy is logged as a row with `qty = 0`, `cost = 0` and the factor found (0 when cash was already
+  negative before the buys).
 - `decisions::DataFrame`: `date`, `reason` (trigger), `status` (allocator), `n_names` (basket names
   with |target weight| > 1e-3), `invested_frac` (allocator `s_star`: Σwᵢ, net for 130/30),
   `μ_T`, `σ_T` (projected value mean/SD at the horizon T, USD).
@@ -99,7 +101,7 @@ Build a run configuration. Required: `rule`, `covariance`, `w_max`, `σ_g_max` (
 `borrow_rate = 0.0075` (yr⁻¹), `label = ""`. Unknown field names throw `ArgumentError`, as do
 invalid values: non-positive `w_max`, `s_max`, `W0` or `σ_m`; `σ_g_max < 0`; `stop < start`; a
 `σ_m_mode` other than `:ewls`/`:fixed`; an empty schedule, a first entry not at `start`, entry dates
-not strictly increasing, or an empty or duplicated basket; `mpc.T < 1` or `mpc.N < 2`.
+not strictly increasing, or an empty or duplicated basket; `mpc.T < 1` or `mpc.N < 2`; `seed < 0`.
 """
 function build(::Type{MyRunConfig}, data::NamedTuple)::MyRunConfig
     for f in _RUN_CONFIG_REQUIRED
@@ -144,6 +146,7 @@ function _check_run_config(c::MyRunConfig)
     c.σ_m_mode in (:ewls, :fixed) || bad("σ_m_mode must be :ewls or :fixed, got :$(c.σ_m_mode)")
     (c.K_turnover_frac >= 0 && c.borrow_rate >= 0) || bad("K_turnover_frac and borrow_rate must be ≥ 0")
     (c.mpc.T >= 1 && c.mpc.N >= 2) || bad("mpc.T must be ≥ 1 and mpc.N ≥ 2")
+    c.seed >= 0 || bad("seed must be ≥ 0")
     s = c.basket_schedule
     isempty(s) && bad("basket_schedule is empty")
     first(s[1]) == c.start || bad("the first basket_schedule entry must be at start $(c.start), got $(first(s[1]))")
@@ -251,13 +254,16 @@ function _bt_cash_after_buys(cash::Float64, q::Vector{Int}, px::Vector{Float64},
     return cash
 end
 
-# Fill queued orders at the open of day t (R25). Orders are whole shares q = trunc(n_target − held).
-# Sells and short sales execute first, then buys. If cash after the sells cannot pay for every buy at
-# the open plus costs, every buy is scaled by one factor f ∈ [0, 1] (the largest, by bisection) and
-# truncated, so cash ≥ 0 after the fills. Updates `held` and the trade log; returns cash (USD).
+# Fill queued orders at the open of day t (R25 as amended by R27). Orders are whole shares
+# q = trunc(n_target) − held: the target is rounded toward zero first, so a fill ends at trunc(n_target)
+# (an ε pin of 1e-3 shares exits fully, and a reduction never stops above its target). Sells and short
+# sales execute first, then buys. If cash after the sells cannot pay for every buy at the open plus
+# costs, every buy is scaled by one factor f ∈ [0, 1] (the largest, by bisection) and truncated, so
+# cash ≥ 0 after the fills; if that leaves no buy at all, each dropped buy is logged with qty 0.
+# Updates `held` and the trade log; returns cash (USD).
 function _bt_fill!(held::Vector{Int}, cash::Float64, order, md::MyMarketData, t::Int, tr::_BTTrades)::Float64
     cols = order.cols
-    q = [trunc(Int, order.n[k] - held[j]) for (k, j) in enumerate(cols)]
+    q = [trunc(Int, order.n[k]) - held[j] for (k, j) in enumerate(cols)]
     px = [md.open[t, j] for j in cols]
     for k in eachindex(q)
         q[k] < 0 && (cash = _bt_execute!(held, cash, tr, md, t, cols[k], q[k], px[k], order.adv[k], 1.0))
@@ -277,8 +283,17 @@ function _bt_fill!(held::Vector{Int}, cash::Float64, order, md::MyMarketData, t:
         qk = trunc(Int, f * q[k])
         qk == 0 || (cash = _bt_execute!(held, cash, tr, md, t, cols[k], qk, px[k], order.adv[k], f))
     end
+    if all(k -> trunc(Int, f * q[k]) == 0, buys)          # cash could not pay for any buy: log the drops
+        for k in buys
+            cash = _bt_execute!(held, cash, tr, md, t, cols[k], 0, px[k], order.adv[k], f)
+        end
+    end
     return cash
 end
+
+# Projection RNG seed (R28): an integer mix of the run seed and the decision date's day number, so the
+# paths do not depend on `hash` (which may change between Julia versions) or on the row index.
+_bt_projection_seed(seed::Int, d::Date)::Int = seed * 1_000_003 + Dates.value(d)
 
 # One fill of `qk` shares (signed) of column j at `px` (USD/share) on day t: pay qk·px plus the trade
 # cost from cash, update the position, log the trade with its buy scale factor. Returns cash (USD).
@@ -297,8 +312,8 @@ end
 Replay `cfg` on end-of-day data from `cfg.start` to the last trading day ≤ `cfg.stop`. Equity starts
 at `W0` (USD) in cash at the start close. On each trading day t, in order:
 
-1. **Fill** the orders queued on day t−1 at `open[t]` (R25): whole shares q = trunc(n_target − held),
-   sells and short sales first, then buys scaled by one factor if cash would go negative; costs from
+1. **Fill** the orders queued on day t−1 at `open[t]` (R25, R27): whole shares q = trunc(n_target) −
+   held, sells and short sales first, then buys scaled by one factor if cash would go negative; costs from
    `trade_cost` with ADV = trailing 63-day mean volume at the decision day, floored at 1 share (R26).
 2. **Accrue** positive cash by exp(g_f[t]·Δt) and charge `borrow_fee` on the short notional at
    `close[t]` (USD). Skipped on the first day (the account opens at that close).
@@ -315,9 +330,10 @@ at `W0` (USD) in cash at the start close. On each trading day t, in order:
    (`expected_growth`) and Σ_g (`growth_covariance`; C2 residuals over the trailing `window` growth
    days with the EWLS α, β) for the basket, then a fresh `MyConstraintSet`/`MyAllocationProblem`
    (prices = close[t], W = equity, n_prev = held shares, K_turnover = K_turnover_frac·W,
-   c̄ = 5e-4·mean(prices), ε = 1e-3) and `allocate`. Store the target weights; queue orders for t+1
-   (held names outside the basket target 0); run `project_gbm` on the targets with cash
-   W − Σ n·close and `rng = MersenneTwister(hash((cfg.seed, date)))`; reset τ = 0; set
+   c̄ = 5e-4·mean(prices), ε = 1e-3) and `allocate`. A result with non-finite shares counts as
+   `:solver_failed` and holds the current shares (R29). Store the target weights; queue orders for
+   t+1 (held names outside the basket target 0); run `project_gbm` on the targets with cash
+   W − Σ n·close and `rng = MersenneTwister(seed·1_000_003 + Dates.value(date))` (R28); reset τ = 0; set
    `last_alloc_was_cash = (status == :no_preferred)` (R19). A decision on the last day is recorded
    but has no fill.
 
@@ -411,8 +427,9 @@ function run_backtest(md::MyMarketData, cfg::MyRunConfig)::MyBacktestResult
             n_prev=Float64.(held[b]), ε=_BT_ε))
         p = build(MyAllocationProblem, (γ=γ, μ_g=μ_g, Σ_g=Σ_g, prices=S, W=V, g_f=md.g_f[t], constraints=cs))
         r = allocate(cfg.rule, p)
+        all(isfinite, r.n) || (r = _result(p, copy(p.constraints.n_prev), :solver_failed))   # R29
         proj = project_gbm(r.n, S, V - dot(r.n, S), μ_g, Σ_g, md.g_f[t]; T=cfg.mpc.T, N=cfg.mpc.N,
-            rng=MersenneTwister(hash((cfg.seed, d))))
+            rng=MersenneTwister(_bt_projection_seed(cfg.seed, d)))
 
         targets[d] = Dict(md.tickers[b[i]] => r.w[i] for i in eachindex(b))
         projections[d] = proj

@@ -33,10 +33,28 @@ function hand_initial(md::MyMarketData, cfg::MyRunConfig, k::Int)
         μ_g=expected_growth(cfg.rule, α, β, ms.ḡ_M), Σ_g=Σ_g, prices=S, W=cfg.W0, g_f=md.g_f[i], constraints=cs))
     r = allocate(cfg.rule, p)
     proj = project_gbm(r.n, S, cfg.W0 - dot(r.n, S), p.μ_g, Σ_g, md.g_f[i]; T=cfg.mpc.T, N=cfg.mpc.N,
-        rng=MersenneTwister(hash((cfg.seed, cfg.start))))
+        rng=MersenneTwister(cfg.seed * 1_000_003 + Dates.value(cfg.start)))   # R28
     return (w=Dict(names .=> r.w), proj=proj)
 end
 hand_initial_weights(md, cfg, k) = hand_initial(md, cfg, k).w
+
+# Test rule: Cobb-Douglas on its first call, then a result with non-finite shares (R29).
+mutable struct MyFlakyRule <: AbstractPortfolioRule
+    calls::Int
+    MyFlakyRule() = new(0)
+end
+function VLINFORMS2026.allocate(rule::MyFlakyRule, p::MyAllocationProblem)
+    rule.calls += 1
+    rule.calls == 1 && return allocate(MyCobbDouglasRule(), p)
+    K = length(p.γ)
+    return build(MyAllocationResult, (n=fill(NaN, K), w=fill(NaN, K), status=:optimal, s_star=NaN))
+end
+
+# Target shares nᵢ = wᵢ·W/Sᵢ of decision d, rebuilt from its stored weights, equity and closes.
+function target_shares(res, md::MyMarketData, d::Date)
+    t = index_of(md, d); W = res.equity[findfirst(==(d), res.dates)]
+    return Dict(n => w * W / md.close[t, findfirst(==(n), md.tickers)] for (n, w) in res.targets[d])
+end
 
 weights_close(a::Dict, b::Dict; rtol=1e-6) = keys(a) == keys(b) && all(isapprox(a[t], b[t]; rtol=rtol) for t in keys(a))
 
@@ -180,6 +198,77 @@ end
     @test_throws ArgumentError run_backtest(md, with(cfg; forced_dates=[Date(2025,1,4)]))
     @test_throws ArgumentError with(cfg; basket_schedule=[md.dates[22] => copy(md.tickers)])
     @test_throws ArgumentError with(cfg; σ_m_mode=:other)
+    @test_throws ArgumentError with(cfg; seed=-1)
+end
+
+@testset "R27: a fill ends at trunc(target): ε pins exit, reductions stop at the target" begin
+    md = bt_md()
+    # the day after every :no_preferred fill, nothing is held (CD pins at ε, 130/30 targets zero)
+    for rule in (MyCobbDouglasRule(), MyLongShortCDRule())
+        res = run_backtest(md, bt_cfg(md; rule=rule)); pos = positions_by_day(res)
+        np = [findfirst(==(d), res.dates) for d in res.decisions.date[res.decisions.status .== :no_preferred]]
+        np = filter(s -> s < length(res.dates), np)
+        @test count(s -> any(!=(0), values(pos[s])), np) ≥ 1           # some of them start from holdings
+        @test all(s -> all(==(0), values(pos[s+1])), np)
+    end
+    # after every fill, each position lies between 0 and its target shares (same sign, |n| ≤ |target|);
+    # for 130/30 only on fill days with no scaled buy (a scaled short cover stops short of its target)
+    ls_md = bt_md(drift=[0.40, 0.25, -1.5])
+    runs = [(md, bt_cfg(md)), (ls_md, bt_cfg(ls_md; rule=MyLongShortCDRule(), base_sim=bt_base_sim(α=[0.2, 0.05, -1.0]),
+        σ_g_max=100.0, w_max=0.5))]
+    for (m, cfg) in runs
+        res = run_backtest(m, cfg); pos = positions_by_day(res); checked = 0; shorts = 0
+        for d in res.decisions.date
+            s = findfirst(==(d), res.dates); s == length(res.dates) && continue
+            fill = res.trades.date .== res.dates[s+1]
+            any(res.trades.scale[fill .& (res.trades.qty .> 0)] .< 1) && continue
+            for (n, x) in target_shares(res, m, d)
+                p = get(pos[s+1], n, 0)
+                @test p * x ≥ 0 && abs(p) ≤ abs(x) * (1 + 1e-9) + 1e-9
+                shorts += p < 0
+            end
+            checked += 1
+        end
+        @test checked ≥ 5
+        cfg.rule isa MyLongShortCDRule && @test shorts ≥ 1
+    end
+end
+
+@testset "R6: EWLS runs daily for every base_sim name, in the basket or not" begin
+    # CCC joins the basket at a swap on day 72. With no per-name or vol cap, CD's weights are γᵢ/Σγ, so
+    # they match a run that held CCC in its basket from the start only if CCC's EWLS ran every day.
+    # CCC's base α (1.0) is far from its data (≈ −0.24 yr⁻¹), so skipped updates move γ visibly.
+    md = bt_md(); c = 72
+    cfg = bt_cfg(md; w_max=1.0, σ_g_max=Inf, natural_triggers=false, base_sim=bt_base_sim(α=[0.2, 0.05, 1.0]))
+    swap = run_backtest(md, with(cfg; basket_schedule=[md.dates[21] => ["AAA", "BBB"], md.dates[c] => ["BBB", "CCC"]]))
+    from_start = run_backtest(md, with(cfg; basket_schedule=[md.dates[21] => ["BBB", "CCC"]], forced_dates=[md.dates[c]]))
+    @test swap.decisions.reason == [:initial, :basket_change] && from_start.decisions.reason == [:initial, :forced]
+    @test 0.1 < swap.targets[md.dates[c]]["CCC"] < 0.9
+    # rtol 1e-4: the two solves differ in W and n_prev, so Clarabel stops at slightly different points
+    # (2.6e-6 apart here); a CCC EWLS frozen until the swap moves them by 5.7e-3
+    @test weights_close(swap.targets[md.dates[c]], from_start.targets[md.dates[c]]; rtol=1e-4)
+end
+
+@testset "R29: non-finite allocator output holds the current shares" begin
+    md = bt_md()
+    res = run_backtest(md, bt_cfg(md; rule=MyFlakyRule(), natural_triggers=false, forced_dates=[md.dates[50]]))
+    @test res.decisions.status == [:optimal, :solver_failed]
+    @test all(res.trades.date .== md.dates[22])                    # the failed decision trades nothing
+    s = findfirst(==(md.dates[50]), res.dates); pos = positions_by_day(res)[s]
+    W = res.equity[s]
+    @test weights_close(res.targets[md.dates[50]],
+        Dict(n => pos[n] * md.close[50, findfirst(==(n), md.tickers)] / W for n in keys(pos)); rtol=1e-12)
+    @test all(isfinite, res.equity) && all(isfinite, res.projections[md.dates[50]].μ)
+end
+
+@testset "a fill that cannot afford any buy logs the dropped buys" begin
+    md = bt_md(); order = (cols=[1, 2], n=[10.0, 5.0], adv=[1e4, 1e4])
+    for (cash0, scale_ok) in ((-5.0, ==(0.0)), (1.0, f -> 0 < f < 1))
+        held = zeros(Int, 3); tr = VLINFORMS2026._BTTrades()
+        @test VLINFORMS2026._bt_fill!(held, cash0, order, md, 30, tr) == cash0
+        @test held == [0, 0, 0] && tr.qty == [0, 0] && tr.cost == [0.0, 0.0] && tr.ticker == ["AAA", "BBB"]
+        @test allequal(tr.scale) && scale_ok(tr.scale[1])
+    end
 end
 
 @testset "R25: overnight gap scales buys, cash stays ≥ 0" begin
