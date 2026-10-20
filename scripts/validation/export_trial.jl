@@ -22,6 +22,15 @@ function main()
     for f in ["artifacts/sim_base.jld2", "artifacts/frozen_basket.jld2", "data/trial-log.txt", "data/residuals.csv"]
         cp(joinpath(TRIAL, f), joinpath(OUT, basename(f)); force=true)
     end
+    # exact EWLS state the trial held after its 2026-05-29 16:15 update (pre-force backup)
+    st = LiveCD.load_state(joinpath(TRIAL, "data", "trial-state.backup-2026-05-29-pre-force.jld2"))
+    sdf = DataFrame(ticker=String[], Sw=Float64[], Swx=Float64[], Swy=Float64[], Swxx=Float64[],
+        Swxy=Float64[], Swyy=Float64[], η=Float64[], α=Float64[], β=Float64[], σ_ε=Float64[])
+    for t in st.tickers
+        e = st.ewls[t]
+        push!(sdf, (String(t), e.Sw, e.Swx, e.Swy, e.Swxx, e.Swxy, e.Swyy, e.η, e.α, e.β, e.σ_ε))
+    end
+    CSV.write(joinpath(OUT, "trial_ewls_0529.csv"), sdf)
     println("wrote ", nrow(rows), " target rows to ", OUT)
 end
 

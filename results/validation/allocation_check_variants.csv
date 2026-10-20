@@ -1,0 +1,12 @@
+variant,date,pass,max_abs_diff,worst,only_sim,only_trial,missing_from_universe
+eod,2026-05-29,false,0.002622728399726708,VRSN,WRB,"",""
+eod,2026-06-29,false,0.010133458286511698,PSA,PSX,"",""
+eod,2026-07-28,false,0.010529394164816875,ORCL,"","",""
+eod,2026-08-26,true,0.009463702143998644,VLO,"","",""
+eod,2026-09-01,false,0.050884855050135284,FOXA,"",FOXA,""
+logged_spy,2026-05-29,true,0.0003861685357401468,VLO,"","",""
+logged_spy,2026-06-29,true,0.006702968930324502,INTU,"","",""
+logged_spy,2026-07-28,true,0.0055471768436032316,ORCL,"","",""
+logged_spy,2026-08-26,true,0.005313098774624284,INTU,"","",""
+logged_spy,2026-09-01,false,0.14999905240544914,CHD,CHD;PG;SPG,FOXA,""
+state_0529,2026-05-29,true,4.944044926930014e-7,PG,"","",""

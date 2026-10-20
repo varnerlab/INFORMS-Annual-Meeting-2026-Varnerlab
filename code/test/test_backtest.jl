@@ -320,3 +320,27 @@ end
         rule isa MyLongShortCDRule || @test all(res.cash .>= 0)
     end
 end
+
+@testset "validation hooks: ewls_g_m, decision_market, ewls_state0" begin
+    md = bt_md(); cfg = bt_cfg(md); i = index_of(md, cfg.start)
+    names = last(first(cfg.basket_schedule))
+    gdata = growth_rates(md.spy_close[i-1:i])[1]
+    w0(c) = run_backtest(md, c).targets[cfg.start]
+    one = with(cfg; ewls_calendar=[cfg.start])
+    base = w0(one)
+    # NaN or the data's own g_m changes nothing; another g_m changes the EWLS update
+    @test weights_close(w0(with(one; ewls_g_m=[NaN])), base)
+    @test weights_close(w0(with(one; ewls_g_m=[gdata])), base)
+    @test !weights_close(w0(with(one; ewls_g_m=[gdata + 3.0])), base; rtol=1e-6)
+    @test_throws ArgumentError with(one; ewls_g_m=[1.0, 2.0])
+    # decision_market: the engine's own market_state is a no-op, another λ is not
+    ms = market_state(md.spy_close, md.dates, cfg.start)
+    @test weights_close(w0(with(one; decision_market=Dict(cfg.start => (g_m=ms.g_m, λ=ms.λ)))), base)
+    @test !weights_close(w0(with(one; decision_market=Dict(cfg.start => (g_m=ms.g_m + 2.0, λ=ms.λ)))), base; rtol=1e-6)
+    # ewls_state0: the base_sim prior as an explicit state is a no-op; a perturbed state is not
+    none = with(cfg; ewls_calendar=Date[])
+    st = Dict(t => ewls_init(cfg.base_sim[t].α, cfg.base_sim[t].β, cfg.base_sim[t].σ_ε) for t in names)
+    @test weights_close(w0(with(none; ewls_state0=st)), w0(none))
+    st[names[1]].α += 2.0
+    @test !weights_close(w0(with(none; ewls_state0=st)), w0(none); rtol=1e-6)
+end

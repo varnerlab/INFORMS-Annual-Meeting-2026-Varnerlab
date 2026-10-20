@@ -39,4 +39,4 @@ export MyProjection, project_gbm
 export trade_cost, borrow_fee, MyMPCSpec, MyTriggerState, check_trigger
 export scorecard
 export MyRunConfig, MyBacktestResult, run_backtest
-export compare_targets, ewls_calendar_from_log
+export compare_targets, ewls_calendar_from_log, logged_market_from_log

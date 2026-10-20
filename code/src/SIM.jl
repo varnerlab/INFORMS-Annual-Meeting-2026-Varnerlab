@@ -126,7 +126,7 @@ end
 
 Causal market state at decision date `d` (uses data through `d` only).
 `g_m` = 252·log(spy[i]/spy[i−1]) (yr⁻¹); `λ` = −20·(EMA21/EMA63 − 1) on SPY closes with dates in
-(d − 105 days, d], seeded at the window's first close; `ḡ_M` (yr⁻¹) = mean of the last
+[d − 105 days, d] (start inclusive, as the trial's data request), seeded at the window's first close; `ḡ_M` (yr⁻¹) = mean of the last
 min(252, i−1) SPY growth rates ending at `d`.
 """
 function market_state(spy_close::AbstractVector, dates::Vector{Date}, d::Date)
@@ -134,7 +134,7 @@ function market_state(spy_close::AbstractVector, dates::Vector{Date}, d::Date)
     (i > length(dates) || dates[i] != d) && throw(ArgumentError("date $(d) is not a trading date"))
     i > 1 || throw(ArgumentError("market_state needs a previous trading day; $(d) is the first date"))
     g_m = growth_rates(spy_close[(i-1):i])[1]
-    lo = searchsortedfirst(dates, d - Day(104))
+    lo = searchsortedfirst(dates, d - Day(105))
     w = spy_close[lo:i]
     λ = -20.0 * (ema_series(w; span = 21)[end] / ema_series(w; span = 63)[end] - 1.0)
     ḡ_M = mean(growth_rates(spy_close[max(1, i - 252):i]))

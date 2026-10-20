@@ -34,6 +34,9 @@ One backtest configuration (`run_backtest`). Fields:
 | `σ_m_mode::Symbol` | `:ewls` (default) updates σ_m with `ewvar_update!`; `:fixed` holds it at `σ_m` |
 | `K_turnover_frac`, `borrow_rate` | turnover budget as a fraction of equity (default 0.10); borrow fee (yr⁻¹, default 0.0075) |
 | `label::String` | run label (default "") |
+| `ewls_g_m::Union{Nothing,Vector{Float64}}` | validation only: market growth g_m (yr⁻¹) for each `ewls_calendar` entry, in order (`NaN` = use the data); default `nothing` |
+| `decision_market::Union{Nothing,Dict{Date,NamedTuple}}` | validation only: `(g_m, λ)` to use at a decision date instead of `market_state`; default `nothing` |
+| `ewls_state0::Union{Nothing,Dict{String,MyEWLSState}}` | validation only: EWLS states (by ticker) in place of `ewls_init` from `base_sim`; default `nothing` |
 """
 mutable struct MyRunConfig
     rule::AbstractPortfolioRule
@@ -56,6 +59,9 @@ mutable struct MyRunConfig
     K_turnover_frac::Float64
     borrow_rate::Float64
     label::String
+    ewls_g_m::Union{Nothing,Vector{Float64}}
+    decision_market::Union{Nothing,Dict{Date,NamedTuple{(:g_m, :λ),Tuple{Float64,Float64}}}}
+    ewls_state0::Union{Nothing,Dict{String,MyEWLSState}}
     MyRunConfig() = new()
 end
 
@@ -131,6 +137,11 @@ function build(::Type{MyRunConfig}, data::NamedTuple)::MyRunConfig
     c.K_turnover_frac = get(data, :K_turnover_frac, 0.10)
     c.borrow_rate = get(data, :borrow_rate, 0.0075)
     c.label = get(data, :label, "")
+    c.ewls_g_m = get(data, :ewls_g_m, nothing)
+    dm = get(data, :decision_market, nothing)
+    c.decision_market = dm === nothing ? nothing :
+        Dict{Date,NamedTuple{(:g_m, :λ),Tuple{Float64,Float64}}}(Date(k) => (g_m=Float64(v.g_m), λ=Float64(v.λ)) for (k, v) in dm)
+    c.ewls_state0 = get(data, :ewls_state0, nothing)
     _check_run_config(c)
     return c
 end
@@ -147,6 +158,8 @@ function _check_run_config(c::MyRunConfig)
     (c.K_turnover_frac >= 0 && c.borrow_rate >= 0) || bad("K_turnover_frac and borrow_rate must be ≥ 0")
     (c.mpc.T >= 1 && c.mpc.N >= 2) || bad("mpc.T must be ≥ 1 and mpc.N ≥ 2")
     c.seed >= 0 || bad("seed must be ≥ 0")
+    c.ewls_g_m === nothing || (c.ewls_calendar !== nothing && length(c.ewls_g_m) == length(c.ewls_calendar)) ||
+        bad("ewls_g_m needs an ewls_calendar of the same length")
     s = c.basket_schedule
     isempty(s) && bad("basket_schedule is empty")
     first(s[1]) == c.start || bad("the first basket_schedule entry must be at start $(c.start), got $(first(s[1]))")
@@ -204,6 +217,18 @@ function _bt_update_counts(md::MyMarketData, cfg::MyRunConfig, i0::Int, i1::Int)
         counts[i-i0+1] += 1
     end
     return counts
+end
+
+# g_m (yr⁻¹) of each EWLS update on each window day (same order as the day's calendar entries);
+# `NaN` means "use the data". Only used when cfg.ewls_g_m is set.
+function _bt_update_gm(md::MyMarketData, cfg::MyRunConfig, i0::Int, i1::Int)::Vector{Vector{Float64}}
+    out = [Float64[] for _ in i0:i1]
+    cfg.ewls_g_m === nothing && return out
+    for (e, g) in zip(cfg.ewls_calendar, cfg.ewls_g_m)
+        e > md.dates[i1] && continue
+        push!(out[searchsortedfirst(md.dates, e)-i0+1], g)
+    end
+    return out
 end
 
 # Mean volume (shares/day) over the trailing 63 trading days ending at day t, floored at 1 (R26).
@@ -358,6 +383,12 @@ function run_backtest(md::MyMarketData, cfg::MyRunConfig)::MyBacktestResult
     ew_cols = sort!([col[t] for t in keys(cfg.base_sim) if haskey(col, t)])
     ews = [ewls_init(cfg.base_sim[md.tickers[j]].α, cfg.base_sim[md.tickers[j]].β, cfg.base_sim[md.tickers[j]].σ_ε)
         for j in ew_cols]
+    if cfg.ewls_state0 !== nothing
+        for (k, j) in enumerate(ew_cols)
+            haskey(cfg.ewls_state0, md.tickers[j]) && (ews[k] = deepcopy(cfg.ewls_state0[md.tickers[j]]))
+        end
+    end
+    upd_gm = _bt_update_gm(md, cfg, i0, i1)
     ew_of = zeros(Int, length(md.tickers)); ew_of[ew_cols] .= eachindex(ew_cols)
     σ_state = ewvar_init(cfg.σ_m); σ_m = cfg.σ_m
 
@@ -396,11 +427,12 @@ function run_backtest(md::MyMarketData, cfg::MyRunConfig)::MyBacktestResult
         # 4. online SIM updates with day t's growth
         if n_updates[s] > 0
             g_m = log(md.spy_close[t] / md.spy_close[t-1]) / _BT_DT
-            for _ in 1:n_updates[s]
+            for u in 1:n_updates[s]
+                g_u = (cfg.ewls_g_m === nothing || isnan(upd_gm[s][u])) ? g_m : upd_gm[s][u]
                 for (k, j) in enumerate(ew_cols)
-                    ewls_update!(ews[k], log(md.close[t, j] / md.close[t-1, j]) / _BT_DT, g_m)
+                    ewls_update!(ews[k], log(md.close[t, j] / md.close[t-1, j]) / _BT_DT, g_u)
                 end
-                σ_new = ewvar_update!(σ_state, g_m)
+                σ_new = ewvar_update!(σ_state, g_u)
                 cfg.σ_m_mode == :ewls && (σ_m = σ_new)
             end
         end
@@ -419,6 +451,9 @@ function run_backtest(md::MyMarketData, cfg::MyRunConfig)::MyBacktestResult
         S = md.close[t, b]
         α = [ews[ew_of[j]].α for j in b]; β = [ews[ew_of[j]].β for j in b]; σε = [ews[ew_of[j]].σ_ε for j in b]
         ms = market_state(md.spy_close, md.dates, d)
+        if cfg.decision_market !== nothing && haskey(cfg.decision_market, d)
+            ms = (g_m=cfg.decision_market[d].g_m, λ=cfg.decision_market[d].λ, ḡ_M=ms.ḡ_M)
+        end
         γ = preference_weights(α, β, ms.g_m, ms.λ)
         μ_g = expected_growth(cfg.rule, α, β, ms.ḡ_M)
         Σ_g = growth_covariance(cfg.covariance, β, σε, σ_m; residuals=_bt_residuals(cfg.covariance, md, t, b, α, β))

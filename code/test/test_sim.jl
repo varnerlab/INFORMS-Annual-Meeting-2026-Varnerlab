@@ -51,8 +51,8 @@ using VLINFORMS2026
         ema(p, n) = (a = 2/(n+1); e = p[1]; for k in 2:length(p); e = a*p[k] + (1-a)*e; end; e)
         d = Date(2025,3,14); i = findfirst(==(d), wd)
         ms = market_state(spy, wd, d)
-        lo = findfirst(x -> x > d - Day(105), wd)
-        @test wd[lo] > d - Day(105) && wd[lo-1] <= d - Day(105)
+        lo = findfirst(x -> x >= d - Day(105), wd)    # start INCLUSIVE (R31)
+        @test wd[lo] == d - Day(105) && wd[lo-1] < d - Day(105)
         w = spy[lo:i]
         @test ms.λ ≈ -20 * (ema(w, 21) / ema(w, 63) - 1)
         # window start matters: a window starting one day earlier gives a different λ

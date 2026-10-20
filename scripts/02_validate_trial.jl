@@ -14,14 +14,28 @@ const σ_G_MAX = 0.12 * sqrt(252)        # yr⁻¹ (trial's 0.12 annualized)
 const W_MAX = 0.15                      # dimensionless
 const W0 = 100_502.72                   # USD, trial equity after the 2026-05-20 liquidation
 const TOL = 0.01                        # dimensionless (1 pp)
-const OPTIONS_PNL = -882.0              # USD, trial's options sleeve realized loss (not in the replay)
 const λ_C2 = 0.5                        # placeholder shrinkage until Task 13
 
-function make_cfg(md, base, σ_m, basket, cov; forced, natural, cal)
+function make_cfg(base, σ_m, basket, cov; start=START, forced, natural, cal, kw...)
     return build(MyRunConfig, (rule=MyCobbDouglasRule(), covariance=cov, w_max=W_MAX, s_max=1.0,
-        σ_g_max=σ_G_MAX, start=START, stop=STOP, W0=W0, basket_schedule=[START => basket],
+        σ_g_max=σ_G_MAX, start=start, stop=start == START ? STOP : start, W0=W0, basket_schedule=[start => basket],
         forced_dates=forced, natural_triggers=natural, ewls_calendar=cal, base_sim=base, σ_m=σ_m,
-        σ_m_mode=:fixed))
+        σ_m_mode=:fixed, kw...))
+end
+
+# Gate rows for the decision dates `dates` of one variant; also the per-name weight comparison.
+function gate_rows!(chk, cmp, variant, targets, dates, tt, basket, missing_names)
+    for d in dates
+        trial = Dict{String,Float64}(String(r.ticker) => r.weight for r in eachrow(tt[tt.date .== d, :]))
+        sim = Dict{String,Float64}(t => w for (t, w) in targets[d] if t in basket)
+        r = compare_targets(sim, trial; tol=TOL)
+        push!(chk, (variant, d, r.pass, r.max_abs_diff, r.worst, join(r.only_sim, ";"), join(r.only_trial, ";"),
+            join(missing_names, ";")))
+        for t in sort!(collect(union(keys(sim), keys(trial))))
+            push!(cmp, (variant, d, t, get(sim, t, 0.0), get(trial, t, 0.0)))
+        end
+        println(variant, " ", d, " pass=", r.pass, " max|Δw|=", round(r.max_abs_diff; digits=5), " worst=", r.worst)
+    end
 end
 
 function main()
@@ -36,30 +50,43 @@ function main()
     basket = [t for t in String.(fb["tickers"]) if t in inuni]
     missing_names = [t for t in String.(fb["tickers"]) if !(t in inuni)]
     isempty(missing_names) || @warn "frozen-basket names missing from the universe" missing_names
-    cal = ewls_calendar_from_log(joinpath(VAL_DIR, "trial-log.txt"), md.dates; start=START, stop=STOP)
+    logp = joinpath(VAL_DIR, "trial-log.txt")
+    cal = ewls_calendar_from_log(logp, md.dates; start=START, stop=STOP)
+    lm = logged_market_from_log(logp, md.dates; start=START, stop=STOP)
     println("EWLS calendar entries: ", length(cal))
-
-    # ---- allocation gate (forced dates, C1)
-    cfg = make_cfg(md, base, σ_m, basket, MySIMCovariance(); forced=FORCED, natural=false, cal=cal)
-    res = run_backtest(md, cfg)
     tt = CSV.read(joinpath(VAL_DIR, "trial_targets.csv"), DataFrame)
-    chk = DataFrame(date=Date[], pass=Bool[], max_abs_diff=Float64[], worst=String[],
+    C1 = MySIMCovariance()
+
+    # ---- allocation gate (forced dates, C1), three variants
+    chk = DataFrame(variant=String[], date=Date[], pass=Bool[], max_abs_diff=Float64[], worst=String[],
         only_sim=String[], only_trial=String[], missing_from_universe=String[])
-    cmp = DataFrame(date=Date[], ticker=String[], w_sim=Float64[], w_trial=Float64[])
-    for d in FORCED
-        trial = Dict{String,Float64}(String(r.ticker) => r.weight for r in eachrow(tt[tt.date .== d, :]))
-        sim = Dict{String,Float64}(t => w for (t, w) in res.targets[d] if t in basket)
-        r = compare_targets(sim, trial; tol=TOL)
-        push!(chk, (d, r.pass, r.max_abs_diff, r.worst, join(r.only_sim, ";"), join(r.only_trial, ";"),
-            join(missing_names, ";")))
-        for t in sort!(collect(union(keys(sim), keys(trial))))
-            push!(cmp, (d, t, get(sim, t, 0.0), get(trial, t, 0.0)))
-        end
-        println(d, " pass=", r.pass, " max|Δw|=", round(r.max_abs_diff; digits=5), " worst=", r.worst)
+    cmp = DataFrame(variant=String[], date=Date[], ticker=String[], w_sim=Float64[], w_trial=Float64[])
+    # (a) eod: the replay as specified, on this study's own closes
+    res = run_backtest(md, make_cfg(base, σ_m, basket, C1; forced=FORCED, natural=false, cal=cal))
+    gate_rows!(chk, cmp, "eod", res.targets, FORCED, tt, basket, missing_names)
+    # (b) logged_spy: market inputs (gm_t, λ_t at decisions; gm_t in each EWLS update) from the trial's log
+    dm = Dict(d => lm.decision[d] for d in FORCED)
+    res_b = run_backtest(md, make_cfg(base, σ_m, basket, C1; forced=FORCED, natural=false, cal=cal,
+        ewls_g_m=lm.ewls_g_m, decision_market=dm))
+    gate_rows!(chk, cmp, "logged_spy", res_b.targets, FORCED, tt, basket, missing_names)
+    # (c) state_0529: the trial's exact EWLS state after its 05-29 update + logged 05-29 market inputs
+    sdf = CSV.read(joinpath(VAL_DIR, "trial_ewls_0529.csv"), DataFrame)
+    st0 = Dict{String,MyEWLSState}()
+    for r in eachrow(sdf)
+        e = MyEWLSState()
+        e.Sw, e.Swx, e.Swy, e.Swxx, e.Swxy, e.Swyy = r.Sw, r.Swx, r.Swy, r.Swxx, r.Swxy, r.Swyy
+        e.η, e.α, e.β, e.σ_ε = r.η, r.α, r.β, r.σ_ε
+        st0[String(r.ticker)] = e
     end
-    CSV.write(joinpath(OUT_DIR, "allocation_check.csv"), chk)
-    CSV.write(joinpath(OUT_DIR, "targets_compare.csv"), cmp)
-    # per-name differences, largest first (the gate's evidence if a date fails)
+    d0 = FORCED[1]
+    res_c = run_backtest(md, make_cfg(base, σ_m, basket, C1; start=d0, forced=Date[], natural=false, cal=Date[],
+        decision_market=Dict(d0 => lm.decision[d0]), ewls_state0=st0))
+    gate_rows!(chk, cmp, "state_0529", res_c.targets, [d0], tt, basket, missing_names)
+    CSV.write(joinpath(OUT_DIR, "allocation_check_variants.csv"), chk)
+    main_chk = select(chk[chk.variant .== "eod", :], Not(:variant))
+    CSV.write(joinpath(OUT_DIR, "allocation_check.csv"), main_chk)
+    CSV.write(joinpath(OUT_DIR, "targets_compare.csv"),
+        select(cmp[cmp.variant .== "eod", :], Not(:variant)))      # (date, ticker, w_sim, w_trial) for Task 16
     cmp.abs_diff = abs.(cmp.w_sim .- cmp.w_trial)
     CSV.write(joinpath(OUT_DIR, "per_name_diff.csv"), sort(cmp, :abs_diff; rev=true))
 
@@ -80,7 +107,7 @@ function main()
     # ---- informational band check: natural triggers, no forced dates
     bc = DataFrame(variant=String[], date=Date[], reason=String[])
     for (name, cov) in (("C1", MySIMCovariance()), ("C2", build(MyShrunkResidualCovariance, (λ=λ_C2, window=126))))
-        c = make_cfg(md, base, σ_m, basket, cov; forced=Date[], natural=true, cal=cal)
+        c = make_cfg(base, σ_m, basket, cov; forced=Date[], natural=true, cal=cal)
         r = run_backtest(md, c)
         for x in eachrow(r.decisions)
             push!(bc, (name, x.date, string(x.reason)))
@@ -91,7 +118,7 @@ function main()
     end
     CSV.write(joinpath(OUT_DIR, "band_check.csv"), sort(bc, [:variant, :date]))
     println(sort(bc, [:variant, :date]))
-    return all(chk.pass)
+    return all(main_chk.pass)
 end
 
 trial_reason(d::Date) = Dict(Date(2026,5,29) => "bug_correction", Date(2026,6,29) => "horizon_elapsed",
