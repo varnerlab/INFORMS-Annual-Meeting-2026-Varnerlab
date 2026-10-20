@@ -22,7 +22,7 @@ const SIZE = (1600, 900)
 # The screen → slot map is fixed, so a screen has the same color in every figure. Screens sit left to
 # right in SCREENS order within each allocator slot, and the legend lists them in the same order.
 const SURFACE = "#fcfcfb"
-const INK, INK2, MUTED = "#0b0b0b", "#52514e", "#898781"
+const INK, INK2 = "#0b0b0b", "#52514e"
 const GRID, AXIS = "#e1e0d9", "#c3c2b7"
 const SLOT = ("#2a78d6", "#eb6834", "#1baf7a")
 const SCREENS = ("bandit", "gamma", "random")
@@ -88,10 +88,11 @@ end
 """
     caption_panel(txt::AbstractString)
 
-A frameless strip that carries a note (one or more lines) under a figure, in muted ink. No units.
+A frameless strip that carries a note (one or more lines) under a figure, in secondary ink (`INK2`, the
+darker of the two text inks below `INK`, for contrast on the slide surface). No units.
 """
 caption_panel(txt::AbstractString) = plot(framestyle=:none, grid=false, legend=false, xlims=(0, 1), ylims=(0, 1),
-    annotations=(0.0, 0.5, text(txt, 13, MUTED, :left)))
+    annotations=(0.0, 0.5, text(txt, 13, INK2, :left)))
 
 """
     spacer_panel()
@@ -326,7 +327,9 @@ end
 # Size sweep (addendum figs 6–7). Each universe-wide γ screen keeps one categorical slot and its own marker;
 # a random control is drawn as a dashed median line over an IQR wash in the slot of the γ screen it is
 # matched with (whole universe: global γ's blue; liquid shortlist: liquid γ's orange). The fixed lists are
-# ink markers and the passive references gray horizontal lines (SPY solid, equal-weight dashed).
+# ink markers and the passive references gray horizontal lines (SPY solid and thin, equal-weight dotted and
+# thicker), each labeled at the right edge of every panel, the higher label above its line and the lower below,
+# so the two stay apart when their values are close.
 const UNI_SCREENS = ("global_gamma", "liquid_gamma", "corr_gamma")
 const UNI_COLOR = Dict("global_gamma" => SLOT[1], "liquid_gamma" => SLOT[2], "corr_gamma" => SLOT[3])
 const UNI_MARKER = Dict("global_gamma" => :circle, "liquid_gamma" => :rect, "corr_gamma" => :diamond)
@@ -334,6 +337,8 @@ const CONTROLS = ("random_global", "random_liquid")
 const CONTROL_COLOR = Dict("random_global" => SLOT[1], "random_liquid" => SLOT[2])
 const FIXED_SIZES = (13, 15)
 const FIXED_MARKER = Dict(13 => :star5, 15 => :utriangle)
+# Passive references: (line style, width in px, direct label).
+const REF_STYLE = Dict("SPY buy-and-hold" => (:solid, 1.5, "SPY"), "equal-weight universe" => (:dot, 3.0, "EW"))
 
 """
     sweep_values(d, a, scr, K, col)::Vector{Float64}
@@ -350,7 +355,8 @@ end
     sweep_key!(p, x, y, kind, color, marker, label)::Float64
 
 One legend key at (`x`, `y`) in a frameless 0..1 strip: `kind` is `:line` (line and marker), `:band`
-(IQR wash with a dashed median line), `:marker`, `:ref_solid` or `:ref_dash` (gray reference lines),
+(IQR wash with a dashed median line), `:marker`, or `:ref` with `marker` a passive-reference name (its
+`REF_STYLE` line),
 followed by `label` in secondary ink. Returns the x (strip units) where the next key may start, from an
 estimate of the label's width (`KEY_CHAR_W` per character at 14 pt). No units.
 """
@@ -366,7 +372,8 @@ function sweep_key!(p, x::Real, y::Real, kind::Symbol, color, marker, label::Str
     elseif kind == :marker
         scatter!(p, [x], [y]; color=color, marker=marker, markersize=marker == :star5 ? 15 : 11)
     else
-        plot!(p, [x - w, x + w], [y, y]; color=INK2, linewidth=1.5, linestyle=kind == :ref_dash ? :dash : :solid)
+        ls, lw, _ = REF_STYLE[marker]
+        plot!(p, [x - w, x + w], [y, y]; color=INK2, linewidth=lw, linestyle=ls)
     end
     annotate!(p, x + w + 0.006, y, text(label, 14, INK2, :left, :vcenter))
     return x + 2w + 0.006 + KEY_CHAR_W * length(label) + 0.035
@@ -391,8 +398,8 @@ function sweep_legend(refs::Vector{<:Pair}, fmt::Function)
                 (:band, CONTROL_COLOR["random_liquid"], nothing, "random, liquid shortlist")]),
             (0.22, [(:marker, INK, FIXED_MARKER[13], "user's 13-name list"),
                 (:marker, INK, FIXED_MARKER[15], "user's 15-name list"),
-                (:ref_solid, nothing, nothing, "SPY buy-and-hold " * fmt(ref["SPY buy-and-hold"])),
-                (:ref_dash, nothing, nothing, "equal-weight universe " * fmt(ref["equal-weight universe"]))])]
+                (:ref, nothing, "SPY buy-and-hold", "SPY buy-and-hold " * fmt(ref["SPY buy-and-hold"])),
+                (:ref, nothing, "equal-weight universe", "equal-weight universe (EW) " * fmt(ref["equal-weight universe"]))])]
     for (y, keys) in rows
         x = 0.02
         for (kind, color, marker, label) in keys
@@ -408,8 +415,9 @@ end
 Small multiples, one panel per allocator (hedge-on rows of the universe summary `d`): `metric` times
 `scale` (e.g. 100 for %) against basket size K (names, log axis). Each γ screen is a line through its
 one deterministic run per K; each random control is its median across seeds with the interquartile band;
-the fixed lists are markers at their sizes; `refs` (`name => value`, scaled) are horizontal lines. All
-panels share one y-range.
+the fixed lists are markers at their sizes; `refs` (`name => value`, scaled) are horizontal lines in their
+`REF_STYLE`, each with its short label in a gutter right of K = 34 (the higher label above its line, the lower
+below it). All panels share one y-range.
 """
 function sweep_figure(d::DataFrame, metric::Symbol; scale::Real=1.0, ylabel::String, title::String,
         refs::Vector{<:Pair}, fmt::Function, caption::String)
@@ -437,14 +445,15 @@ function sweep_figure(d::DataFrame, metric::Symbol; scale::Real=1.0, ylabel::Str
     allequal(seeds) || error("random controls have unequal seed counts: ", sort(unique(seeds)))
     lo, hi = extrema(allv); pad = 0.06 * (hi - lo)
     ylims = (lo - pad, hi + pad)
-    refstyle = Dict("SPY buy-and-hold" => :solid, "equal-weight universe" => :dash)
     panels = map(enumerate(ALLOCATORS)) do (i, a)
-        p = plot(; xscale=:log10, xlims=(4.4, 39), xticks=(Ks, string.(Ks)), minorgrid=false, ylims=ylims,
+        p = plot(; xscale=:log10, xlims=(4.4, 52), xticks=(Ks, string.(Ks)), minorgrid=false, ylims=ylims,
             title=ALLOC_NAME[a], titlefontsize=17, legend=false, ylabel=i in (1, 4) ? ylabel : "",
             xlabel=i >= 4 ? "basket size K (names, log scale)" : "", left_margin=i in (1, 4) ? 12Plots.mm : 3Plots.mm,
             bottom_margin=i >= 4 ? 6Plots.mm : 2Plots.mm, guidefontsize=15, tickfontsize=13)
-        for (name, val) in refs
-            hline!(p, [val]; color=INK2, linewidth=1.5, linestyle=refstyle[name])
+        for (k, (name, val)) in enumerate(sort(refs; by=last, rev=true))
+            ls, lw, short = REF_STYLE[name]
+            hline!(p, [val]; color=INK2, linewidth=lw, linestyle=ls)
+            annotate!(p, 38, val, text(short, 12, INK2, :left, k == 1 ? :bottom : :top))
         end
         for c in CONTROLS
             s = series[(a, c)]
