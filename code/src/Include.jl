@@ -11,6 +11,7 @@ using JLD2
 using JuMP
 using Clarabel
 using SCS
+using SHA
 
 include("Types.jl")
 include("Factory.jl")
@@ -27,6 +28,7 @@ include("Metrics.jl")
 include("Backtest.jl")
 include("Validation.jl")
 include("Bandit.jl")
+include("Experiments.jl")
 
 export MyMarketData, build, load_market_data, growth_rates, index_of, DATA_FILES,
     MySIMParameterEstimate, MyEWLSState, MyEWVarState, estimate_sim, fit_base_sim, ewls_init, ewls_update!,
@@ -43,3 +45,4 @@ export MyRunConfig, MyBacktestResult, run_backtest
 export compare_targets, ewls_calendar_from_log, logged_market_from_log
 export assign_quotas, beat_spy_reward, train_sector_bandit, quarter_starts, bandit_basket_schedule,
     random_sector_basket, random_matched_schedule
+export config_key, config_hash, run_and_save, run_grid, rebuild_summary, run_stats, load_experiment
