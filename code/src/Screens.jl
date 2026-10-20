@@ -190,6 +190,188 @@ function pick(screen::MyRandomScreen, md::MyMarketData, t::Int; X::AbstractMatri
     return sort(keep)
 end
 
+# ---------------------------------------------------------------------------------------------
+# Universe-wide screens: K names from the whole universe (no sector quota). They carry K as a
+# field and ignore the per-sector `N` passed to `pick`.
+# ---------------------------------------------------------------------------------------------
+
+"""
+    liquid_shortlist(md::MyMarketData, t::Int; size::Int=100, window::Int=63)::Vector{Int}
+
+The `size` columns with the largest median dollar volume (USD/day), the median of
+`close[k, j]·volume[k, j]` over rows `k ∈ max(1, t-window+1):t`. Ranked by dollar volume descending,
+ties by column index. Uses data dated at or before day `t` only.
+"""
+function liquid_shortlist(md::MyMarketData, t::Int; size::Int=100, window::Int=63)::Vector{Int}
+    rows = max(1, t - window + 1):t
+    dv = [median(md.close[rows, j] .* md.volume[rows, j]) for j in 1:length(md.tickers)]
+    order = sortperm(collect(zip(-dv, 1:length(dv))))
+    return order[1:min(size, length(order))]
+end
+
+"""
+    MyGlobalGammaScreen <: AbstractScreen
+
+The `K` highest-γ names (yr⁻¹) over the whole universe. Field: `K` (names, ≥ 1).
+"""
+mutable struct MyGlobalGammaScreen <: AbstractScreen
+    K::Int
+    MyGlobalGammaScreen(K::Int) = (K >= 1 || throw(ArgumentError("K must be ≥ 1, got $K")); new(K))
+end
+
+"""
+    MyLiquidGammaScreen <: AbstractScreen
+
+The `K` highest-γ names (yr⁻¹) within the liquid shortlist. Fields: `K` (names, ≥ 1), `shortlist`
+(names kept by median dollar volume), `window` (trading days of the dollar-volume median).
+"""
+mutable struct MyLiquidGammaScreen <: AbstractScreen
+    K::Int
+    shortlist::Int
+    window::Int
+    MyLiquidGammaScreen(K::Int, shortlist::Int, window::Int) =
+        (K >= 1 || throw(ArgumentError("K must be ≥ 1, got $K")); new(K, shortlist, window))
+end
+
+"""
+    MyCorrGammaScreen <: AbstractScreen
+
+Walks the global γ ranking and accepts a name only if its correlation with every accepted name,
+on daily growth rates (yr⁻¹) over the trailing `window` days, is at most `corr_max`. Fields: `K`
+(names, ≥ 1), `corr_max` (dimensionless), `window` (trading days).
+"""
+mutable struct MyCorrGammaScreen <: AbstractScreen
+    K::Int
+    corr_max::Float64
+    window::Int
+    MyCorrGammaScreen(K::Int, corr_max::Real, window::Int) =
+        (K >= 1 || throw(ArgumentError("K must be ≥ 1, got $K")); new(K, corr_max, window))
+end
+
+"""
+    MyGlobalRandomScreen <: AbstractScreen
+
+`K` distinct names drawn at random from the whole universe. Field: `K` (names, ≥ 1).
+"""
+mutable struct MyGlobalRandomScreen <: AbstractScreen
+    K::Int
+    MyGlobalRandomScreen(K::Int) = (K >= 1 || throw(ArgumentError("K must be ≥ 1, got $K")); new(K))
+end
+
+"""
+    MyLiquidRandomScreen <: AbstractScreen
+
+`K` distinct names drawn at random from the liquid shortlist. Fields as `MyLiquidGammaScreen`.
+"""
+mutable struct MyLiquidRandomScreen <: AbstractScreen
+    K::Int
+    shortlist::Int
+    window::Int
+    MyLiquidRandomScreen(K::Int, shortlist::Int, window::Int) =
+        (K >= 1 || throw(ArgumentError("K must be ≥ 1, got $K")); new(K, shortlist, window))
+end
+
+"""
+    MyFixedScreen <: AbstractScreen
+
+A fixed ticker list, chosen in advance and independent of the data. Field: `tickers`.
+"""
+mutable struct MyFixedScreen <: AbstractScreen
+    tickers::Vector{String}
+    MyFixedScreen(tickers::Vector{String}) = new(tickers)
+end
+
+"""
+    build(::Type{T}, data::NamedTuple) where T in the universe-wide screens
+
+Construct the screen from the fields named in `data` (`K`; plus `shortlist`, `window` or `corr_max`
+where the screen has them; `tickers` for `MyFixedScreen`).
+"""
+build(::Type{MyGlobalGammaScreen}, d::NamedTuple)::MyGlobalGammaScreen = MyGlobalGammaScreen(d.K)
+build(::Type{MyLiquidGammaScreen}, d::NamedTuple)::MyLiquidGammaScreen = MyLiquidGammaScreen(d.K, d.shortlist, d.window)
+build(::Type{MyCorrGammaScreen}, d::NamedTuple)::MyCorrGammaScreen = MyCorrGammaScreen(d.K, d.corr_max, d.window)
+build(::Type{MyGlobalRandomScreen}, d::NamedTuple)::MyGlobalRandomScreen = MyGlobalRandomScreen(d.K)
+build(::Type{MyLiquidRandomScreen}, d::NamedTuple)::MyLiquidRandomScreen = MyLiquidRandomScreen(d.K, d.shortlist, d.window)
+build(::Type{MyFixedScreen}, d::NamedTuple)::MyFixedScreen = MyFixedScreen(collect(String, d.tickers))
+
+# The K highest γ_t (yr⁻¹) among `pool`, ties by column index; sorted columns.
+function _top_gamma(pool::Vector{Int}, γ_t::AbstractVector, K::Int)::Vector{Int}
+    order = sortperm(collect(zip(-γ_t[pool], pool)))
+    return sort(pool[order[1:min(K, length(pool))]])
+end
+
+"""
+    pick(screen, md, t; X, γ_t, N, seed)::Vector{Int}   (universe-wide screens)
+
+Sorted column indices of `min(K, eligible)` names. `N` is ignored. All use data dated ≤ `t` only.
+
+- `MyGlobalGammaScreen`: the `K` highest `γ_t` (yr⁻¹), ties by column index.
+- `MyLiquidGammaScreen`: the same, within `liquid_shortlist(md, t; size=shortlist, window)`.
+- `MyCorrGammaScreen`: walk the global γ ranking; accept j if `cor(gⱼ, gₐ) ≤ corr_max` for every
+  accepted a, where g is the daily growth rate `ln(close[k]/close[k-1])/Δt` (yr⁻¹), Δt = 1/252, for
+  `k ∈ (t-window+1):t`. A NaN correlation (zero variance) counts as not exceeding `corr_max`. If
+  fewer than `K` are accepted, fill with the highest-γ names not yet accepted.
+- `MyGlobalRandomScreen`, `MyLiquidRandomScreen`: `K` distinct columns from
+  `MersenneTwister(_stream_seed(seed, md.dates[t], 0))`, over the universe or the liquid shortlist.
+- `MyFixedScreen`: the sorted columns of `tickers`; `ArgumentError` naming any ticker not in
+  `md.tickers`.
+"""
+function pick(screen::MyGlobalGammaScreen, md::MyMarketData, t::Int; X::AbstractMatrix,
+        γ_t::AbstractVector, N::Int, seed::Int)::Vector{Int}
+    return _top_gamma(collect(1:length(md.tickers)), γ_t, screen.K)
+end
+
+function pick(screen::MyLiquidGammaScreen, md::MyMarketData, t::Int; X::AbstractMatrix,
+        γ_t::AbstractVector, N::Int, seed::Int)::Vector{Int}
+    return _top_gamma(liquid_shortlist(md, t; size=screen.shortlist, window=screen.window), γ_t, screen.K)
+end
+
+function pick(screen::MyCorrGammaScreen, md::MyMarketData, t::Int; X::AbstractMatrix,
+        γ_t::AbstractVector, N::Int, seed::Int)::Vector{Int}
+    Δt = 1 / 252
+    m = length(md.tickers)
+    ks = (t - screen.window + 1):t
+    first(ks) >= 2 || throw(ArgumentError("correlation window starts at $(first(ks)) < 2 for t = $t"))
+    g = log.(md.close[ks, :] ./ md.close[ks .- 1, :]) ./ Δt         # yr⁻¹
+    order = sortperm(collect(zip(-γ_t, 1:m)))
+    accepted = Int[]
+    for j in order
+        length(accepted) >= screen.K && break
+        ok = all(a -> begin
+                ρ = cor(view(g, :, j), view(g, :, a))
+                isnan(ρ) || ρ <= screen.corr_max
+            end, accepted)
+        ok && push!(accepted, j)
+    end
+    if length(accepted) < screen.K
+        for j in order
+            length(accepted) >= screen.K && break
+            j in accepted || push!(accepted, j)
+        end
+    end
+    return sort(accepted)
+end
+
+function pick(screen::MyGlobalRandomScreen, md::MyMarketData, t::Int; X::AbstractMatrix,
+        γ_t::AbstractVector, N::Int, seed::Int)::Vector{Int}
+    rng = MersenneTwister(_stream_seed(seed, md.dates[t], 0))
+    return sort(_sample_without_replacement(rng, collect(1:length(md.tickers)), screen.K))
+end
+
+function pick(screen::MyLiquidRandomScreen, md::MyMarketData, t::Int; X::AbstractMatrix,
+        γ_t::AbstractVector, N::Int, seed::Int)::Vector{Int}
+    rng = MersenneTwister(_stream_seed(seed, md.dates[t], 0))
+    pool = liquid_shortlist(md, t; size=screen.shortlist, window=screen.window)
+    return sort(_sample_without_replacement(rng, pool, screen.K))
+end
+
+function pick(screen::MyFixedScreen, md::MyMarketData, t::Int; X::AbstractMatrix,
+        γ_t::AbstractVector, N::Int, seed::Int)::Vector{Int}
+    missing_t = [s for s in screen.tickers if !(s in md.tickers)]
+    isempty(missing_t) || throw(ArgumentError("fixed-list tickers not in the universe: $(join(missing_t, ", "))"))
+    return sort([findfirst(==(s), md.tickers) for s in screen.tickers])
+end
+
 """
     short_candidates(γ_t::AbstractVector, md::MyMarketData; N::Int, exclude::AbstractVector{Int}=Int[])::Vector{Int}
 
