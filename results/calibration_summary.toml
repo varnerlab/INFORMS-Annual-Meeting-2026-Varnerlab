@@ -1,0 +1,25 @@
+xi_short = 21
+train_start = "2014-01-03"
+xi_long = 63
+G = 21.23146839777891
+vol_cap_annual = 0.17267331106841044
+universe_size = 373
+lambda = 0.0
+m_m = 0.10610227305653364
+v_m = 7.510933801787949
+sigma_m = 2.7411038348706644
+xi_quantile = 0.99
+train_stop = "2024-12-31"
+
+[sector_counts]
+"Health Care" = 44
+Financials = 53
+"Consumer Discretionary" = 39
+Materials = 17
+"Consumer Staples" = 31
+Energy = 16
+"Real Estate" = 22
+"Information Technology" = 50
+Utilities = 26
+"Communication Services" = 15
+Industrials = 60

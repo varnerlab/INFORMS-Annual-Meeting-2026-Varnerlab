@@ -2,3 +2,4 @@
 data/
 results/runs/
 *.tmp
+results/smoke/
