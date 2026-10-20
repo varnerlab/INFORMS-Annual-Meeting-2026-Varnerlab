@@ -488,7 +488,7 @@ b = project_gbm([1.,2.],[50.,60.],10.,[.1,.2],[9. 2; 2 16],.04; rng=MersenneTwis
   7. On a fire:
      - `allocate`, then store the targets.
      - Queue orders for t+1.
-     - Run `project_gbm` on the targets, with `rng = MersenneTwister(hash((cfg.seed, t)))`.
+     - Run `project_gbm` on the targets, with `rng = MersenneTwister(cfg.seed * 1_000_003 + Dates.value(date))` (R28).
      - Reset τ = 0.
      - Set `last_alloc_was_cash = (result.status == :no_preferred)`. Using the status rather than share counts matters because Stone–Geary's `:no_preferred` holds its 1% baselines, not ε. Min-variance and tangent never set it.
 
