@@ -167,7 +167,8 @@ end
 
 Joins two summary tables on `key`. Returns `(n_matched, n_missing, max_abs_diff)`: rows matched, keys of
 `old` absent from `new` (counts), and the largest |old - new| over `cols` and matched rows, in each
-column's units (NaN against NaN counts as 0).
+column's units. A cell that is missing (or NaN) on both sides counts as 0; one missing or NaN on only
+one side makes `max_abs_diff` `Inf`, so the comparison fails rather than passing falsely.
 """
 function compare_summaries(old::DataFrame, new::DataFrame; key::Symbol=:label,
         cols=[:sharpe, :max_drawdown, :alpha, :alpha_t, :beta, :realized_growth, :terminal, :vol])::NamedTuple{(:n_matched, :n_missing, :max_abs_diff)}
@@ -181,8 +182,11 @@ function compare_summaries(old::DataFrame, new::DataFrame; key::Symbol=:label,
         nm += 1
         for c in cols
             a, b = old[i, c], new[j, c]
-            (ismissing(a) || ismissing(b)) && continue
-            (isnan(a) && isnan(b)) && continue
+            bad(x) = ismissing(x) || (x isa Number && isnan(x))
+            (bad(a) && bad(b)) && continue
+            if bad(a) || bad(b)
+                mx = Inf; continue
+            end
             mx = max(mx, abs(Float64(a) - Float64(b)))
         end
     end

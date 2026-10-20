@@ -34,3 +34,16 @@ end
     old = DataFrame(label=["a", "b"], sharpe=[0.1, NaN]); new = DataFrame(label=["a", "b"], sharpe=[0.1, NaN])
     @test compare_summaries(old, new; cols=[:sharpe]) == (n_matched=2, n_missing=0, max_abs_diff=0.0)
 end
+
+@testset "compare_summaries fails on real differences" begin
+    old = DataFrame(label=["a", "b"], sharpe=[0.1, 0.2])
+    r = compare_summaries(old, DataFrame(label=["a", "b"], sharpe=[0.1, 0.25]); cols=[:sharpe])
+    @test r.max_abs_diff ≈ 0.05
+    r = compare_summaries(old, DataFrame(label=["a"], sharpe=[0.1]); cols=[:sharpe])
+    @test r.n_missing == 1
+    @test r.n_matched == 1
+    r = compare_summaries(old, DataFrame(label=["a", "b"], sharpe=[0.1, missing]); cols=[:sharpe])
+    @test r.max_abs_diff == Inf
+    r = compare_summaries(old, DataFrame(label=["a", "b"], sharpe=[0.1, NaN]); cols=[:sharpe])
+    @test r.max_abs_diff == Inf
+end
