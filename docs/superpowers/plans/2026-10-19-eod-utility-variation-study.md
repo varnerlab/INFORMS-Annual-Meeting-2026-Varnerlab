@@ -66,8 +66,8 @@
   - Stage 0: warm-up 2014-01-03 → 2015-12-31, tuning 2016-01-04 → 2024-12-31
 - **Trial constants (verbatim):**
   - EWLS `half_life=63.0`, `prior_weight=63.0`, applied per update.
-  - SPY EMAs with spans 21 and 63, computed on SPY **prices** over the window of closes with dates in (d − 105 calendar days, d], seeded at the window's first close.
-  - λ = −20·(ema21/ema63 − 1).
+  - SPY EMAs with spans 21 and 63, computed on SPY **prices** over the window of closes with dates in [d − 105 calendar days, d], seeded at the window's first close.
+  - λ = −20·(ema21/ema63 − 1). The EMA window is the SPY closes with dates in **[d − 105 days, d]**, start inclusive (R31). This matches the trial's `fetch_bar_window(start = asof − 105 days)`.
   - g_m = 252·log(SPY_d/SPY_{d−1}).
   - γᵢ = tanh(αᵢ/max(|βᵢ|^λ, 1e-8) + |βᵢ|^(1−λ)·g_m).
   - Floor ε = 1e-3 shares for names with γ ≤ 0.
@@ -526,7 +526,9 @@ r = run_backtest(crash_md(), cfg); @test count(==(:drawdown), r.decisions.reason
 **Interfaces:**
 - Produces:
   - `compare_targets(sim::Dict{String,Float64}, trial::Dict{String,Float64}; tol=0.01)::NamedTuple{(:pass, :only_sim, :only_trial, :max_abs_diff, :worst)}`: the set of names with w > 1e-3 must match, and every |Δw| ≤ tol.
-  - `ewls_calendar_from_log(path::String, trading_days::Vector{Date})::Vector{Date}`: one entry per `[EWLS]` line, giving the latest trading day on or before that line's date. Repeats are kept: 05-29 and 08-21 appear twice, and holiday lines map to the previous trading day.
+  - `ewls_calendar_from_log(path::String, trading_days::Vector{Date}; start::Date, stop::Date)::Vector{Date}`: one entry per `[EWLS] updated=` line (R32). `[EWLS] skipped …` lines are NOT updates, so the trial's second 05-29 line, a skip, is excluded.
+    - Lines whose own date is outside [start, stop] are dropped before mapping.
+    - Each kept line maps to the latest trading day on or before its date. The real 08-21 double is kept, and holiday lines map to the previous trading day.
 - **Trial paths**, read-only, from `TRIAL = ~/Desktop/julia_work/constrained-CD-with-MPC-paper-trade-trial`:
   - `artifacts/sim_base.jld2` (`tickers`, `alpha`, `beta`, `sigma_eps`, `sigma_market`, `adv`)
   - `artifacts/frozen_basket.jld2` (`tickers`)
