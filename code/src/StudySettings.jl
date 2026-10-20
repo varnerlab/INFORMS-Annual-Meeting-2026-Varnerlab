@@ -8,7 +8,10 @@ in trading days; `D_max`, `w_max`, `s_max`, `turnover_frac`, `ls_*` are fraction
 `basket_K`, `liquidity_shortlist` are counts of names; `liquidity_window`, `corr_window` are in trading days;
 `corr_max` is a correlation (dimensionless); `w_max_scale` is the pick-cap numerator (a pick's cap is
 `max(w_max, w_max_scale/K)`, fraction of wealth); `fixed_tickers` is the pre-chosen list of the `:fixed` screen
-(chosen in advance, without 2025 data). `vol_cap_annual` is in yr⁻¹ and `lambda` in yr (dimensionless risk preference, `NaN` = calibrated);
+(chosen in advance, without 2025 data). `vol_cap_annual` is an annualized volatility in yr⁻¹ᐟ² (the growth-rate cap is
+`vol_cap_annual/√Δt` in yr⁻¹); `lambda` is the shrinkage of the residual covariance toward its diagonal
+(dimensionless, in [0, 1], `NaN` = calibrated); `s_max` is the sector weight cap; `beta_min` is the floor of β_max;
+`xi_short`, `xi_long` are the EMA spans of SPY closes behind ξ;
 `borrow_rate` is per year; `half_spread_bps` is in basis points; `W0` is in dollars. `NaN` for
 `vol_cap_annual` means the SPY volatility over the calibration window. The zero-argument constructor
 fills the defaults. Field names are ASCII so TOML keys equal field names **(plan decision)**.

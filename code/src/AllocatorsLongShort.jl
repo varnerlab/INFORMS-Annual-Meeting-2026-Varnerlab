@@ -54,7 +54,7 @@ with every other name's shares fixed then minimizes the hedge weight, so a hedge
 far as a binding limit (β or volatility cap) needs it.
 
 Constraints: Σ_{long} wᵢ ≤ long_cap, Σ_{short} |wᵢ| ≤ short_cap, Σwᵢ ≤ net_cap, plus
-`add_shared_constraints!(…; signed=true)`: net exposure ≤ 1 (cash ≥ 0), |wᵢ| ≤ w_max, |net sector
+`add_shared_constraints!(…; signed=true)`: net exposure ≤ 1 (cash ≥ 0), |wᵢ| ≤ w_capᵢ, |net sector
 weight| ≤ s_max, Σβᵢwᵢ ≤ β_max and √(wᵀΣ_g w) ≤ σ_g_max (yr⁻¹) on the signed weights, and the
 turnover budget on the signed share changes (USD). `s_star` is the net exposure Σwᵢ.
 

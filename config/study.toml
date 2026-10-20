@@ -8,8 +8,8 @@ train_stop = 2024-12-31   # calibration end (date)
 W0 = 100000.0             # initial wealth ($)
 
 [market]
-xi_short = 21             # short growth window for xi (trading days)
-xi_long = 63              # long growth window for xi (trading days)
+xi_short = 21             # short EMA span of SPY closes for xi (trading days)
+xi_long = 63              # long EMA span of SPY closes for xi (trading days)
 xi_quantile = 0.99        # quantile that sets the xi gain (dimensionless)
 gtilde_window = 252       # window of the market growth average (trading days)
 beta_floor = 0.1          # floor on beta in gamma weights (dimensionless)
@@ -20,7 +20,7 @@ ewls_prior_weight = 63.0  # EWLS prior weight (trading days)
 
 [covariance]
 omega_window = 126        # residual covariance window (trading days)
-lambda = "calibrated"     # risk preference (dimensionless); "calibrated" = from calibration
+lambda = "calibrated"     # shrinkage of the residual covariance toward its diagonal (dimensionless, 0-1); "calibrated" = from calibration
 
 [triggers]
 T = 21                    # MPC horizon (trading days)
@@ -48,8 +48,8 @@ fixed_tickers = ["AAPL", "MSFT", "INTC", "MU", "AMD", "NVDA", "GS", "BAC", "WFC"
 
 [limits]
 w_max = 0.10              # single-name weight cap (fraction of wealth)
-vol_cap_annual = "calibrated"  # volatility cap (1/yr); "calibrated" = SPY 2014-2024
-s_max = 1.0               # share cap multiplier (dimensionless)
+vol_cap_annual = "calibrated"  # annualized volatility cap (1/sqrt(yr)); "calibrated" = SPY 2014-2024
+s_max = 1.0               # sector weight cap (fraction of wealth)
 turnover_frac = 0.10      # turnover limit (fraction of wealth)
 w_max_scale = 1.5         # a screen pick's cap is max(w_max, w_max_scale/K) (dimensionless)
 
@@ -69,7 +69,7 @@ impact_kappa = 0.001      # impact coefficient (dimensionless)
 hedge = true              # beta hedge on (flag)
 beta_ref = 1.0            # reference portfolio beta (dimensionless)
 kappa_beta = 1.0          # beta cap strength (dimensionless)
-beta_min = 0.0            # lower beta bound (dimensionless)
+beta_min = 0.0            # floor of the beta cap beta_max (dimensionless)
 pool_H = 5                # hedge pool size (count)
 downday_lookback = 252    # down-day beta lookback (trading days)
 

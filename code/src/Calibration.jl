@@ -72,7 +72,7 @@ end
 
 Summary of `c` for `results/calibration_summary.toml`. `s` is a `MyStudySettings` (untyped here because
 `StudySettings.jl` is included after this file); it supplies `xi_short`, `xi_long` and `xi_quantile`.
-Keys: `lambda` (dimensionless), `sigma_m` (yr⁻¹), `vol_cap_annual` (yr⁻¹, `σ_m·√Δt` with Δt = 1/252 yr),
+Keys: `lambda` (dimensionless), `sigma_m` (yr⁻¹), `vol_cap_annual` (yr⁻¹ᐟ², `σ_m·√Δt` with Δt = 1/252 yr),
 `m_m` (yr⁻¹), `v_m` (yr⁻²), `xi_short`, `xi_long` (trading days), `xi_quantile`, `G` (dimensionless ξ gain on
 the SPY closes of the training window), `train_start`, `train_stop` (ISO dates), `universe_size` (count) and
 `sector_counts` (name => count). Print a TOML file with `TOML.print(io, d; sorted=true)` for a stable key order.
