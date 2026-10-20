@@ -30,15 +30,22 @@ function _tables_paired(left::DataFrame, right::DataFrame, by::Vector{Symbol}, p
     return DataFrame(rows)
 end
 
+"""Default `group_summary` metrics: the growth scorecard (Sharpe, max drawdown, α in yr⁻¹, its t-stat, β,
+realized growth in yr⁻¹) and, next to it, the invested fraction and the hedge statistics (`mean_invested`,
+`cap_bind_share`, `mean_hedge_weight`, fractions; `cap_bind_share` is NaN with the hedge off)."""
+const SUMMARY_METRICS = [:sharpe, :max_drawdown, :alpha, :alpha_t, :beta, :realized_growth, :mean_invested,
+    :cap_bind_share, :mean_hedge_weight]
+
 """
-    group_summary(df; by, metrics) -> DataFrame
+    group_summary(df; by, metrics=SUMMARY_METRICS) -> DataFrame
 
 Per group of `by`: `n` (rows, count) and, for each metric `m`, `m_median`, `m_q25`, `m_q75`
-(median and quartiles across seeds, in the metric's own units; missing and NaN values skipped).
-`screen` is normalized to a `Symbol`; rows with `status != "ok"` are dropped when that column exists.
+(median and quartiles across seeds, in the metric's own units; missing and NaN values skipped, and NaN
+when a group has none). `screen` is normalized to a `Symbol`; rows with `status != "ok"` are dropped when
+that column exists.
 """
 function group_summary(df::DataFrame; by::Vector{Symbol}=[:allocator, :screen, :hedge, :repick_on_band_exit],
-        metrics::Vector{Symbol}=[:sharpe, :max_drawdown, :alpha, :alpha_t, :realized_growth])::DataFrame
+        metrics::Vector{Symbol}=SUMMARY_METRICS)::DataFrame
     d = _tables_prepare(df)
     rows = []
     for sub in groupby(d, by)
@@ -69,15 +76,18 @@ function paired_win_rate(df::DataFrame; metric::Symbol=:sharpe, a::Symbol=:bandi
 end
 
 """
-    gamma_percentile(df; metric=:sharpe, by, screen=:gamma, control=:random) -> DataFrame
+    gamma_percentile(df; metric=:sharpe, by, screen=:gamma, control=:random, higher_is_better=true) -> DataFrame
 
 Per group of `by` that has a `screen` row: `gamma_value` (metric units), `n_random` (count of
-control-screen seeds) and `percentile` (fraction in [0,1] of the control screen's values below the
-screen value; ties count half). Groups with no screen row or no control rows are left out.
+control-screen seeds), `percentile` (fraction in [0,1] of the control screen's values below the
+screen value; ties count half) and `share_of_controls_beaten` (fraction of control seeds the screen beats,
+ties half: `percentile` when `higher_is_better`, else the share of control values above the screen's, e.g.
+deeper drawdowns), which reads the same way for every metric. Groups with no screen row or no control
+rows are left out.
 """
 function gamma_percentile(df::DataFrame; metric::Symbol=:sharpe,
         by::Vector{Symbol}=[:allocator, :hedge, :repick_on_band_exit],
-        screen::Symbol=:gamma, control::Symbol=:random)::DataFrame
+        screen::Symbol=:gamma, control::Symbol=:random, higher_is_better::Bool=true)::DataFrame
     d = _tables_prepare(df)
     d = d[_tables_ok.(d[!, metric]), :]
     rows = []
@@ -88,11 +98,14 @@ function gamma_percentile(df::DataFrame; metric::Symbol=:sharpe,
         end
         isempty(rnd) && continue
         gv = Float64(sub[1, metric]); rv = Float64.(rnd[!, metric])
-        pct = (count(<(gv), rv) + 0.5 * count(==(gv), rv)) / length(rv)
-        push!(rows, (; (c => sub[1, c] for c in by)..., gamma_value=gv, n_random=length(rv), percentile=pct))
+        tie = 0.5 * count(==(gv), rv)
+        pct = (count(<(gv), rv) + tie) / length(rv)
+        beaten = higher_is_better ? pct : (count(>(gv), rv) + tie) / length(rv)
+        push!(rows, (; (c => sub[1, c] for c in by)..., gamma_value=gv, n_random=length(rv), percentile=pct,
+            share_of_controls_beaten=beaten))
     end
     isempty(rows) && return DataFrame([c => Any[] for c in by]..., :gamma_value => Float64[],
-        :n_random => Int[], :percentile => Float64[])
+        :n_random => Int[], :percentile => Float64[], :share_of_controls_beaten => Float64[])
     return DataFrame(rows)
 end
 
@@ -142,6 +155,34 @@ function passive_references(md::MyMarketData, start::Date, stop::Date; W0::Real=
     rows = [merge((name="SPY buy-and-hold",), growth_scorecard(Float64(W0) .* spy ./ spy[1], spy, gf)),
         merge((name="equal-weight universe",), growth_scorecard(Float64.(ew), spy, gf))]
     return DataFrame(rows)
+end
+
+"""Allocator order of the written tables (`sort_table`)."""
+const TABLE_ALLOCATOR_ORDER = ["CD", "CES", "SG", "MinVar", "Tangent", "LS"]
+"""Screen order of the written tables (`sort_table`); other screens follow, by name."""
+const TABLE_SCREEN_ORDER = ["gamma", "bandit", "random", "global_gamma", "liquid_gamma", "corr_gamma",
+    "random_global", "random_liquid", "fixed"]
+
+_table_rank(v, order) = (something(findfirst(==(string(v)), order), length(order) + 1), string(v))
+
+"""
+    sort_table(t::DataFrame)::DataFrame
+
+A sorted copy of `t`, so a written table does not depend on the row order of the summaries (which follow the
+run hashes). Keys, for the columns `t` has: `allocator` (`TABLE_ALLOCATOR_ORDER`), `pair`, `metric`,
+`screen` (`TABLE_SCREEN_ORDER`, others after by name), `basket_size` (ascending), `hedge` (on first),
+`repick_on_band_exit` (on first). A table with none of them is returned unchanged.
+"""
+function sort_table(t::DataFrame)::DataFrame
+    cols = names(t); ord = Any[]
+    "allocator" in cols && push!(ord, order(:allocator; by=a -> _table_rank(a, TABLE_ALLOCATOR_ORDER)))
+    "pair" in cols && push!(ord, order(:pair))
+    "metric" in cols && push!(ord, order(:metric; by=string))
+    "screen" in cols && push!(ord, order(:screen; by=x -> _table_rank(x, TABLE_SCREEN_ORDER)))
+    "basket_size" in cols && push!(ord, order(:basket_size))
+    "hedge" in cols && push!(ord, order(:hedge; rev=true))
+    "repick_on_band_exit" in cols && push!(ord, order(:repick_on_band_exit; rev=true))
+    return isempty(ord) ? copy(t) : sort(t, ord)
 end
 
 """
