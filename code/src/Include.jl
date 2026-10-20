@@ -31,6 +31,7 @@ include("Bandit.jl")
 include("Experiments.jl")
 include("MarketInputs.jl")
 include("Calibration.jl")
+include("OnlineSIM.jl")
 
 export MyMarketData, build, load_market_data, growth_rates, index_of, DATA_FILES,
     MySIMParameterEstimate, MyEWLSState, MyEWVarState, estimate_sim, fit_base_sim, ewls_init, ewls_update!,
@@ -50,3 +51,4 @@ export assign_quotas, beat_spy_reward, train_sector_bandit, quarter_starts, band
 export config_key, config_hash, run_and_save, run_grid, rebuild_summary, run_stats, load_experiment
 export xi_gain, xi_series, gtilde_series, gamma_weights
 export MyCalibration, calibrate, save_calibration, load_calibration
+export MyOnlineSIM, online_sim
