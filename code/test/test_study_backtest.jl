@@ -150,3 +150,17 @@ end
     @test any(<(0), values(pos[5])) && any(>(0), values(pos[5]))    # longs and shorts held at d …
     @test all(==(0), values(pos[6]))                                 # … all closed at the next open
 end
+@testset "study loop: an all-cash book has no band" begin            # cash_revisit governs the return from cash
+    md, ctx = study_ctx(hedge=false)
+    base = run_study(ctx, study_run(ctx, "CD", :gamma))
+    d2 = base.decisions.date[2]; s2 = findfirst(==(d2), base.dates)
+    ctx.γ[s2, :] .= -0.1                                             # no γ > 0 at the second decision: ε pins only
+    res = run_study(ctx, study_run(ctx, "CD", :gamma)); dd = res.decisions
+    k = findfirst(==(d2), dd.date)
+    @test dd.status[k] == :no_preferred && haskey(res.projections, d2)
+    @test all(==(0), values(positions_by_day(res)[s2 + 1]))          # sold out to cash at the next open
+    j = findnext(in((:cash_revisit, :horizon_elapsed, :drawdown)), dd.reason, k + 1)
+    @test j !== nothing && dd.reason[j] == :cash_revisit && dd.date[j] == res.dates[s2 + ctx.settings.cash_revisit]
+    @test !any(dd.reason[k+1:j-1] .== :band_exit)
+    @test !any(res.repicks.trigger[d2 .< res.repicks.date .< dd.date[j]] .== :band_exit)
+end

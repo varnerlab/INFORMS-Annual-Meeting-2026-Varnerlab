@@ -292,7 +292,11 @@ close. `run.settings` must share the context's `context_key`. On each trading da
    An empty 130/30 problem records `:no_preferred` and targets every holding to 0. Then
    `project_gbm` of the resulting book (the targets, or the kept holdings) with cash V − n·S and
    `rng = MersenneTwister(seed·1_000_003 + Dates.value(date))` (R28), and the decision row. τ resets
-   to 0 and `last_alloc_was_cash = (status == :no_preferred)`.
+   to 0 and `last_alloc_was_cash = (status == :no_preferred)`. The projection becomes the trigger's
+   band, except for a book that holds no whole share (every target, or every kept holding,
+   truncates to 0 shares): such a book has no band, so the band-exit trigger cannot fire and
+   `cash_revisit` (or the horizon or drawdown trigger) governs the return from cash; its
+   projection is still recorded **(plan decision)**.
 7. **Daily row:** ξ[t], the β cap, the holdings' β and hedge weight, the pool size.
 
 When the timer and a band exit fall on the same day the re-pick is logged as `:timer`
@@ -389,7 +393,9 @@ function run_study(ctx::MyStudyContext, run::MyStudyRun)::MyStudyResult
                 oc = vcat(b.cols, leaving)
                 pending = (cols=oc, n=vcat(b.n, zeros(length(leaving))), adv=[_bt_adv(md, t, j) for j in oc])
             end
-            trig.τ = 0; trig.projection = proj; trig.initial = false
+            # an all-cash book (no whole share) gets no band: cash_revisit governs the return from cash
+            trig.τ = 0; trig.projection = all(x -> trunc(Int, x) == 0, b.n) ? nothing : proj
+            trig.initial = false
             trig.last_alloc_was_cash = (b.status == :no_preferred)
         end
         # 7. daily row
