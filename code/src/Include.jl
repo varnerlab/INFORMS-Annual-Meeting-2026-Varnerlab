@@ -36,6 +36,7 @@ include("HedgePool.jl")
 include("Screens.jl")
 include("StudySettings.jl")
 include("Context.jl")
+include("GrowthScorecard.jl")
 
 export MyMarketData, build, load_market_data, growth_rates, index_of, DATA_FILES,
     MySIMParameterEstimate, MyEWLSState, MyEWVarState, estimate_sim, fit_base_sim, ewls_init, ewls_update!,
@@ -60,3 +61,4 @@ export down_day_beta, hedge_pool, beta_cap
 export AbstractScreen, MyBanditScreen, MyGammaScreen, MyRandomScreen, excess_growth_windows,
     train_ticker_bandit, rank_arms, pick, short_candidates
 export MyStudySettings, load_study, with_settings, context_key, MyStudyContext, build_context
+export growth_scorecard
