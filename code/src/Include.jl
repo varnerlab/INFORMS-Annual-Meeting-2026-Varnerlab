@@ -41,7 +41,7 @@ include("StudyBacktest.jl")
 include("StudyRunner.jl")
 include("StudyTables.jl")
 
-export MyMarketData, build, load_market_data, growth_rates, index_of, DATA_FILES,
+export MyMarketData, build, load_market_data, growth_rates, index_of, DATA_FILES, boundary_split_factor, split_adjustments,
     MySIMParameterEstimate, MyEWLSState, MyEWVarState, estimate_sim, fit_base_sim, ewls_init, ewls_update!,
     ewvar_init, ewvar_update!, market_state, preference_weights
 export AbstractCovarianceModel, MySIMCovariance, MyShrunkResidualCovariance, growth_covariance,
