@@ -11,6 +11,8 @@
 const _STUDY_ALLOCATORS = ("CD", "CES", "SG", "MinVar", "Tangent", "LS")
 const _STUDY_SCREENS = (:bandit, :gamma, :random)
 const _STUDY_CAP_TOL = 1e-6     # beta_target within this of beta_max counts as a binding cap (dimensionless)
+const _STUDY_ACCEPTED = (:optimal, :fallback_minvar, :long_only_fallback)   # solved, limits met
+const _STUDY_FAILED = (:infeasible, :solver_failed)                         # keep the whole book
 
 """
     MyStudyRun
@@ -72,20 +74,23 @@ end
 Output of `run_study`, one entry per trading day of the run in `dates`, `equity` (USD, at the close),
 `cash` (USD, at the close) and `borrow_fees` (USD charged that day). Also:
 - `trades::DataFrame`: as `MyBacktestResult.trades` (`date`, `ticker`, `qty`, `price`, `cost`, `scale`).
-- `decisions::DataFrame`: `date`, `reason` (trigger), `status` (allocator), `n_names` (problem names
-  with |target weight| > 1e-3), `invested_frac` (allocator `s_star`, net for 130/30), `μ_T`, `σ_T`
+- `decisions::DataFrame`: `date`, `reason` (trigger), `status` (allocator), `n_names` (names with
+  |target weight| > 1e-3), `invested_frac` (Σ target weights, net for 130/30), `μ_T`, `σ_T`
   (projected value mean/SD at the horizon T, USD), `beta_target` (Σ wᵢβᵢ of the target weights with
-  the online β, dimensionless), `beta_max` (the β cap, `Inf` with the hedge off), `cap_binds` (a
-  finite cap and beta_target ≥ beta_max − 1e-6) and `hedge_weight` (Σ target weight of the
-  hedge-pool names).
+  the online β, dimensionless), `beta_max` (the β cap, `Inf` with the hedge off), `cap_binds` (an
+  accepted status `:optimal`/`:fallback_minvar`/`:long_only_fallback`, a finite cap and
+  beta_target ≥ beta_max − 1e-6) and `hedge_weight` (Σ target weight of the hedge-pool names). After
+  an `:infeasible` or `:solver_failed` decision the target book is the whole kept book (see
+  `run_study`).
 - `repicks::DataFrame`: `date`, `trigger` (`:initial`, `:timer` or `:band_exit`), `basket`, `pool`
   and `shorts` (tickers; `pool` in ranked order) and `changed` (the set basket ∪ pool ∪ shorts differs
   from the previous re-pick's; `true` at the initial re-pick).
 - `daily::DataFrame`: `date`, `xi` (ξ, dimensionless), `beta_max` (`Inf` with the hedge off),
   `portfolio_beta` (Σ nᵢ·closeᵢ·βᵢ/V of the holdings at the close, online β, dimensionless),
   `hedge_weight` (value of the holdings in the current pool names / V) and `pool_size` (names).
-- `targets[date]`: target weight wᵢ = nᵢSᵢ/W per problem name (continuous allocator output at the
-  decision close; held names outside the problem have target 0).
+- `targets[date]`: target weight wᵢ = nᵢSᵢ/W per name of the decision's book (the problem names with
+  the continuous allocator output, held names outside it at target 0; or, after a failed solve, every
+  held name at its held weight).
 - `projections[date]`: the `MyProjection` (μ_τ, σ_τ for τ = 1..T, USD) of each decision.
 """
 mutable struct MyStudyResult
@@ -219,6 +224,49 @@ function _study_problem(ctx::MyStudyContext, run::MyStudyRun, t::Int, cols::Vect
 end
 
 """
+    _study_decision(ctx, run, rule, t::Int, basket, pool, shorts, held::Vector{Int}, V::Float64)::NamedTuple
+
+One decision after the close of market-data row `t` (holdings `held` in shares, equity `V` in USD).
+Returns the book it leaves, `(status, cols, n, S, μ_g, Σ_g, β, β_max, hedge, trade)`: ticker columns,
+shares n (shares), close prices S (USD/share), μ_g (yr⁻¹), Σ_g (yr⁻²), online β (dimensionless) and
+hedge flags of those columns, the β cap (dimensionless) and whether to queue orders.
+
+- **Solved** (any status but `:infeasible`/`:solver_failed`): the `_study_problem` on
+  `_study_problem_columns` and the allocator's shares; non-finite shares count as `:solver_failed`
+  (R29). `trade = true`.
+- **Failed** (`:infeasible`, `:solver_failed`): keep every holding (spec §6): the columns are the
+  names with nonzero holdings (the problem columns at zero shares when there are none), with μ_g, Σ_g
+  and β from `_study_problem` on them, and n = the held shares. `trade = false`.
+- **Empty problem** (a 130/30 whose basket names all have γ ≤ 0, with an empty pool and no short
+  candidate at γ < 0): `:no_preferred` with no columns, so every holding targets 0 and the book is
+  all cash. `trade = true`.
+"""
+function _study_decision(ctx::MyStudyContext, run::MyStudyRun, rule::AbstractPortfolioRule, t::Int,
+        basket::Vector{Int}, pool::Vector{Int}, shorts::Vector{Int}, held::Vector{Int}, V::Float64)::NamedTuple
+    s = t - first(ctx.rows) + 1
+    cols, hedge = _study_problem_columns(rule, basket, pool, shorts, view(ctx.γ, s, :))
+    if isempty(cols)
+        return (status=:no_preferred, cols=Int[], n=Float64[], S=Float64[], μ_g=Float64[], Σ_g=zeros(0, 0),
+            β=Float64[], β_max=_study_beta_max(run.settings, ctx.ξ[t]), hedge=Bool[], trade=true)
+    end
+    p = _study_problem(ctx, run, t, cols, hedge, held, V)
+    r = allocate(rule, p)
+    all(isfinite, r.n) || (r = _result(p, copy(p.constraints.n_prev), :solver_failed))   # R29
+    n = r.n; trade = true
+    if r.status in _STUDY_FAILED
+        kept = findall(!=(0), held)
+        if !isempty(kept) && kept != cols
+            cols = kept; hedge = [j in pool for j in cols]
+            p = _study_problem(ctx, run, t, cols, hedge, held, V)
+        end
+        n = Float64.(held[cols]); trade = false
+    end
+    c = p.constraints
+    return (status=r.status, cols=cols, n=n, S=p.prices, μ_g=p.μ_g, Σ_g=p.Σ_g, β=c.β, β_max=c.β_max,
+        hedge=hedge, trade=trade)
+end
+
+"""
     run_study(ctx::MyStudyContext, run::MyStudyRun)::MyStudyResult
 
 Replay `run` on the context's rows `ctx.rows`, with equity starting at `W0` (USD) in cash at the start
@@ -237,16 +285,18 @@ close. `run.settings` must share the context's `context_key`. On each trading da
    `pick` (N = `N_per_sector`, seed = `run.seed`), the pool `ctx.pool[s]` (empty with the hedge off)
    and, for `"LS"`, the `short_candidates` outside the pool. If the set basket ∪ pool ∪ shorts changed
    and no trigger fired, the reason becomes `:basket_change`.
-6. **Decide** when the reason is not `:in_spec`: the problem of `_study_problem_columns` and
-   `_study_problem`, `allocate` (non-finite shares count as `:solver_failed` and keep the held shares,
-   R29), `project_gbm` of the targets with cash V − n·S and
-   `rng = MersenneTwister(seed·1_000_003 + Dates.value(date))` (R28), the decision row, and orders for
-   t+1 (held names outside the problem target 0; none on the last day). τ resets to 0 and
-   `last_alloc_was_cash = (status == :no_preferred)`.
+6. **Decide** when the reason is not `:in_spec` (`_study_decision`): `allocate` on the problem of
+   `_study_problem_columns` and `_study_problem` (non-finite shares count as `:solver_failed`, R29).
+   After a solve, queue orders for t+1 (held names outside the problem target 0; none on the last
+   day). After `:infeasible` or `:solver_failed`, queue no orders and keep every holding (spec §6).
+   An empty 130/30 problem records `:no_preferred` and targets every holding to 0. Then
+   `project_gbm` of the resulting book (the targets, or the kept holdings) with cash V − n·S and
+   `rng = MersenneTwister(seed·1_000_003 + Dates.value(date))` (R28), and the decision row. τ resets
+   to 0 and `last_alloc_was_cash = (status == :no_preferred)`.
 7. **Daily row:** ξ[t], the β cap, the holdings' β and hedge weight, the pool size.
 
 When the timer and a band exit fall on the same day the re-pick is logged as `:timer`
-**(implementation decision)**. Throws `ArgumentError` when the settings do not match the context's or
+**(plan decision)**. Throws `ArgumentError` when the settings do not match the context's or
 a screen cannot pick (e.g. a bandit lookback longer than the data); allocator and projection errors
 propagate.
 """
@@ -318,31 +368,29 @@ function run_study(ctx::MyStudyContext, run::MyStudyRun)::MyStudyResult
         end
         # 6. decide
         if reason != :in_spec
-            cols, hedge = _study_problem_columns(rule, basket, pool, shorts, view(ctx.γ, s, :))
-            p = _study_problem(ctx, run, t, cols, hedge, held, V)
-            r = allocate(rule, p)
-            all(isfinite, r.n) || (r = _result(p, copy(p.constraints.n_prev), :solver_failed))   # R29
-            S = p.prices
-            proj = project_gbm(r.n, S, V - dot(r.n, S), p.μ_g, p.Σ_g, md.g_f[t]; T=st.T, N=st.n_paths,
+            b = _study_decision(ctx, run, rule, t, basket, pool, shorts, held, V)
+            w = b.n .* b.S ./ V
+            proj = project_gbm(b.n, b.S, V - dot(b.n, b.S), b.μ_g, b.Σ_g, md.g_f[t]; T=st.T, N=st.n_paths,
                 rng=MersenneTwister(_bt_projection_seed(run.seed, d)))
-            β_target = dot(r.w, p.constraints.β); β_max = p.constraints.β_max
+            β_target = dot(w, b.β)
 
-            targets[d] = Dict(md.tickers[cols[i]] => r.w[i] for i in eachindex(cols))
+            targets[d] = Dict(md.tickers[b.cols[i]] => w[i] for i in eachindex(b.cols))
             projections[d] = proj
-            push!(dec.date, d); push!(dec.reason, reason); push!(dec.status, r.status)
-            push!(dec.n_names, count(w -> abs(w) > _BT_HELD_W, r.w)); push!(dec.invested_frac, r.s_star)
+            push!(dec.date, d); push!(dec.reason, reason); push!(dec.status, b.status)
+            push!(dec.n_names, count(x -> abs(x) > _BT_HELD_W, w)); push!(dec.invested_frac, sum(w; init=0.0))
             push!(dec.μ_T, proj.μ[end]); push!(dec.σ_T, proj.σ[end])
-            push!(dec.beta_target, β_target); push!(dec.beta_max, β_max)
-            push!(dec.cap_binds, isfinite(β_max) && β_target >= β_max - _STUDY_CAP_TOL)
-            push!(dec.hedge_weight, sum(r.w[hedge]; init=0.0))
+            push!(dec.beta_target, β_target); push!(dec.beta_max, b.β_max)
+            push!(dec.cap_binds, b.status in _STUDY_ACCEPTED && isfinite(b.β_max) &&
+                β_target >= b.β_max - _STUDY_CAP_TOL)
+            push!(dec.hedge_weight, sum(w[b.hedge]; init=0.0))
 
-            if t < i1
-                leaving = [j for j in eachindex(held) if held[j] != 0 && !(j in cols)]
-                oc = vcat(cols, leaving)
-                pending = (cols=oc, n=vcat(r.n, zeros(length(leaving))), adv=[_bt_adv(md, t, j) for j in oc])
+            if b.trade && t < i1
+                leaving = [j for j in eachindex(held) if held[j] != 0 && !(j in b.cols)]
+                oc = vcat(b.cols, leaving)
+                pending = (cols=oc, n=vcat(b.n, zeros(length(leaving))), adv=[_bt_adv(md, t, j) for j in oc])
             end
             trig.τ = 0; trig.projection = proj; trig.initial = false
-            trig.last_alloc_was_cash = (r.status == :no_preferred)
+            trig.last_alloc_was_cash = (b.status == :no_preferred)
         end
         # 7. daily row
         held_β = 0.0

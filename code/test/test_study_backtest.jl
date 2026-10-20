@@ -33,11 +33,13 @@ end
     @test res.repicks.date == res.dates[1:21:end]
     @test Set(res.decisions.reason) ⊆ Set([:initial, :basket_change])
     @test all(d in res.decisions.date for d in res.repicks.date[res.repicks.changed])
+    @test all(res.repicks.trigger[2:end] .== :timer)
 end
 @testset "study loop: band exits re-pick only when enabled" begin
     md, ctx = study_ctx(z=0.0)
     on = run_study(ctx, study_run(ctx, "CD", :random))
     @test all(d in on.repicks.date for d in on.decisions.date[on.decisions.reason .== :band_exit])
+    @test any(on.repicks.trigger .== :band_exit)
     md, ctx = study_ctx(z=0.0, repick_on_band_exit=false)
     off = run_study(ctx, study_run(ctx, "CD", :random))
     @test any(off.decisions.reason .== :band_exit) && off.repicks.date == off.dates[1:21:end]
@@ -64,16 +66,28 @@ end
 @testset "study loop: costs come from settings" begin
     md, ctx = study_ctx(half_spread_bps=0.0, impact_kappa=0.0)
     @test sum(run_study(ctx, study_run(ctx, "CD", :gamma)).trades.cost) == 0.0
+    mdv = study_md()                                                 # volume varies, so the ADV window matters
+    mdv.volume .= [1e5 * (1 + 0.5 * sin(0.1 * i + j)) for i in axes(mdv.volume, 1), j in axes(mdv.volume, 2)]
+    md, ctx = study_ctx(; md=mdv, half_spread_bps=7.0, impact_kappa=0.003)   # distinct, non-default
+    res = run_study(ctx, study_run(ctx, "CD", :gamma))
+    col = Dict(t => j for (j, t) in enumerate(md.tickers))
+    adv(r) = (t = index_of(md, r.date) - 1; max(mean(md.volume[max(1, t - 62):t, col[r.ticker]]), 1.0))  # decision day
+    @test any(res.trades.cost .> 0)
+    @test all(r.cost == trade_cost(r.qty, r.price, adv(r); half_spread_bps=7.0, κ=0.003) for r in eachrow(res.trades))
 end
 @testset "study loop: look-ahead canary" begin
     md, ctx = study_ctx(); res = run_study(ctx, study_run(ctx, "CD", :bandit))
-    d = res.dates[60]
+    d = res.decisions.date[cld(nrow(res.decisions), 2)]              # a mid-run decision
+    i = findfirst(==(d), res.dates)
+    @test 1 < i < length(res.dates)
     _, ctxp = study_ctx(; md=perturb_after(md, d))
     rp = run_study(ctxp, study_run(ctxp, "CD", :bandit))
-    @test rp.equity[1:60] == res.equity[1:60]
+    @test rp.equity[1:i] == res.equity[1:i]
     k = res.decisions.date .<= d
     @test rp.decisions.date[rp.decisions.date .<= d] == res.decisions.date[k]
     @test rp.repicks.basket[rp.repicks.date .<= d] == res.repicks.basket[res.repicks.date .<= d]
+    @test rp.targets[d] == res.targets[d]
+    @test rp.projections[d].μ == res.projections[d].μ
 end
 @testset "study loop: a binding β cap holds; run validation" begin   # added: the default fixture's cap never binds
     md, ctx = study_ctx(beta_ref=0.0)                                # β_max = max(0, −ξ)
@@ -91,4 +105,48 @@ end
     @test build(MyStudyRun, (settings=s, allocator="CD", screen=:gamma, seed=1)).label == ""
     @test_throws ArgumentError run_study(ctx, build(MyStudyRun, (settings=with_settings(s; pool_H=3),
         allocator="CD", screen=:gamma, seed=1)))                     # settings of another context
+end
+@testset "study loop: a failed solve keeps the whole book" begin     # spec §6, Review Focus 1
+    md, ctx = study_ctx(sg_baseline=0.07)                            # baselines that break the limits on some days
+    run = study_run(ctx, "SG", :gamma); res = run_study(ctx, run)
+    failed = findall(in((:infeasible, :solver_failed)), res.decisions.status)
+    @test !isempty(failed) && !any(res.decisions.cap_binds[failed])
+    pos = positions_by_day(res); col = Dict(t => j for (j, t) in enumerate(md.tickers))
+    day(f) = findfirst(==(res.decisions.date[f]), res.dates)        # run-day index of decision f
+    for f in failed                                                  # no orders: nothing fills the next day
+        day(f) < length(res.dates) && @test !any(res.trades.date .== res.dates[day(f)+1])
+    end
+    repick(f) = findlast(<=(res.decisions.date[f]), res.repicks.date)
+    in_problem(f) = Set(vcat(res.repicks.basket[repick(f)], res.repicks.pool[repick(f)]))
+    outside(f) = any(n != 0 && !(tk in in_problem(f)) for (tk, n) in pos[day(f)])
+    k = findfirst(outside, failed)                                   # a failed decision after a basket change
+    @test k !== nothing
+    f = failed[k]; d = res.decisions.date[f]; i = day(f); t = index_of(md, d)
+    V = res.equity[i]; book = Dict(tk => n for (tk, n) in pos[i] if n != 0)
+    @test keys(res.targets[d]) == keys(book)                         # targets = the held book
+    @test all(isapprox(res.targets[d][tk], n * md.close[t, col[tk]] / V; rtol=1e-12) for (tk, n) in book)
+    @test res.decisions.invested_frac[f] ≈ sum(values(res.targets[d]))
+    cols = sort([col[tk] for tk in keys(book)]); held = zeros(Int, length(md.tickers))
+    for (tk, n) in book
+        held[col[tk]] = n
+    end
+    pool = Set(res.repicks.pool[repick(f)])
+    p = VLINFORMS2026._study_problem(ctx, run, t, cols, [md.tickers[j] in pool for j in cols], held, V)
+    n = Float64.(held[cols]); S = md.close[t, cols]
+    proj = project_gbm(n, S, V - dot(n, S), p.μ_g, p.Σ_g, md.g_f[t]; T=ctx.settings.T, N=ctx.settings.n_paths,
+        rng=MersenneTwister(VLINFORMS2026._bt_projection_seed(run.seed, d)))
+    @test res.projections[d].μ == proj.μ && res.projections[d].σ == proj.σ   # the band projects the held book
+end
+@testset "study loop: an empty 130/30 problem goes to cash" begin
+    md, ctx = study_ctx(z=0.0, repick_on_band_exit=false, hedge=false)   # a decision every day, no pool
+    ctx.γ[5, :] .= 0.0                                               # day 5: no γ > 0 basket name, no γ < 0 short
+    res = run_study(ctx, study_run(ctx, "LS", :gamma))
+    d = res.dates[5]; k = findfirst(==(d), res.decisions.date)
+    @test k !== nothing && res.decisions.status[k] == :no_preferred
+    @test isempty(res.targets[d]) && res.decisions.invested_frac[k] == 0.0 && res.decisions.n_names[k] == 0
+    @test all(iszero, res.projections[d].σ)
+    @test res.projections[d].μ ≈ res.equity[5] .* exp.(md.g_f[index_of(md, d)] .* (1:ctx.settings.T) ./ 252)
+    pos = positions_by_day(res)
+    @test any(<(0), values(pos[5])) && any(>(0), values(pos[5]))    # longs and shorts held at d …
+    @test all(==(0), values(pos[6]))                                 # … all closed at the next open
 end
