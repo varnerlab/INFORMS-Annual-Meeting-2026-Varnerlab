@@ -192,3 +192,11 @@ end
         scr == :fixed ? (@test allequal(res.repicks.basket) && res.repicks.basket[1] == sort(md_tickers_13())) : (@test all(length.(res.repicks.basket) .== 8))
     end
 end
+
+@testset "study loop: omega_window is checked per run on a shared context" begin   # a context ignores omega_window
+    md, ctx = study_ctx()
+    r = build(MyStudyRun, (settings=with_settings(ctx.settings; omega_window=first(ctx.rows)), allocator="CD",
+        screen=:gamma, seed=5660))
+    @test context_key(r.settings) == context_key(ctx.settings)
+    @test_throws ArgumentError run_study(ctx, r)
+end

@@ -319,14 +319,17 @@ close. `run.settings` must share the context's `context_key`. On each trading da
 7. **Daily row:** ξ[t], the β cap, the holdings' β and hedge weight, the pool size.
 
 When the timer and a band exit fall on the same day the re-pick is logged as `:timer`
-**(plan decision)**. Throws `ArgumentError` when the settings do not match the context's or
-a screen cannot pick (e.g. a bandit lookback longer than the data); allocator and projection errors
-propagate.
+**(plan decision)**. Throws `ArgumentError` when the settings do not match the context's, when the first
+run row is ≤ the run's `omega_window` (trading days; not part of `context_key`, so checked here per run),
+or when a screen cannot pick (e.g. a bandit lookback longer than the data); allocator and projection
+errors propagate.
 """
 function run_study(ctx::MyStudyContext, run::MyStudyRun)::MyStudyResult
     st = run.settings; md = ctx.md
     isequal(context_key(st), context_key(ctx.settings)) ||
         throw(ArgumentError("run settings do not match the context's: $(context_key(st)) vs $(context_key(ctx.settings))"))
+    first(ctx.rows) > st.omega_window ||
+        throw(ArgumentError("run starts at row $(first(ctx.rows)), which must exceed omega_window = $(st.omega_window)"))
     rule = make_rule(run.allocator, st); screen = make_screen(run.screen, st)
     mpc = build(MyMPCSpec, (z=st.z, T=st.T, N=st.n_paths, D_max=st.D_max, cash_revisit_interval=st.cash_revisit))
     cost_kw = (half_spread_bps=st.half_spread_bps, κ=st.impact_kappa)

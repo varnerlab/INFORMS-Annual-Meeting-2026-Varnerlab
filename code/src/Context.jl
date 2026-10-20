@@ -43,9 +43,13 @@ end
 Compute G (from SPY closes over the training rows), ξ and g̃ per row, the online SIM path, γ and the
 hedge pool per run row, and the bandit excess-growth matrix. Row s of `γ`/`pool` uses data dated
 ≤ `rows[s]` only. Throws `ArgumentError` when `first(rows) ≤ max(omega_window, downday_lookback)`
-(trading days).
+(trading days), or when `calib`'s training window (`train_start`, `train_stop`) differs from `s`'s.
+`omega_window` is not part of `context_key`, so `run_study` checks it again for each run.
 """
 function build_context(md::MyMarketData, calib::MyCalibration, s::MyStudySettings)::MyStudyContext
+    (calib.train_start == s.train_start && calib.train_stop == s.train_stop) ||
+        throw(ArgumentError("calibration window $(calib.train_start) → $(calib.train_stop) differs from the " *
+            "settings' training window $(s.train_start) → $(s.train_stop)"))
     i0 = index_of(md, s.start)
     i0 > max(s.omega_window, s.downday_lookback) ||
         throw(ArgumentError("run starts at row $(i0), which must exceed max(omega_window, downday_lookback) = " *

@@ -30,6 +30,9 @@ end
     @test q.ξ[1:850] == ctx.ξ[1:850] && isequal(q.g̃[1:850], ctx.g̃[1:850])
     @test q.γ[1:50, :] == ctx.γ[1:50, :] && q.pool[1:50] == ctx.pool[1:50]
     @test_throws ArgumentError build_context(md, c, with_settings(s; start=md.dates[200], train_stop=md.dates[150]))
+    # the calibration must come from the settings' training window
+    @test_throws ArgumentError build_context(md, c, with_settings(s; train_stop=md.dates[799]))
+    @test_throws ArgumentError build_context(md, c, with_settings(s; train_start=md.dates[2]))
 end
 
 @testset "addendum settings and grid" begin
