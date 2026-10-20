@@ -14,3 +14,7 @@ Asked after Tasks 1–12 were built and reviewed (branch `feat/eod-study`, 754 t
 User: "question 2 clearly indicates that you are not doing what I want"
 
 None of the four is answered. The build stays paused until the mismatch is resolved.
+
+## 2026-10-20: resolved by restarting the design
+
+The user restarted the design instead of answering these questions. The approved design is `docs/superpowers/specs/2026-10-20-screened-utility-panel-study-design.md`, which replaces the 10-19 design and keeps the trial's rules (drawdown peak never reset), uses a 252-day SPY growth average in γ, and re-picks the basket with single-ticker screens.

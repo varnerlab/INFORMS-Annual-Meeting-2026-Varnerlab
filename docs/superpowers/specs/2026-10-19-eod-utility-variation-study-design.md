@@ -1,6 +1,6 @@
 # End-of-day utility-variation study: design
 
-Date: 2026-10-19. Status: draft for user approval.
+Date: 2026-10-19. Status: **superseded** by `2026-10-20-screened-utility-panel-study-design.md`.
 Repo: `varnerlab/INFORMS-Annual-Meeting-2026-Varnerlab` (private). All study material lives here.
 
 Items marked **(my call)** were chosen by Claude, not the user. They are defaults the user can overturn.
