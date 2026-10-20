@@ -17,7 +17,10 @@ growth rates g = ln(S_end/S_start)/(k·Δt) in 1/yr with Δt = 1/252.
 4. `julia -t auto scripts/11_run_study.jl --fixed`: fixed-schedule grid (no re-pick on band exit), `results/fixed_summary.csv`.
 5. `julia scripts/12_tables.jl [dir] [--smoke]`: comparison tables to `<dir>/tables/*.csv` (default `results/`),
    also printed as Markdown. Smoke check: `julia scripts/12_tables.jl results/smoke --smoke`.
-6. `scripts/13_figures.jl`: figures (uses `scripts/Project.toml`).
+6. `julia --project=scripts scripts/13_figures.jl`: slide figures (1600×900 PNG) to `results/figures/`, from
+   `results/*_summary.csv`, `results/runs/`, `config/study.toml` and `results/calibration_summary.toml`.
+   It uses its own environment (`scripts/Project.toml`, Plots.jl with VLINFORMS2026 developed from `code/`);
+   once per checkout, run `julia --project=scripts -e 'using Pkg; Pkg.instantiate()'`.
 
 Tests: `julia --project=code code/test/runtests.jl`. Settings live in `config/study.toml`.
 `data/`, `results/runs/` and `results/smoke/` are never committed; summaries, tables, figures and
@@ -33,6 +36,9 @@ Plan:
 - The hedge-pool tie-break: a hedge name holds more than its floor only when a binding limit (β cap or vol cap) makes it worth its budget.
 - "Share of days the β cap binds" is counted over decision days (`cap_bind_share`), the only days the cap is enforced.
 - The figures use Plots.jl in a separate scripts environment.
+- ξ's short and long averages and g̃_M are exponential moving averages (EMA, as in CHEME-5660 L8b) where the
+  spec says "moving average": ξ uses spans `xi_short`/`xi_long` (21/63 days) and g̃_M a span of `gtilde_window`
+  (252 days).
 - The old 10-19 `run_backtest` stays; `run_study` reuses its fill and cost helpers.
 
 Spec "my call" items the code implements:
