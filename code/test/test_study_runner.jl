@@ -1,4 +1,4 @@
-using Test, Dates, DataFrames, CSV, VLINFORMS2026
+using Test, Dates, DataFrames, CSV, Statistics, VLINFORMS2026
 include("helpers.jl")
 @testset "study runner" begin
     s = MyStudySettings(); grid = (n_seeds=30, base_seed=5660, allocators=["CD", "CES", "SG", "MinVar", "Tangent", "LS"],
@@ -33,4 +33,18 @@ include("helpers.jl")
     @test st.n_decisions == nrow(res.decisions)
     @test st.n_repicks == nrow(res.repicks) - 1
     @test st.n_basket_changes == count(res.repicks.changed[2:end])
+end
+
+@testset "addendum run lists" begin
+    s = MyStudySettings()
+    g = (n_seeds=30, base_seed=5660, allocators=["CD", "CES", "SG", "MinVar", "Tangent", "LS"], screens=[:bandit, :gamma, :random],
+        hedge=[true, false], K=[5, 8, 13, 21, 34],
+        universe_screens=[:global_gamma, :liquid_gamma, :corr_gamma, :random_global, :random_liquid],
+        fixed_lists=["l8b_13" => s.fixed_tickers, "l8b_15" => vcat(s.fixed_tickers, ["WMT", "PG"])])
+    u = universe_runs(s, g); f = fixed_list_runs(s, g)
+    @test length(u) == 3780 && length(f) == 24                      # 3·5·6·2 + 2·5·30·6·2; 2·6·2
+    @test length(unique(study_hash.(vcat(u, f, tier1_runs(s, g))))) == 3780 + 24 + 732
+    @test all(r -> r.settings.basket_K == 15, filter(r -> occursin("l8b_15", r.label), f))
+    md, ctx = study_ctx(); res = run_study(ctx, study_run(ctx, "CD", :gamma))
+    @test study_stats(res).basket_size == median(length.(res.repicks.basket))
 end

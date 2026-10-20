@@ -30,7 +30,7 @@ mean equity (USD) and by the run length in years, n_days/252 with n_days = lengt
 `:horizon_elapsed`, `:cash_revisit`, `:basket_change`). `n_repicks` counts re-picks and `n_basket_changes`
 those that changed the basket, both excluding the initial re-pick. `mean_names` (names) and
 `mean_invested` (fraction of wealth) average over decisions. `mean_portfolio_beta` (dimensionless),
-`mean_hedge_weight` (fraction of wealth) and `mean_pool_size` (names) average over days.
+`mean_hedge_weight` (fraction of wealth) and `mean_pool_size` (names) average over days. `basket_size` (names) is the median pick count over re-picks.
 `cap_bind_share` is the share of decisions with `cap_binds` (dimensionless), `NaN` when the β cap is off
 (no decision has a finite cap). Reading "share of days the cap binds" as decision days, the only days the
 cap is enforced, is a **(plan decision)**.
@@ -51,7 +51,8 @@ function study_stats(res::MyStudyResult)::NamedTuple
         mean_names=mn(dec.n_names), mean_invested=mn(dec.invested_frac),
         mean_portfolio_beta=mn(dy.portfolio_beta),
         cap_bind_share=capped ? mean(dec.cap_binds) : NaN,
-        mean_hedge_weight=mn(dy.hedge_weight), mean_pool_size=mn(dy.pool_size))
+        mean_hedge_weight=mn(dy.hedge_weight), mean_pool_size=mn(dy.pool_size),
+        basket_size=median(length.(rp.basket)))
 end
 
 """
@@ -142,6 +143,44 @@ function tier1_runs(s::MyStudySettings, grid)::Vector{MyStudyRun}
 end
 
 """
+    universe_runs(s::MyStudySettings, grid)::Vector{MyStudyRun}
+
+Size-sweep runs: `grid.K` × `grid.hedge` × `grid.allocators` × `grid.universe_screens`, each on
+`with_settings(s; basket_K=K, hedge=h)`. Deterministic screens (`_STUDY_DETERMINISTIC`) get seed
+`[base_seed]`, the others `base_seed .+ (0:n_seeds-1)`. Labels look like
+`"CD|global_gamma|K=13|hedge=true|seed=5660"`.
+"""
+function universe_runs(s::MyStudySettings, grid)::Vector{MyStudyRun}
+    out = MyStudyRun[]
+    for K in grid.K, h in grid.hedge, a in grid.allocators, scr in grid.universe_screens
+        seeds = scr in _STUDY_DETERMINISTIC ? [grid.base_seed] : collect(grid.base_seed .+ (0:grid.n_seeds-1))
+        sh = with_settings(s; basket_K=K, hedge=h)
+        for seed in seeds
+            push!(out, build(MyStudyRun, (settings=sh, allocator=a, screen=scr, seed=seed,
+                label="$(a)|$(scr)|K=$(K)|hedge=$(h)|seed=$(seed)")))
+        end
+    end
+    return out
+end
+
+"""
+    fixed_list_runs(s::MyStudySettings, grid)::Vector{MyStudyRun}
+
+Runs of the fixed lists: `grid.fixed_lists` (name => tickers) × `grid.hedge` × `grid.allocators` with
+screen `:fixed`, `fixed_tickers = list`, `basket_K = length(list)` and seed `base_seed`. Labels look like
+`"CD|fixed:l8b_13|hedge=true|seed=5660"`.
+"""
+function fixed_list_runs(s::MyStudySettings, grid)::Vector{MyStudyRun}
+    out = MyStudyRun[]
+    for (name, list) in grid.fixed_lists, h in grid.hedge, a in grid.allocators
+        sh = with_settings(s; fixed_tickers=collect(String, list), basket_K=length(list), hedge=h)
+        push!(out, build(MyStudyRun, (settings=sh, allocator=a, screen=:fixed, seed=grid.base_seed,
+            label=_study_label(a, "fixed:$(name)", h, grid.base_seed))))
+    end
+    return out
+end
+
+"""
     fixed_schedule_runs(s::MyStudySettings, grid)::Vector{MyStudyRun}
 
 The hedge-on subset of `tier1_runs(s, grid)` with `repick_on_band_exit = false`: re-picks only on the
@@ -160,7 +199,7 @@ end
 const _STUDY_SCORE_FIELDS = (:sharpe, :max_drawdown, :alpha, :alpha_t, :beta, :realized_growth, :terminal, :vol)
 const _STUDY_STAT_FIELDS = (:turnover, :total_cost, :borrow_fees, :n_decisions, :n_band_exit, :n_drawdown,
     :n_horizon, :n_cash_revisit, :n_basket_change, :n_repicks, :n_basket_changes, :mean_names, :mean_invested,
-    :mean_portfolio_beta, :cap_bind_share, :mean_hedge_weight, :mean_pool_size)
+    :mean_portfolio_beta, :cap_bind_share, :mean_hedge_weight, :mean_pool_size, :basket_size)
 const _STUDY_SUMMARY_COLUMNS = vcat([:hash, :label, :status, :allocator, :screen, :seed],
     collect(fieldnames(MyStudySettings)), [:wall_seconds], collect(_STUDY_SCORE_FIELDS), collect(_STUDY_STAT_FIELDS))
 
@@ -172,13 +211,14 @@ function _study_summary_row(file::AbstractString)
         :allocator => k.allocator, :screen => String(k.screen), :seed => k.seed,
         :wall_seconds => get(d, "wall_seconds", missing))
     for f in fieldnames(MyStudySettings)
-        row[f] = getfield(k, f)
+        v = getfield(k, f)
+        row[f] = v isa AbstractVector ? join(v, ";") : v
     end
     for f in _STUDY_SCORE_FIELDS
         row[f] = getfield(sc, f)
     end
     for f in _STUDY_STAT_FIELDS
-        row[f] = getfield(st, f)
+        row[f] = get(st, f, missing)
     end
     return row
 end

@@ -69,19 +69,20 @@ function paired_win_rate(df::DataFrame; metric::Symbol=:sharpe, a::Symbol=:bandi
 end
 
 """
-    gamma_percentile(df; metric=:sharpe, by) -> DataFrame
+    gamma_percentile(df; metric=:sharpe, by, screen=:gamma, control=:random) -> DataFrame
 
-Per group of `by` that has a `:gamma` screen row: `gamma_value` (metric units), `n_random` (count of
-random-screen seeds) and `percentile` (fraction in [0,1] of the random screen's values below the
-γ-screen value; ties count half). Groups with no γ row or no random rows are left out.
+Per group of `by` that has a `screen` row: `gamma_value` (metric units), `n_random` (count of
+control-screen seeds) and `percentile` (fraction in [0,1] of the control screen's values below the
+screen value; ties count half). Groups with no screen row or no control rows are left out.
 """
 function gamma_percentile(df::DataFrame; metric::Symbol=:sharpe,
-        by::Vector{Symbol}=[:allocator, :hedge, :repick_on_band_exit])::DataFrame
+        by::Vector{Symbol}=[:allocator, :hedge, :repick_on_band_exit],
+        screen::Symbol=:gamma, control::Symbol=:random)::DataFrame
     d = _tables_prepare(df)
     d = d[_tables_ok.(d[!, metric]), :]
     rows = []
-    for sub in groupby(d[d.screen .== :gamma, :], by)
-        rnd = d[d.screen .== :random, :]
+    for sub in groupby(d[d.screen .== screen, :], by)
+        rnd = d[d.screen .== control, :]
         for c in by
             rnd = rnd[rnd[!, c] .== sub[1, c], :]
         end
@@ -159,4 +160,31 @@ function markdown_table(df::DataFrame)::String
         println(io, "| ", join((cell(x) for x in r), " | "), " |")
     end
     return String(take!(io))
+end
+
+"""
+    compare_summaries(old, new; key=:label, cols=[...]) -> NamedTuple
+
+Joins two summary tables on `key`. Returns `(n_matched, n_missing, max_abs_diff)`: rows matched, keys of
+`old` absent from `new` (counts), and the largest |old - new| over `cols` and matched rows, in each
+column's units (NaN against NaN counts as 0).
+"""
+function compare_summaries(old::DataFrame, new::DataFrame; key::Symbol=:label,
+        cols=[:sharpe, :max_drawdown, :alpha, :alpha_t, :beta, :realized_growth, :terminal, :vol])::NamedTuple{(:n_matched, :n_missing, :max_abs_diff)}
+    idx = Dict(k => i for (i, k) in enumerate(new[!, key]))
+    nm = 0; nmiss = 0; mx = 0.0
+    for (i, k) in enumerate(old[!, key])
+        j = get(idx, k, 0)
+        if j == 0
+            nmiss += 1; continue
+        end
+        nm += 1
+        for c in cols
+            a, b = old[i, c], new[j, c]
+            (ismissing(a) || ismissing(b)) && continue
+            (isnan(a) && isnan(b)) && continue
+            mx = max(mx, abs(Float64(a) - Float64(b)))
+        end
+    end
+    return (n_matched=nm, n_missing=nmiss, max_abs_diff=mx)
 end

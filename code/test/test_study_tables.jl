@@ -25,3 +25,12 @@ include("helpers.jl")
     ls = split(mt, "\n"; keepempty=false)
     @test ls[1] == "| a | b |" && ls[2] == "|---|---|" && ls[3] == "| 1 | 0.1235 |" && length(ls) == 4
 end
+
+@testset "matched-control percentile and summary comparison" begin
+    df = DataFrame(allocator=fill("CD", 4), screen=["global_gamma", "random_global", "random_global", "random_global"],
+        hedge=trues(4), basket_size=fill(13, 4), seed=[5660, 1, 2, 3], sharpe=[0.5, 0.2, 0.6, 0.4])
+    p = gamma_percentile(df; screen=:global_gamma, control=:random_global, by=[:allocator, :basket_size, :hedge])
+    @test only(p.percentile) ≈ 2 / 3 && only(p.gamma_value) == 0.5
+    old = DataFrame(label=["a", "b"], sharpe=[0.1, NaN]); new = DataFrame(label=["a", "b"], sharpe=[0.1, NaN])
+    @test compare_summaries(old, new; cols=[:sharpe]) == (n_matched=2, n_missing=0, max_abs_diff=0.0)
+end
