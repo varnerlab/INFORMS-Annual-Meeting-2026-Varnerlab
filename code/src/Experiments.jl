@@ -7,15 +7,18 @@ _key_hook(x) = x === nothing ? nothing : sort!(collect(x); by=first)
 """
     config_key(cfg::MyRunConfig)::NamedTuple
 
-Identity of a run: every field of `cfg` except `base_sim`, with `basket_schedule` reduced to the hex
+Identity of a run (R33: its parameters): every field of `cfg` except `base_sim` and `label`, with `basket_schedule` reduced to the hex
 SHA1 of its repr (a `String`). The validation-only hooks (`ewls_g_m`, `decision_market`,
 `ewls_state0`) are always present (as `nothing` by default); dictionary hooks are stored as
-key-sorted pairs. Dimensions are those of the fields (yr⁻¹, USD, shares, dates).
+key-sorted pairs. `label` is excluded (two configs differing only in label share a hash; the label is
+still stored in the `.jld2` and the summary). Struct reprs (rule, mpc, covariance) are part of the
+key, so changing those types' fields changes hashes. Dimensions are those of the fields (yr⁻¹, USD,
+shares, dates).
 """
 function config_key(cfg::MyRunConfig)::NamedTuple
     fields = Symbol[]; vals = Any[]
     for f in fieldnames(MyRunConfig)
-        f === :base_sim && continue
+        (f === :base_sim || f === :label) && continue
         v = getfield(cfg, f)
         f === :basket_schedule && (v = bytes2hex(sha1(repr(v))))
         f in (:decision_market, :ewls_state0) && (v = _key_hook(v))
@@ -38,7 +41,7 @@ _runs_dir(outdir::AbstractString) = joinpath(outdir, "runs")
 
 Run `run_backtest(md, cfg)`, score it with `scorecard(equity, spy_close, g_f)` on the result's dates
 (equity in USD, SPY close in USD, g_f in yr⁻¹), and write `outdir/runs/<hash>.jld2` with keys
-`config_key`, `result`, `scorecard`, `wall_seconds` (s), `basket_kind` (`"static"` for a one-entry
+`config_key`, `result`, `scorecard`, `wall_seconds` (s), `label`, `basket_kind` (`"static"` for a one-entry
 basket schedule, else `"scheduled"`). The file is written to `<hash>.jld2.tmp`
 and then renamed (`mv(...; force=true)`), so a reader never sees a partial file. Returns the hash.
 Throws whatever the backtest throws (`run_grid` catches it).
@@ -52,7 +55,7 @@ function run_and_save(md::MyMarketData, cfg::MyRunConfig; outdir::AbstractString
     sc = scorecard(res.equity, md.spy_close[i0:i1], md.g_f[i0:i1])
     wall = (time_ns() - t0) / 1e9
     final = joinpath(runs, h * ".jld2"); tmp = final * ".tmp"
-    jldsave(tmp; config_key=config_key(cfg), result=res, scorecard=sc, wall_seconds=wall,
+    jldsave(tmp; config_key=config_key(cfg), result=res, scorecard=sc, wall_seconds=wall, label=cfg.label,
         basket_kind=length(cfg.basket_schedule) == 1 ? "static" : "scheduled")
     mv(tmp, final; force=true)
     return h
@@ -79,7 +82,7 @@ Run every config whose `outdir/runs/<hash>.jld2` is missing (a stray `.tmp` does
 limited to one thread. Each run is wrapped in `try/catch`: a failure writes
 `<hash>.error.txt` (exception, stacktrace, config key) and the sweep continues; errored hashes are
 retried on the next call, and a success deletes the stale error file. Returns
-`(ran=Vector{String}, skipped=Vector{String}, errors=Vector{String})` of hashes.
+`(ran, skipped, errors)`, each a sorted `Vector{String}` of hashes (deterministic across thread counts).
 """
 function run_grid(md::MyMarketData, cfgs::Vector{MyRunConfig}; outdir::AbstractString="results")
     Threads.nthreads() > 1 && BLAS.set_num_threads(1)
@@ -107,7 +110,7 @@ function run_grid(md::MyMarketData, cfgs::Vector{MyRunConfig}; outdir::AbstractS
             end
         end
     end
-    return (ran=ran, skipped=skipped, errors=errors)
+    return (ran=sort!(ran), skipped=sort!(skipped), errors=sort!(errors))
 end
 
 # Rule name with its parameters, e.g. "MyCESRule(η=2.0)"; parameter-free rules give just the type name.
@@ -123,7 +126,7 @@ const _SUMMARY_METRICS = (:sharpe, :max_drawdown, :alpha_ann, :alpha_t, :beta, :
     run_stats(res::MyBacktestResult)::NamedTuple
 
 Per-run activity statistics. `turnover` = Σ|qty·price| (USD) over trades with qty ≠ 0, divided by the
-mean equity (USD) and by the run length in years ((n_days)/252), i.e. fraction of equity traded per
+mean equity (USD) and by the run length in years, years = n_days/252 with n_days = length(dates) − 1, i.e. fraction of equity traded per
 year (yr⁻¹). `total_cost` = Σ cost (USD); `borrow_fees` = Σ daily borrow fees (USD); `n_*` count
 decisions by `reason`; `mean_names` = mean `n_names`; `mean_invested` = mean `invested_frac`.
 """
@@ -152,7 +155,7 @@ function _summary_row(file::AbstractString)
     d = load(file)
     k = d["config_key"]; sc = d["scorecard"]; st = run_stats(d["result"])
     cov = k.covariance
-    base = Dict{Symbol,Any}(:hash => h, :label => k.label, :rule => _rule_name(k.rule),
+    base = Dict{Symbol,Any}(:hash => h, :label => get(d, "label", ""), :rule => _rule_name(k.rule),
         :covariance => cov isa MyShrunkResidualCovariance ? "C2" : "C1",
         :λ => cov isa MyShrunkResidualCovariance ? cov.λ : missing,
         :w_max => k.w_max, :σ_g_max => k.σ_g_max, :s_max => k.s_max, :z => k.mpc.z, :T => k.mpc.T,

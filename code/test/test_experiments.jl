@@ -19,27 +19,31 @@ const _EXP_COLS = ["hash", "label", "rule", "covariance", "λ", "w_max", "σ_g_m
         @test config_key(cfg).basket_schedule isa String && length(config_key(cfg).basket_schedule) == 40   # SHA1
         @test config_hash(cfg) == config_hash(with(cfg; base_sim=bt_base_sim(α=[0.9, 0.9, 0.9])))   # base_sim excluded
         @test length(config_hash(cfg)) == 40
+        @test config_hash(cfg) == config_hash(with(cfg; label="other"))   # R33: label is not identity
+        @test !haskey(config_key(cfg), :label)
     end
 
     @testset "run_and_save, resume, partial tmp, summary" begin
         mktempdir() do out
             cfgs = [cfg, with(cfg; w_max=0.5, label="b"), with(cfg; covariance=MyShrunkResidualCovariance(), label="c")]
             cfgs[3].covariance = build(MyShrunkResidualCovariance, (λ=0.3,))
-            run_grid(md, cfgs; outdir=out)
+            r1 = run_grid(md, cfgs; outdir=out)
+            @test r1.ran == sort(config_hash.(cfgs)) && isempty(r1.skipped) && isempty(r1.errors)
             runs = joinpath(out, "runs")
             for c in cfgs
                 @test isfile(joinpath(runs, config_hash(c) * ".jld2"))
             end
             @test !any(endswith(f, ".tmp") for f in readdir(runs))
             mt = Dict(f => mtime(joinpath(runs, f)) for f in readdir(runs))
-            sleep(1.1)
-            run_grid(md, cfgs; outdir=out)   # nothing to do
+            r2 = run_grid(md, cfgs; outdir=out)   # nothing to do
+            @test isempty(r2.ran) && r2.skipped == sort(config_hash.(cfgs))
             @test all(mtime(joinpath(runs, f)) == mt[f] for f in readdir(runs))
 
             # partial tmp is rerun
             h = config_hash(cfgs[2]); f = joinpath(runs, h * ".jld2")
             rm(f); write(f * ".tmp", "garbage")
-            run_grid(md, cfgs; outdir=out)
+            r3 = run_grid(md, cfgs; outdir=out)
+            @test r3.ran == [h] && length(r3.skipped) == 2
             @test isfile(f) && filesize(f) > 100
             @test !isfile(f * ".tmp")
 
@@ -63,7 +67,8 @@ const _EXP_COLS = ["hash", "label", "rule", "covariance", "λ", "w_max", "σ_g_m
         mktempdir() do out
             bad = with(cfg; basket_schedule=[md.dates[21] => ["AAA", "ZZZ"]], label="bad")
             good = with(cfg; label="good")
-            run_grid(md, [bad, good]; outdir=out)
+            r = @test_logs (:warn, r"run failed") match_mode=:any run_grid(md, [bad, good]; outdir=out)
+            @test r.errors == [config_hash(bad)] && r.ran == [config_hash(good)]
             runs = joinpath(out, "runs")
             @test isfile(joinpath(runs, config_hash(good) * ".jld2"))
             @test !isfile(joinpath(runs, config_hash(bad) * ".jld2"))
@@ -74,7 +79,7 @@ const _EXP_COLS = ["hash", "label", "rule", "covariance", "λ", "w_max", "σ_g_m
             @test df[df.label .== "bad", :status] == ["error"] && df[df.label .== "good", :status] == ["ok"]
             @test ismissing(df[df.label .== "bad", :sharpe][1])
             # retry: error text is replaced once the config succeeds (here: re-run still errors, file persists)
-            run_grid(md, [bad]; outdir=out)
+            @test_logs (:warn, r"run failed") match_mode=:any run_grid(md, [bad]; outdir=out)
             @test isfile(joinpath(runs, config_hash(bad) * ".error.txt"))
             # success removes a stale error file
             h = config_hash(good); write(joinpath(runs, h * ".error.txt"), "stale"); rm(joinpath(runs, h * ".jld2"))
