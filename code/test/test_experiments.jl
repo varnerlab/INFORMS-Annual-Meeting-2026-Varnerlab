@@ -63,6 +63,15 @@ const _EXP_COLS = ["hash", "label", "rule", "covariance", "λ", "w_max", "σ_g_m
         end
     end
 
+    @testset "label-only duplicates" begin
+        mktempdir() do out
+            r = run_grid(md, [with(cfg; label="first"), with(cfg; label="second")]; outdir=out)
+            @test length(r.ran) == 1
+            df = rebuild_summary(out, "dup")
+            @test nrow(df) == 1 && df.label == ["first"]
+        end
+    end
+
     @testset "erroring config does not stop the sweep" begin
         mktempdir() do out
             bad = with(cfg; basket_schedule=[md.dates[21] => ["AAA", "ZZZ"]], label="bad")

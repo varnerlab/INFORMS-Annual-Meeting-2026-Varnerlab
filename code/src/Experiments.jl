@@ -78,7 +78,8 @@ end
     run_grid(md::MyMarketData, cfgs::Vector{MyRunConfig}; outdir="results")
 
 Run every config whose `outdir/runs/<hash>.jld2` is missing (a stray `.tmp` does not count), using
-`Threads.@threads`. Duplicate configs (equal hash) run once. When `Threads.nthreads() > 1`, BLAS is
+`Threads.@threads`. Duplicate configs (equal hash) run once. Configs that differ only in `label` share a hash; the first in
+`cfgs` (or the run already on disk) determines the stored label. When `Threads.nthreads() > 1`, BLAS is
 limited to one thread. Each run is wrapped in `try/catch`: a failure writes
 `<hash>.error.txt` (exception, stacktrace, config key) and the sweep continues; errored hashes are
 retried on the next call, and a success deletes the stale error file. Returns
