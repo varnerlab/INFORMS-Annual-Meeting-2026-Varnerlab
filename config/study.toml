@@ -39,12 +39,19 @@ bandit_eps_floor = 0.05   # exploration floor (probability)
 bandit_iters_per_arm = 50 # iterations per arm (count)
 bandit_min_iters = 500    # minimum iterations (count)
 bandit_max_iters = 5000   # maximum iterations (count)
+basket_K = 13             # names picked by the universe-wide screens (count)
+liquidity_shortlist = 100 # liquid shortlist size (count)
+liquidity_window = 63     # window of the dollar-volume ranking (trading days)
+corr_max = 0.7            # largest pairwise growth-rate correlation accepted (dimensionless)
+corr_window = 252         # correlation window (trading days)
+fixed_tickers = ["AAPL", "MSFT", "INTC", "MU", "AMD", "NVDA", "GS", "BAC", "WFC", "C", "F", "GM", "JNJ"]  # pre-chosen list, picked in advance without 2025 data
 
 [limits]
 w_max = 0.10              # single-name weight cap (fraction of wealth)
 vol_cap_annual = "calibrated"  # volatility cap (1/yr); "calibrated" = SPY 2014-2024
 s_max = 1.0               # share cap multiplier (dimensionless)
 turnover_frac = 0.10      # turnover limit (fraction of wealth)
+w_max_scale = 1.5         # a screen pick's cap is max(w_max, w_max_scale/K) (dimensionless)
 
 [allocators]
 ces_eta = 0.5             # CES elasticity parameter (dimensionless)
@@ -72,3 +79,9 @@ base_seed = 5660          # first seed (integer)
 allocators = ["CD", "CES", "SG", "MinVar", "Tangent", "LS"]  # allocator labels
 screens = ["bandit", "gamma", "random"]                       # screen labels
 hedge = [true, false]     # hedge on/off cells (flags)
+K = [5, 8, 13, 21, 34]     # basket sizes of the universe-wide screens (count)
+universe_screens = ["global_gamma", "liquid_gamma", "corr_gamma", "random_global", "random_liquid"]  # screen labels
+
+[grid.fixed_lists]        # lists chosen in advance without 2025 data
+l8b_13 = ["AAPL", "MSFT", "INTC", "MU", "AMD", "NVDA", "GS", "BAC", "WFC", "C", "F", "GM", "JNJ"]
+l8b_15 = ["AAPL", "MSFT", "INTC", "MU", "AMD", "NVDA", "GS", "BAC", "WFC", "C", "F", "GM", "JNJ", "WMT", "PG"]

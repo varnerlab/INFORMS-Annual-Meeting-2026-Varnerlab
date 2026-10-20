@@ -13,7 +13,7 @@ end
     md, ctx = study_ctx(); run = study_run(ctx, "CD", :gamma); res = run_study(ctx, run)
     t = first(ctx.rows); basket = [findfirst(==(x), md.tickers) for x in res.repicks.basket[1]]
     cols, hedge = VLINFORMS2026._study_problem_columns(MyCobbDouglasRule(), basket, ctx.pool[1], Int[], ctx.γ[1, :])
-    p = VLINFORMS2026._study_problem(ctx, run, t, cols, hedge, zeros(Int, length(md.tickers)), 100_000.0)
+    p = VLINFORMS2026._study_problem(ctx, run, t, cols, hedge, zeros(Int, length(md.tickers)), 100_000.0; basket=basket)
     @test p.γ == ctx.γ[1, cols] && p.μ_g ≈ ctx.sim.α[1, cols] .+ ctx.sim.β[1, cols] .* ctx.g̃[t]
     @test p.constraints.β == ctx.sim.β[1, cols] && p.constraints.β_max == beta_cap(ctx.ξ[t])
     @test p.constraints.σ_g_max == ctx.calib.σ_m && p.constraints.c̄ ≈ 5e-4 * mean(md.close[t, cols])
@@ -163,4 +163,22 @@ end
     @test j !== nothing && dd.reason[j] == :cash_revisit && dd.date[j] == res.dates[s2 + ctx.settings.cash_revisit]
     @test !any(dd.reason[k+1:j-1] .== :band_exit)
     @test !any(res.repicks.trigger[d2 .< res.repicks.date .< dd.date[j]] .== :band_exit)
+end
+
+@testset "scaled cap for screen picks only" begin                     # Review Focus 4
+    md, ctx = study_ctx(); run = study_run(ctx, "CD", :gamma); t = first(ctx.rows)
+    cols = [1, 2, 3, 4, 5, 6]; hedge = [false, false, false, true, true, false]
+    p = VLINFORMS2026._study_problem(ctx, run, t, cols, hedge, zeros(Int, 48), 1e5; basket=[1, 2, 3, 4, 6])
+    @test p.constraints.w_cap ≈ [0.3, 0.3, 0.3, 0.3, 0.10, 0.3]        # K = 5 picks; pick 4 is also pooled; 5 is pool-only
+    q = VLINFORMS2026._study_problem(ctx, run, t, cols, hedge, zeros(Int, 48), 1e5; basket=collect(1:33))
+    @test all(==(0.10), q.constraints.w_cap)                         # 1.5/33 < 0.10
+end
+@testset "new screens and the fixed list run end to end" begin
+    md, ctx = study_ctx(basket_K=8, fixed_tickers=md_tickers_13())
+    # `changed` also tracks the hedge pool, which moves, so the fixed list is checked on its basket
+    for scr in (:global_gamma, :liquid_gamma, :corr_gamma, :random_global, :random_liquid, :fixed)
+        res = run_study(ctx, study_run(ctx, "CD", scr))
+        @test all(res.cash .>= 0) && all(isfinite, res.equity)
+        scr == :fixed ? (@test allequal(res.repicks.basket)) : (@test all(length.(res.repicks.basket) .== 8))
+    end
 end

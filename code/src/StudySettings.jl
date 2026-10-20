@@ -5,7 +5,10 @@
 
 Every configurable setting of the study. Dates are calendar dates; windows, lags and horizons are
 in trading days; `D_max`, `w_max`, `s_max`, `turnover_frac`, `ls_*` are fractions of wealth;
-`vol_cap_annual` is in yr⁻¹ and `lambda` in yr (dimensionless risk preference, `NaN` = calibrated);
+`basket_K`, `liquidity_shortlist` are counts of names; `liquidity_window`, `corr_window` are in trading days;
+`corr_max` is a correlation (dimensionless); `w_max_scale` is the pick-cap numerator (a pick's cap is
+`max(w_max, w_max_scale/K)`, fraction of wealth); `fixed_tickers` is the pre-chosen list of the `:fixed` screen
+(chosen in advance, without 2025 data). `vol_cap_annual` is in yr⁻¹ and `lambda` in yr (dimensionless risk preference, `NaN` = calibrated);
 `borrow_rate` is per year; `half_spread_bps` is in basis points; `W0` is in dollars. `NaN` for
 `vol_cap_annual` means the SPY volatility over the calibration window. The zero-argument constructor
 fills the defaults. Field names are ASCII so TOML keys equal field names **(plan decision)**.
@@ -25,6 +28,8 @@ mutable struct MyStudySettings
     borrow_rate::Float64
     half_spread_bps::Float64; impact_kappa::Float64
     hedge::Bool; beta_ref::Float64; kappa_beta::Float64; beta_min::Float64; pool_H::Int; downday_lookback::Int
+    basket_K::Int; liquidity_shortlist::Int; liquidity_window::Int; corr_max::Float64; corr_window::Int
+    w_max_scale::Float64; fixed_tickers::Vector{String}
     function MyStudySettings()
         return new(Date(2025, 1, 2), Date(2026, 9, 4), Date(2014, 1, 3), Date(2024, 12, 31),
             100_000.0,
@@ -37,7 +42,9 @@ mutable struct MyStudySettings
             0.10, NaN, 1.0, 0.10,
             0.5, 0.01, 1.30, 0.30, 1.00, 0.0075,
             5.0, 0.001,
-            true, 1.0, 1.0, 0.0, 5, 252)
+            true, 1.0, 1.0, 0.0, 5, 252,
+            13, 100, 63, 0.7, 252,
+            1.5, ["AAPL", "MSFT", "INTC", "MU", "AMD", "NVDA", "GS", "BAC", "WFC", "C", "F", "GM", "JNJ"])
     end
 end
 
@@ -50,6 +57,10 @@ function _validate_settings(s::MyStudySettings)
     0 < s.xi_quantile < 1 || throw(ArgumentError("MyStudySettings: xi_quantile must be in (0, 1)"))
     s.beta_min ≥ 0 || throw(ArgumentError("MyStudySettings: beta_min must be ≥ 0"))
     0 < s.w_max ≤ 1 || throw(ArgumentError("MyStudySettings: w_max must be in (0, 1]"))
+    0 < s.corr_max ≤ 1 || throw(ArgumentError("MyStudySettings: corr_max must be in (0, 1]"))
+    s.w_max_scale > 0 || throw(ArgumentError("MyStudySettings: w_max_scale must be > 0"))
+    (!isempty(s.fixed_tickers) && allunique(s.fixed_tickers)) ||
+        throw(ArgumentError("MyStudySettings: fixed_tickers must be non-empty and unique"))
     s.ces_eta > 0 || throw(ArgumentError("MyStudySettings: ces_eta must be > 0"))
     s.train_stop < s.start ≤ s.stop ||
         throw(ArgumentError("MyStudySettings: need train_stop < start ≤ stop"))
@@ -62,7 +73,7 @@ end
 Start from the defaults and override the fields in `data` (each converted to its field type).
 Throws `ArgumentError` on an unknown field, an unconvertible value, or a failed validation:
 windows and counts ≥ 1, `xi_short < xi_long`, `0 < xi_quantile < 1`, `beta_min ≥ 0`,
-`0 < w_max ≤ 1`, `ces_eta > 0`, `train_stop < start ≤ stop`.
+`0 < w_max ≤ 1`, `ces_eta > 0`, `0 < corr_max ≤ 1`, `w_max_scale > 0`, `fixed_tickers` non-empty and unique, `train_stop < start ≤ stop`.
 """
 function build(::Type{MyStudySettings}, data::NamedTuple)::MyStudySettings
     s = MyStudySettings()
@@ -74,7 +85,7 @@ function build(::Type{MyStudySettings}, data::NamedTuple)::MyStudySettings
         catch
             throw(ArgumentError("MyStudySettings: cannot convert $(k) = $(repr(v)) to $(T)"))
         end
-        setfield!(s, k, val)
+        setfield!(s, k, val isa Vector ? copy(val) : val)      # no aliasing of vector fields
     end
     return _validate_settings(s)
 end
@@ -94,7 +105,8 @@ end
 
 Read `config/study.toml`. Every table except `[grid]` is flattened into settings keys (a key that
 repeats across tables or is not a settings field throws `ArgumentError`); `"calibrated"` for
-`lambda` or `vol_cap_annual` becomes `NaN`. `grid` is `(n_seeds, base_seed, allocators, screens, hedge)`.
+`lambda` or `vol_cap_annual` becomes `NaN`. `grid` is `(n_seeds, base_seed, allocators, screens, hedge, K, universe_screens, fixed_lists)`, with
+`fixed_lists` the `[grid.fixed_lists]` table as `name => tickers` pairs sorted by name.
 """
 function load_study(path::AbstractString)
     raw = TOML.parsefile(path)
@@ -111,11 +123,13 @@ function load_study(path::AbstractString)
     end
     settings = build(MyStudySettings, NamedTuple(flat))
     g = get(raw, "grid", Dict{String,Any}())
-    for k in ("n_seeds", "base_seed", "allocators", "screens", "hedge")
+    for k in ("n_seeds", "base_seed", "allocators", "screens", "hedge", "K", "universe_screens", "fixed_lists")
         haskey(g, k) || throw(ArgumentError("load_study: [grid] is missing $(k)"))
     end
     grid = (n_seeds = Int(g["n_seeds"]), base_seed = Int(g["base_seed"]),
-        allocators = String.(g["allocators"]), screens = Symbol.(g["screens"]), hedge = Bool.(g["hedge"]))
+        allocators = String.(g["allocators"]), screens = Symbol.(g["screens"]), hedge = Bool.(g["hedge"]),
+        K = Int.(g["K"]), universe_screens = Symbol.(g["universe_screens"]),
+        fixed_lists = sort!([String(n) => String.(v) for (n, v) in g["fixed_lists"]]; by=first))
     return (settings = settings, grid = grid)
 end
 

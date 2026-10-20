@@ -124,14 +124,14 @@ _study_label(a::AbstractString, scr, hedge::Bool, seed::Integer) = "$(a)|$(scr)|
     tier1_runs(s::MyStudySettings, grid)::Vector{MyStudyRun}
 
 Tier 1 runs: allocators × screens × hedge, each on `s` with `hedge` set, with seeds
-`base_seed .+ (0:n_seeds-1)`; the deterministic `:gamma` screen gets `[base_seed]` only. `grid` is the
+`base_seed .+ (0:n_seeds-1)`; the deterministic screens (`_STUDY_DETERMINISTIC`) get `[base_seed]` only. `grid` is the
 `(n_seeds, base_seed, allocators, screens, hedge)` tuple of `load_study`. Labels look like
 `"CD|bandit|hedge=true|seed=5660"`.
 """
 function tier1_runs(s::MyStudySettings, grid)::Vector{MyStudyRun}
     out = MyStudyRun[]
     for h in grid.hedge, a in grid.allocators, scr in grid.screens
-        seeds = scr == :gamma ? [grid.base_seed] : collect(grid.base_seed .+ (0:grid.n_seeds-1))
+        seeds = scr in _STUDY_DETERMINISTIC ? [grid.base_seed] : collect(grid.base_seed .+ (0:grid.n_seeds-1))
         sh = with_settings(s; hedge=h)
         for seed in seeds
             push!(out, build(MyStudyRun, (settings=sh, allocator=a, screen=scr, seed=seed,

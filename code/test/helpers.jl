@@ -173,3 +173,6 @@ end
 # One study run on ctx's settings.
 study_run(ctx::MyStudyContext, allocator::String, screen::Symbol; seed::Int=5660) =
     build(MyStudyRun, (settings=ctx.settings, allocator=allocator, screen=screen, seed=seed))
+
+# The 13 tickers of the user's fixed list stand in as the first 13 fixture tickers (deterministic).
+md_tickers_13() = study_md().tickers[1:13]

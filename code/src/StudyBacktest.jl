@@ -9,7 +9,11 @@
 # σ_m and σ_g_max (yr⁻¹), Σ_g (yr⁻²), weights, β and ξ (dimensionless).
 
 const _STUDY_ALLOCATORS = ("CD", "CES", "SG", "MinVar", "Tangent", "LS")
-const _STUDY_SCREENS = (:bandit, :gamma, :random)
+const _STUDY_SCREENS = (:bandit, :gamma, :random, :global_gamma, :liquid_gamma, :corr_gamma,
+    :random_global, :random_liquid, :fixed)
+
+# Screens whose pick does not depend on the seed: a run list needs one seed for each.
+const _STUDY_DETERMINISTIC = (:gamma, :global_gamma, :liquid_gamma, :corr_gamma, :fixed)
 const _STUDY_CAP_TOL = 1e-6     # beta_target within this of beta_max counts as a binding cap (dimensionless)
 const _STUDY_ACCEPTED = (:optimal, :fallback_minvar, :long_only_fallback)   # solved, limits met
 const _STUDY_FAILED = (:infeasible, :solver_failed)                         # keep the whole book
@@ -23,7 +27,7 @@ One study run (`run_study`). Fields:
 |---|---|
 | `settings::MyStudySettings` | every window, limit and cost (units as in `MyStudySettings`) |
 | `allocator::String` | `"CD"`, `"CES"`, `"SG"`, `"MinVar"`, `"Tangent"` or `"LS"` (130/30 CD) |
-| `screen::Symbol` | `:bandit`, `:gamma` or `:random` |
+| `screen::Symbol` | one of `_STUDY_SCREENS` |
 | `seed::Int` | screen and projection RNG seed (≥ 0) |
 | `label::String` | run label (default `""`) |
 """
@@ -45,7 +49,7 @@ end
 
 Build a run from `settings`, `allocator`, `screen`, `seed` and optional `label` (default `""`).
 Throws `ArgumentError` on a missing or unknown field, an allocator other than `"CD"`, `"CES"`,
-`"SG"`, `"MinVar"`, `"Tangent"`, `"LS"`, a screen other than `:bandit`, `:gamma`, `:random`, or
+`"SG"`, `"MinVar"`, `"Tangent"`, `"LS"`, a screen not in `_STUDY_SCREENS`, or
 `seed < 0`.
 """
 function build(::Type{MyStudyRun}, data::NamedTuple)::MyStudyRun
@@ -143,7 +147,9 @@ end
 
 The ticker screen of `screen`: `:bandit` (`MyBanditScreen` with `bandit_lookback`, `bandit_horizon`
 in trading days, `bandit_eps_floor`, `bandit_iters_per_arm`, `bandit_min_iters`, `bandit_max_iters`),
-`:gamma` or `:random`. Throws `ArgumentError` on another symbol.
+`:gamma`, `:random`, and the universe-wide `:global_gamma`, `:liquid_gamma`, `:corr_gamma`, `:random_global`,
+`:random_liquid` (from `basket_K`, `liquidity_shortlist`, `liquidity_window` in trading days, `corr_max`,
+`corr_window` in trading days) and `:fixed` (`fixed_tickers`). Throws `ArgumentError` on another symbol.
 """
 function make_screen(screen::Symbol, s::MyStudySettings)::AbstractScreen
     screen == :bandit && return build(MyBanditScreen, (lookback=s.bandit_lookback, horizon=s.bandit_horizon,
@@ -151,6 +157,12 @@ function make_screen(screen::Symbol, s::MyStudySettings)::AbstractScreen
         max_iters=s.bandit_max_iters))
     screen == :gamma && return MyGammaScreen()
     screen == :random && return MyRandomScreen()
+    screen == :global_gamma && return MyGlobalGammaScreen(s.basket_K)
+    screen == :liquid_gamma && return MyLiquidGammaScreen(s.basket_K, s.liquidity_shortlist, s.liquidity_window)
+    screen == :corr_gamma && return MyCorrGammaScreen(s.basket_K, s.corr_max, s.corr_window)
+    screen == :random_global && return MyGlobalRandomScreen(s.basket_K)
+    screen == :random_liquid && return MyLiquidRandomScreen(s.basket_K, s.liquidity_shortlist, s.liquidity_window)
+    screen == :fixed && return MyFixedScreen(copy(s.fixed_tickers))
     throw(ArgumentError("unknown screen :$(screen); expected one of $(_STUDY_SCREENS)"))
 end
 
@@ -186,7 +198,7 @@ _study_beta_max(s::MyStudySettings, ξ_t::Real)::Float64 =
 
 """
     _study_problem(ctx, run, t::Int, cols::Vector{Int}, hedge::Vector{Bool}, held::Vector{Int},
-        V::Float64)::MyAllocationProblem
+        V::Float64; basket::Vector{Int}=Int[])::MyAllocationProblem
 
 The allocation problem after the close of market-data row `t` for the ticker columns `cols` (hedge
 flags `hedge`), with holdings `held` (shares, one per ticker) and equity `V` (USD). With
@@ -200,10 +212,12 @@ s = t − first(ctx.rows) + 1, S = close[t, cols] (USD/share) and Ω = `omega_wi
   K_turnover = `turnover_frac`·V (USD), c̄ = `half_spread_bps`·1e-4·mean(S) (USD/share),
   n_prev = held[cols], ε = 1e-3 shares, the online β, and β_max = `beta_cap(ξ[t])` with the
   `beta_ref`, `kappa_beta`, `beta_min` settings when `hedge` is on (else Inf).
+- Per-name caps: `w_cap[i] = max(w_max, w_max_scale/length(basket))` when `cols[i] ∈ basket` (the screen
+  picks, a pick that is also pooled included), else `w_max`; the default empty `basket` gives `w_max` everywhere.
 - prices = S, W = V, g_f = g_f[t] (yr⁻¹).
 """
 function _study_problem(ctx::MyStudyContext, run::MyStudyRun, t::Int, cols::Vector{Int}, hedge::Vector{Bool},
-        held::Vector{Int}, V::Float64)::MyAllocationProblem
+        held::Vector{Int}, V::Float64; basket::Vector{Int}=Int[])::MyAllocationProblem
     st = run.settings; md = ctx.md
     s = t - first(ctx.rows) + 1
     S = md.close[t, cols]
@@ -215,7 +229,9 @@ function _study_problem(ctx::MyStudyContext, run::MyStudyRun, t::Int, cols::Vect
     Σ_g = growth_covariance(build(MyShrunkResidualCovariance, (λ=λ, window=Ω)), β, std.(eachcol(E)),
         ctx.sim.σ_m[s]; residuals=E)
     σ_g_max = isnan(st.vol_cap_annual) ? ctx.calib.σ_m : st.vol_cap_annual / sqrt(_BT_DT)
-    cs = build(MyConstraintSet, (w_max=st.w_max, s_max=st.s_max, σ_g_max=σ_g_max,
+    cap_pick = isempty(basket) ? st.w_max : max(st.w_max, st.w_max_scale / length(basket))
+    w_cap = [c in basket ? cap_pick : st.w_max for c in cols]
+    cs = build(MyConstraintSet, (w_max=st.w_max, w_cap=w_cap, s_max=st.s_max, σ_g_max=σ_g_max,
         K_turnover=st.turnover_frac * V, c̄=st.half_spread_bps * 1e-4 * mean(S),     # bps → fraction
         sector=md.sector[cols], n_prev=Float64.(held[cols]), ε=_BT_ε, β=β,
         β_max=_study_beta_max(st, ctx.ξ[t])))
@@ -249,7 +265,7 @@ function _study_decision(ctx::MyStudyContext, run::MyStudyRun, rule::AbstractPor
         return (status=:no_preferred, cols=Int[], n=Float64[], S=Float64[], μ_g=Float64[], Σ_g=zeros(0, 0),
             β=Float64[], β_max=_study_beta_max(run.settings, ctx.ξ[t]), hedge=Bool[], trade=true)
     end
-    p = _study_problem(ctx, run, t, cols, hedge, held, V)
+    p = _study_problem(ctx, run, t, cols, hedge, held, V; basket=basket)
     r = allocate(rule, p)
     all(isfinite, r.n) || (r = _result(p, copy(p.constraints.n_prev), :solver_failed))   # R29
     n = r.n; trade = true

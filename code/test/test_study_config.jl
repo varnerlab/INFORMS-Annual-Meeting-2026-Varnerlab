@@ -31,3 +31,15 @@ end
     @test q.γ[1:50, :] == ctx.γ[1:50, :] && q.pool[1:50] == ctx.pool[1:50]
     @test_throws ArgumentError build_context(md, c, with_settings(s; start=md.dates[200], train_stop=md.dates[150]))
 end
+
+@testset "addendum settings and grid" begin
+    s = MyStudySettings()
+    @test (s.basket_K, s.liquidity_shortlist, s.liquidity_window, s.corr_max, s.corr_window, s.w_max_scale) == (13, 100, 63, 0.7, 252, 1.5)
+    @test s.fixed_tickers == ["AAPL", "MSFT", "INTC", "MU", "AMD", "NVDA", "GS", "BAC", "WFC", "C", "F", "GM", "JNJ"]
+    cfg = load_study(joinpath(REPO, "config", "study.toml"))
+    @test same(cfg.settings, s)
+    @test cfg.grid.K == [5, 8, 13, 21, 34] && length(cfg.grid.universe_screens) == 5
+    @test first.(cfg.grid.fixed_lists) == ["l8b_13", "l8b_15"] && last(cfg.grid.fixed_lists[2])[14:15] == ["WMT", "PG"]
+    @test_throws ArgumentError build(MyStudySettings, (corr_max=1.5,))
+    @test_throws ArgumentError build(MyStudySettings, (fixed_tickers=String[],))
+end
