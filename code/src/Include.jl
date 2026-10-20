@@ -25,6 +25,7 @@ include("Costs.jl")
 include("Triggers.jl")
 include("Metrics.jl")
 include("Backtest.jl")
+include("Validation.jl")
 
 export MyMarketData, build, load_market_data, growth_rates, index_of, DATA_FILES,
     MySIMParameterEstimate, MyEWLSState, MyEWVarState, estimate_sim, fit_base_sim, ewls_init, ewls_update!,
@@ -38,3 +39,4 @@ export MyProjection, project_gbm
 export trade_cost, borrow_fee, MyMPCSpec, MyTriggerState, check_trigger
 export scorecard
 export MyRunConfig, MyBacktestResult, run_backtest
+export compare_targets, ewls_calendar_from_log
