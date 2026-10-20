@@ -263,7 +263,7 @@ The config-driven, resumable, threaded runner keys each run by a hash of its con
 
 From the daily wealth series over the run, all in growth rates:
 
-- **Sharpe ratio:** with g_W,t = ln(W_t/W_{t−1})/Δt, Sharpe = √Δt·mean(g_W − g_f)/std(g_W − g_f). This matches CHEME-5660 `realized_scorecard`.
+- **Sharpe ratio:** with g_W,t = ln(W_t/W_{t−1})/Δt, Sharpe = mean(g_W − g_f)/(√Δt·std(g_W − g_f)), i.e. excess growth over the annualized volatility σ·√Δt. This matches CHEME-5660 `realized_scorecard`.
 - **Max drawdown:** peak to trough on wealth.
 - **Alpha vs SPY:** OLS of (g_W − g_f) = α + β·(g_SPY − g_f) + ε on daily growth rates. Report α in 1/yr, its t-stat, and β.
 - **Secondary:** realized growth ln(W_T/W_0)/T, terminal wealth, turnover, costs, borrow fees, trigger counts by reason, re-pick count, basket changes, names held, invested fraction.
