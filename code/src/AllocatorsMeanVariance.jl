@@ -97,7 +97,7 @@ const _TURNOVER_RTOL = 1e-7
 function _without_vol_cap(p::MyAllocationProblem)::MyAllocationProblem
     c = p.constraints
     cs = build(MyConstraintSet, (w_max=c.w_max, s_max=c.s_max, σ_g_max=Inf, K_turnover=c.K_turnover,
-        c̄=c.c̄, sector=c.sector, n_prev=c.n_prev, ε=c.ε, β=c.β, β_max=c.β_max))
+        c̄=c.c̄, sector=c.sector, n_prev=c.n_prev, ε=c.ε, β=c.β, β_max=c.β_max, w_cap=c.w_cap))
     return build(MyAllocationProblem, (γ=p.γ, μ_g=p.μ_g, Σ_g=p.Σ_g, prices=p.prices, W=p.W, g_f=p.g_f,
         constraints=cs, hedge=p.hedge))
 end

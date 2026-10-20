@@ -50,7 +50,8 @@ end
     MyConstraintSet
 
 The constraint set shared by every portfolio rule:
-- `w_max`: per-name weight cap (dimensionless; applies to |wᵢ| for signed rules)
+- `w_max`: per-name weight cap (dimensionless; applies to |wᵢ| for signed rules); the scalar default of `w_cap`
+- `w_cap`: per-name weight cap on |wᵢ| (dimensionless, one per name; default `fill(w_max, K)`)
 - `s_max`: per-sector weight cap (dimensionless; `s_max ≥ 1` means no sector cap)
 - `σ_g_max`: cap on the portfolio growth-rate SD √(wᵀΣ_g w) (yr⁻¹)
 - `K_turnover`: turnover budget (USD), c̄·Σ|nᵢ − n_prevᵢ| ≤ K_turnover
@@ -72,6 +73,7 @@ mutable struct MyConstraintSet
     ε::Float64
     β::Vector{Float64}
     β_max::Float64
+    w_cap::Vector{Float64}
     MyConstraintSet() = new()
 end
 
@@ -155,7 +157,8 @@ end
 Build the shared constraint set from `w_max`, `s_max`, `σ_g_max` (yr⁻¹), `K_turnover` (USD),
 `c̄` (USD/share), `sector`, `n_prev` (shares) and optional `ε` (shares, default 1e-3), `β`
 (dimensionless, default zeros, one per name) and `β_max` (dimensionless, default `Inf` = no β cap;
-`NaN` and `-Inf` throw).
+`NaN` and `-Inf` throw) and `w_cap` (dimensionless per-name caps on |wᵢ|, default `fill(w_max, K)`;
+length must be K, entries finite and > 0).
 """
 function build(::Type{MyConstraintSet}, data::NamedTuple)::MyConstraintSet
     for f ∈ (:w_max, :s_max, :σ_g_max, :K_turnover, :c̄, :sector, :n_prev)
@@ -172,6 +175,7 @@ function build(::Type{MyConstraintSet}, data::NamedTuple)::MyConstraintSet
     model.ε = Float64(get(data, :ε, 1e-3))
     model.β = Float64.(collect(get(data, :β, zeros(length(model.sector)))))
     model.β_max = Float64(get(data, :β_max, Inf))
+    model.w_cap = Float64.(collect(get(data, :w_cap, fill(model.w_max, length(model.sector)))))
     model.w_max > 0 || throw(ArgumentError("w_max must be positive"))
     model.s_max > 0 || throw(ArgumentError("s_max must be positive"))
     model.σ_g_max >= 0 || throw(ArgumentError("σ_g_max must be ≥ 0"))
@@ -181,6 +185,9 @@ function build(::Type{MyConstraintSet}, data::NamedTuple)::MyConstraintSet
         throw(ArgumentError("β_max must be a number or Inf, got $(model.β_max)"))
     length(model.sector) == length(model.n_prev) == length(model.β) ||
         throw(DimensionMismatch("sector, n_prev and β must have one entry per name"))
+    length(model.w_cap) == length(model.sector) ||
+        throw(DimensionMismatch("w_cap must have one entry per name"))
+    all(x -> isfinite(x) && x > 0, model.w_cap) || throw(ArgumentError("w_cap entries must be finite and > 0"))
     return model
 end
 
@@ -267,9 +274,9 @@ variables/affine expressions, or constants for pinned names) and return the weig
 w = n·S/W (dimensionless, `Vector{AffExpr}`). Constraints, following engine `Allocator.jl:115-163`:
 
 - **Budget:** Σ nᵢSᵢ ≤ W·κ (USD). With `signed=true` this is net exposure ≤ 1 (cash ≥ 0).
-- **Per-name cap:** wᵢ ≤ w_max·κ for every name, pinned ones included (a pinned name's constant row
+- **Per-name cap:** wᵢ ≤ w_capᵢ·κ for every name, pinned ones included (a pinned name's constant row
   is checked directly and only sent to the solver when violated); with `signed=true` also
-  wᵢ ≥ −w_max·κ, i.e. |wᵢ| ≤ w_max·κ.
+  wᵢ ≥ −w_capᵢ·κ, i.e. |wᵢ| ≤ w_capᵢ·κ.
 - **Sector cap** (only when `s_max < 1`): Σ_{i∈s} wᵢ ≤ s_max·κ per sector; with `signed=true` the
   net sector weight is capped on both sides, |Σ_{i∈s} wᵢ| ≤ s_max·κ.
 - **β cap** (only when β_max is finite): Σ βᵢwᵢ ≤ β_max·κ (dimensionless) on the signed βᵢ, cash at
@@ -281,7 +288,7 @@ w = n·S/W (dimensionless, `Vector{AffExpr}`). Constraints, following engine `Al
   only (engine semantics: pinned names' churn is not counted). The slack variables are skipped when
   c̄ = 0 or when no feasible point can violate the budget: c̄·max‖n − n_prev‖₁ ≤ K_turnover, with
   max‖·‖₁ ≤ B_eff/min Sᵢ + Σ n_prevᵢ (long-only; B_eff = W − pinned cost, USD) or
-  Σ (w_max·W/Sᵢ + |n_prevᵢ|) (signed), both over the free names.
+  Σ (w_capᵢ·W/Sᵢ + |n_prevᵢ|) (signed), both over the free names.
 
 The sign of `n` is the caller's: long-only rules declare nᵢ ≥ 0 (or a floor) as variable bounds,
 and the long-only turnover guard relies on it; signed rules pass n = n⁺ − n⁻.
@@ -309,8 +316,8 @@ function add_shared_constraints!(m::JuMP.Model, n::AbstractVector, p::MyAllocati
 
     # Per-name cap
     for i in 1:K
-        _add_le!(m, w[i], c.w_max * κ)
-        signed && _add_le!(m, -w[i], c.w_max * κ)
+        _add_le!(m, w[i], c.w_cap[i] * κ)
+        signed && _add_le!(m, -w[i], c.w_cap[i] * κ)
     end
 
     # Sector cap (net sector weight)
@@ -346,7 +353,7 @@ function add_shared_constraints!(m::JuMP.Model, n::AbstractVector, p::MyAllocati
         free = [i for i in 1:K if !_is_pinned(n[i])]
         if !isempty(free)
             max_l1 = if signed
-                sum(c.w_max * W / S[i] + abs(c.n_prev[i]) for i in free)
+                sum(c.w_cap[i] * W / S[i] + abs(c.n_prev[i]) for i in free)
             else
                 B_eff = W - sum((_pinned_value(n[i]) * S[i] for i in 1:K if _is_pinned(n[i])); init=0.0)
                 B_eff / minimum(S[free]) + sum(c.n_prev[free])
