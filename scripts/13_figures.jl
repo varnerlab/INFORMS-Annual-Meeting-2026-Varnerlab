@@ -1,5 +1,5 @@
 # Task 14: slide figures (PNG, 1600×900) from results/*_summary.csv and results/runs/, written to
-# results/figures/. Settings come from config/study.toml and λ from results/calibration_summary.toml.
+# results/figures/. Addendum Task 5 adds figs 6–7 (size sweep) when results/universe_summary.csv exists. Settings come from config/study.toml and λ from results/calibration_summary.toml.
 # Usage (from the repo root): julia --project=scripts scripts/13_figures.jl
 # One-time setup: julia --project=scripts -e 'using Pkg; Pkg.instantiate()'
 # Every performance number is a growth-rate metric: g = ln(S_t/S_{t-1})/Δt in 1/yr with Δt = 1/252.
@@ -323,6 +323,151 @@ function market_figure(res, md, s::MyStudySettings, G::Real, period::String)
         layout=grid(3, 1; heights=[0.03, 0.88, 0.09]))
 end
 
+# Size sweep (addendum figs 6–7). Each universe-wide γ screen keeps one categorical slot and its own marker;
+# a random control is drawn as a dashed median line over an IQR wash in the slot of the γ screen it is
+# matched with (whole universe: global γ's blue; liquid shortlist: liquid γ's orange). The fixed lists are
+# ink markers and the passive references gray horizontal lines (SPY solid, equal-weight dashed).
+const UNI_SCREENS = ("global_gamma", "liquid_gamma", "corr_gamma")
+const UNI_COLOR = Dict("global_gamma" => SLOT[1], "liquid_gamma" => SLOT[2], "corr_gamma" => SLOT[3])
+const UNI_MARKER = Dict("global_gamma" => :circle, "liquid_gamma" => :rect, "corr_gamma" => :diamond)
+const CONTROLS = ("random_global", "random_liquid")
+const CONTROL_COLOR = Dict("random_global" => SLOT[1], "random_liquid" => SLOT[2])
+const FIXED_SIZES = (13, 15)
+const FIXED_MARKER = Dict(13 => :star5, 15 => :utriangle)
+
+"""
+    sweep_values(d, a, scr, K, col)::Vector{Float64}
+
+The finite values of column `col` (its units) of `d` for allocator `a`, screen `scr` and basket size `K`
+(names).
+"""
+function sweep_values(d::DataFrame, a::String, scr::String, K::Int, col::Symbol)::Vector{Float64}
+    v = Float64.(d[(d.allocator .== a) .& (d.screen .== scr) .& (d.basket_size .== K), col])
+    return v[isfinite.(v)]
+end
+
+"""
+    sweep_key!(p, x, y, kind, color, marker, label)::Float64
+
+One legend key at (`x`, `y`) in a frameless 0..1 strip: `kind` is `:line` (line and marker), `:band`
+(IQR wash with a dashed median line), `:marker`, `:ref_solid` or `:ref_dash` (gray reference lines),
+followed by `label` in secondary ink. Returns the x (strip units) where the next key may start, from an
+estimate of the label's width (`KEY_CHAR_W` per character at 14 pt). No units.
+"""
+function sweep_key!(p, x::Real, y::Real, kind::Symbol, color, marker, label::String)::Float64
+    w = 0.016
+    if kind == :band
+        plot!(p, Shape([x - w, x + w, x + w, x - w], [y - 0.17, y - 0.17, y + 0.17, y + 0.17]);
+            fillcolor=color, fillalpha=0.18, linewidth=0, label="")
+        plot!(p, [x - w, x + w], [y, y]; color=color, linewidth=2.5, linestyle=:dash)
+    elseif kind == :line
+        plot!(p, [x - w, x + w], [y, y]; color=color, linewidth=2.5)
+        scatter!(p, [x], [y]; color=color, marker=marker, markersize=8)
+    elseif kind == :marker
+        scatter!(p, [x], [y]; color=color, marker=marker, markersize=marker == :star5 ? 15 : 11)
+    else
+        plot!(p, [x - w, x + w], [y, y]; color=INK2, linewidth=1.5, linestyle=kind == :ref_dash ? :dash : :solid)
+    end
+    annotate!(p, x + w + 0.006, y, text(label, 14, INK2, :left, :vcenter))
+    return x + 2w + 0.006 + KEY_CHAR_W * length(label) + 0.035
+end
+
+const KEY_CHAR_W = 0.0078
+
+"""
+    sweep_legend(refs, fmt)
+
+The legend strip shared by the panels of a size-sweep figure. Top row: the three γ screens and the two
+random controls. Bottom row: the two fixed lists and the passive references `refs` (`name => value`,
+already scaled, labeled with `fmt(value)`). Keys in a row sit one after another. No units.
+"""
+function sweep_legend(refs::Vector{<:Pair}, fmt::Function)
+    p = plot(framestyle=:none, grid=false, legend=false, xlims=(0, 1), ylims=(0, 1))
+    ref = Dict(refs)
+    rows = [(0.75, [(:line, UNI_COLOR["global_gamma"], UNI_MARKER["global_gamma"], "global γ"),
+                (:line, UNI_COLOR["liquid_gamma"], UNI_MARKER["liquid_gamma"], "liquid γ"),
+                (:line, UNI_COLOR["corr_gamma"], UNI_MARKER["corr_gamma"], "correlation-aware γ"),
+                (:band, CONTROL_COLOR["random_global"], nothing, "random, whole universe"),
+                (:band, CONTROL_COLOR["random_liquid"], nothing, "random, liquid shortlist")]),
+            (0.22, [(:marker, INK, FIXED_MARKER[13], "user's 13-name list"),
+                (:marker, INK, FIXED_MARKER[15], "user's 15-name list"),
+                (:ref_solid, nothing, nothing, "SPY buy-and-hold " * fmt(ref["SPY buy-and-hold"])),
+                (:ref_dash, nothing, nothing, "equal-weight universe " * fmt(ref["equal-weight universe"]))])]
+    for (y, keys) in rows
+        x = 0.02
+        for (kind, color, marker, label) in keys
+            x = sweep_key!(p, x, y, kind, color, marker, label)
+        end
+    end
+    return p
+end
+
+"""
+    sweep_figure(d, metric; scale, ylabel, title, refs, fmt, caption)
+
+Small multiples, one panel per allocator (hedge-on rows of the universe summary `d`): `metric` times
+`scale` (e.g. 100 for %) against basket size K (names, log axis). Each γ screen is a line through its
+one deterministic run per K; each random control is its median across seeds with the interquartile band;
+the fixed lists are markers at their sizes; `refs` (`name => value`, scaled) are horizontal lines. All
+panels share one y-range.
+"""
+function sweep_figure(d::DataFrame, metric::Symbol; scale::Real=1.0, ylabel::String, title::String,
+        refs::Vector{<:Pair}, fmt::Function, caption::String)
+    Ks = sort(unique(Int.(d.basket_size[in.(d.screen, Ref(UNI_SCREENS))])))
+    d = copy(d); d._y = scale .* Float64.(d[!, metric])
+    seeds = Int[]; allv = Float64[last.(refs)...]
+    series = Dict{Tuple{String,String},Any}()
+    for a in ALLOCATORS
+        for scr in UNI_SCREENS
+            v = [only(sweep_values(d, a, scr, K, :_y)) for K in Ks]
+            series[(a, scr)] = v; append!(allv, v)
+        end
+        for c in CONTROLS
+            vs = [sweep_values(d, a, c, K, :_y) for K in Ks]
+            append!(seeds, length.(vs))
+            q = [quantile(v, [0.25, 0.5, 0.75]) for v in vs]
+            series[(a, c)] = (lo=getindex.(q, 1), med=getindex.(q, 2), hi=getindex.(q, 3))
+            append!(allv, getindex.(q, 1), getindex.(q, 3))
+        end
+        for n in FIXED_SIZES
+            v = sweep_values(d, a, "fixed", n, :_y)
+            series[(a, "fixed$(n)")] = v; append!(allv, v)
+        end
+    end
+    allequal(seeds) || error("random controls have unequal seed counts: ", sort(unique(seeds)))
+    lo, hi = extrema(allv); pad = 0.06 * (hi - lo)
+    ylims = (lo - pad, hi + pad)
+    refstyle = Dict("SPY buy-and-hold" => :solid, "equal-weight universe" => :dash)
+    panels = map(enumerate(ALLOCATORS)) do (i, a)
+        p = plot(; xscale=:log10, xlims=(4.4, 39), xticks=(Ks, string.(Ks)), minorgrid=false, ylims=ylims,
+            title=ALLOC_NAME[a], titlefontsize=17, legend=false, ylabel=i in (1, 4) ? ylabel : "",
+            xlabel=i >= 4 ? "basket size K (names, log scale)" : "", left_margin=i in (1, 4) ? 12Plots.mm : 3Plots.mm,
+            bottom_margin=i >= 4 ? 6Plots.mm : 2Plots.mm, guidefontsize=15, tickfontsize=13)
+        for (name, val) in refs
+            hline!(p, [val]; color=INK2, linewidth=1.5, linestyle=refstyle[name])
+        end
+        for c in CONTROLS
+            s = series[(a, c)]
+            plot!(p, Ks, s.med; ribbon=(s.med .- s.lo, s.hi .- s.med), fillcolor=CONTROL_COLOR[c], fillalpha=0.14,
+                color=CONTROL_COLOR[c], linestyle=:dash, linewidth=2.5)
+        end
+        for scr in UNI_SCREENS
+            plot!(p, Ks, series[(a, scr)]; color=UNI_COLOR[scr], linewidth=2.5, marker=UNI_MARKER[scr], markersize=7)
+        end
+        for n in FIXED_SIZES
+            v = series[(a, "fixed$(n)")]
+            isempty(v) || scatter!(p, fill(n, length(v)), v; color=INK, marker=FIXED_MARKER[n],
+                markersize=FIXED_MARKER[n] == :star5 ? 15 : 11)
+        end
+        p
+    end
+    head = plot(framestyle=:none, grid=false, legend=false, xlims=(0, 1), ylims=(0, 1),
+        annotations=(0.0, 0.4, text(title, 20, INK, :left)))
+    body = plot(panels...; layout=(2, 3))
+    return plot(head, sweep_legend(refs, fmt), body, caption_panel(caption);
+        layout=grid(4, 1; heights=[0.04, 0.08, 0.73, 0.15]))
+end
+
 """
     load_ok(file)::Union{Nothing,DataFrame}
 
@@ -381,6 +526,27 @@ function main()
     res = load(joinpath(RESULTS, "runs", ex.hash[1] * ".jld2"))["result"]
     save_fig!(example_figure(res, md, s, "Cobb-Douglas, γ screen, hedge on"), "fig4_example_run.png")
     save_fig!(market_figure(res, md, s, G, period), "fig5_market_state.png")
+    uni = load_ok("universe_summary.csv")
+    if uni !== nothing
+        on = uni[(uni.hedge .== true) .& (uni.repick_on_band_exit .== true), :]
+        nseed = nrow(on[(on.screen .== "random_global") .& (on.allocator .== "CD") .& (on.basket_size .== s.basket_K), :])
+        ucap = "Run $(period), hedge on (β cap and hedge pool), re-pick every $(s.repick_interval) days or at a band exit. " *
+            "A screen pick's cap is max($(num(100 * s.w_max))%, $(num(s.w_max_scale))/K).\n" *
+            "Solid lines: one deterministic run per screen and K. Dashed lines and bands: random-control median and " *
+            "interquartile range over $(nseed) seeds.\n" *
+            "Liquid γ and its control use the top $(s.liquidity_shortlist) names by $(s.liquidity_window)-day median dollar " *
+            "volume. Correlation-aware γ: pairwise growth-rate correlation ≤ $(num(s.corr_max)).\n" *
+            "The universe-wide screens are exploratory: they, their thresholds and the K grid were designed after the " *
+            "Tier 1 results were known.\nThe user's 13- and 15-name lists were chosen in advance, without 2025 data."
+        save_fig!(sweep_figure(on, :sharpe; ylabel="Sharpe ratio",
+            title="Sharpe ratio (from daily growth rates) vs basket size K, hedge on", refs=pref(:sharpe),
+            fmt=v -> @sprintf("%.2f", v),
+            caption=ucap), "fig6_sharpe_vs_K.png")
+        save_fig!(sweep_figure(on, :max_drawdown; scale=100, ylabel="max drawdown (%)",
+            title="Max drawdown (% of peak wealth) vs basket size K, hedge on (lower is better)",
+            refs=pref(:max_drawdown; scale=100),
+            fmt=v -> @sprintf("%.1f%%", v), caption=ucap), "fig7_max_drawdown_vs_K.png")
+    end
     foreach(println, written)
     return nothing
 end
