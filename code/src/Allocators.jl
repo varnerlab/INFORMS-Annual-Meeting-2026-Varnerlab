@@ -405,10 +405,13 @@ _free_hedges(p::MyAllocationProblem) = findall(i -> p.hedge[i] && p.γ[i] <= 0, 
 # constant n1ᵢ, minimize Σ wᵢ over the hedge names (variables ≥ `floors`, shares) under the shared
 # constraints (`signed` as in add_shared_constraints!) plus the rule's own rows `rows!(m, w)`. The
 # utility depends on the fixed names only, so this keeps the first-stage utility and holds a hedge
-# above its floor only as far as a binding limit (β or volatility cap) needs it. Returns n1 with the
-# hedge entries replaced (shares), or n1 unchanged when this stage does not solve.
+# above its floor only as far as a binding limit (β or volatility cap) needs it. With no fixed names
+# it is the least hedge that makes constant holdings n1 meet every limit (Stone–Geary without γ > 0).
+# Returns (n, status): n1 with the hedge entries replaced (shares) and :optimal, or n1 unchanged with
+# :infeasible / :solver_failed when this stage does not solve.
 function _min_hedge(p::MyAllocationProblem, n1::Vector{Float64}, fixed::Vector{Int}, hedge::Vector{Int},
-        floors::Vector{Float64}; signed::Bool=false, rows!::Function=(m, w) -> nothing)::Vector{Float64}
+        floors::Vector{Float64}; signed::Bool=false,
+        rows!::Function=(m, w) -> nothing)::Tuple{Vector{Float64},Symbol}
     x, status = _solve_with_fallback(function (opt)
         m = Model(opt)
         set_silent(m)
@@ -427,10 +430,10 @@ function _min_hedge(p::MyAllocationProblem, n1::Vector{Float64}, fixed::Vector{I
         @objective(m, Min, sum(w[i] for i in hedge))
         return m, h
     end)
-    status == :optimal || return n1
+    status == :optimal || return (n1, status)
     n = copy(n1)
     n[hedge] .= x
-    return n
+    return (n, :optimal)
 end
 
 # Utility solve over the preferred names (γ > 0) and the free hedge names: `pins` gives every name's
@@ -466,7 +469,7 @@ function _solve_utility(p::MyAllocationProblem, pins::Vector{Float64}, lb::Vecto
     n = copy(pins)
     n[pref] .= x[1:Kp]
     n[hedge] .= x[Kp+1:end]
-    Kh > 0 && (n = _min_hedge(p, n, pref, hedge, pins[hedge]))
+    Kh > 0 && (n = first(_min_hedge(p, n, pref, hedge, pins[hedge])))
     return _result(p, n, :optimal)
 end
 
@@ -475,7 +478,8 @@ end
 
 Solve one allocation under the shared constraints (`add_shared_constraints!`). Shares `n` are
 continuous (shares), weights w = n·S/W. Status `:no_preferred` when no γᵢ > 0 (utility rules return
-their pins, no solve); `:infeasible` or `:solver_failed` return `n = constraints.n_prev`. In the
+their pins without a solve, except Stone–Geary under a finite β cap); `:infeasible` or
+`:solver_failed` return `n = constraints.n_prev`. In the
 utility rules a hedge name (`p.hedge`) with γᵢ ≤ 0 is a free variable above its pin, with no utility
 term and a cost of 1e-6 per unit of weight (the tie-break); a second solve with the other names'
 shares fixed then minimizes the hedge weight, so a hedge sits above its pin only as far as a binding
@@ -509,14 +513,18 @@ end
 CES with ρ = 1 − 1/η, nᵢ in shares, γ ≤ 0 names pinned at ε shares (free hedge names: nᵢ ≥ ε, no
 utility term). Under a budget alone nᵢ ∝ (γᵢ/Sᵢ)^η for every η (CHEME-5660 `allocate_ces`).
 - η > 1 (0 < ρ < 1): maximize Σ_{γ>0} γᵢ·tᵢ with (nᵢ, 1, tᵢ) ∈ PowerCone(ρ), i.e. tᵢ ≤ nᵢ^ρ.
-- 0 < η < 1 (ρ < 0): minimize Σ_{γ>0} γᵢ·tᵢ with (tᵢ, nᵢ, 1) ∈ PowerCone(η), i.e. tᵢ^η·nᵢ^(1−η) ≥ 1,
-  tᵢ ≥ nᵢ^ρ. This maximizes (Σ γᵢ nᵢ^ρ)^(1/ρ), since 1/ρ < 0.
+- 0 < η < 1 (ρ < 0): minimize Σ_{γ>0} γᵢ·tᵢ with (tᵢ, nᵢ, c^(1−η)) ∈ PowerCone(η), i.e.
+  tᵢ^η·nᵢ^(1−η) ≥ c^(1−η), tᵢ ≥ (nᵢ/c)^ρ, where c = W/mean(S) (shares) is a typical share count.
+  This maximizes (Σ γᵢ nᵢ^ρ)^(1/ρ), since 1/ρ < 0; c scales every term by c^(−ρ), which leaves
+  the argmax unchanged and keeps the objective O(1) at any W (unscaled, a 33-name budget-only case
+  at W = 1e6 USD is off by 22% in shares).
 - η = 1: `allocate(MyCobbDouglasRule(), p)`.
 """
 function allocate(rule::MyCESRule, p::MyAllocationProblem)::MyAllocationResult
     rule.η == 1 && return allocate(MyCobbDouglasRule(), p)
     _check_problem(p)
     η = rule.η; ρ = 1 - 1 / η
+    c = p.W / (sum(p.prices) / length(p.prices))                         # typical share count
     pins = fill(p.constraints.ε, length(p.γ))
     any(>(0), p.γ) || return _result(p, pins, :no_preferred)
     Kp = count(>(0), p.γ)
@@ -529,7 +537,7 @@ function allocate(rule::MyCESRule, p::MyAllocationProblem)::MyAllocationResult
             return sum(γp[k] * t[k] for k in 1:Kp)
         end
         for k in 1:Kp
-            @constraint(m, [t[k], x[k], 1.0] in MOI.PowerCone(η))         # t ≥ n^ρ, ρ < 0
+            @constraint(m, [t[k], x[k], c^(1 - η)] in MOI.PowerCone(η))   # t ≥ (n/c)^ρ, ρ < 0
         end
         return -sum(γp[k] * t[k] for k in 1:Kp)
     end)
@@ -541,13 +549,16 @@ end
 Stone–Geary: maximize Σ_{γ>0} γᵢ·log(nᵢ − bᵢ) via exponential cones on the excess shares, with
 bᵢ = floor(baseline_frac·W/Sᵢ) shares, nᵢ ≥ bᵢ, and γ ≤ 0 names held at bᵢ (free hedge names:
 nᵢ ≥ bᵢ, no utility term). Returns `:infeasible` with n_prev when Σ bᵢSᵢ > W (USD), or when the
-baselines break another limit (e.g. Σ βᵢbᵢSᵢ/W > β_max); `:no_preferred` returns n = b.
+baselines break another limit (e.g. Σ βᵢbᵢSᵢ/W > β_max). With no γ > 0 (`:no_preferred`) it returns
+n = b, except under a finite β_max: with free hedge names it returns the least hedge holding above b
+that meets every shared limit, and without them it checks Σ βᵢbᵢSᵢ/W ≤ β_max; when neither works it
+returns n_prev with `:infeasible` (`:solver_failed` if the hedge solve fails).
 """
 function allocate(rule::MyStoneGearyRule, p::MyAllocationProblem)::MyAllocationResult
     _check_problem(p)
     b = floor.(rule.baseline_frac * p.W ./ p.prices)                      # baseline shares
     sum(b .* p.prices) > p.W && return _result(p, copy(p.constraints.n_prev), :infeasible)
-    any(>(0), p.γ) || return _result(p, b, :no_preferred)
+    any(>(0), p.γ) || return _stone_geary_baselines(p, b)
     pref = findall(p.γ .> 0); Kp = length(pref)
     b_p = b[pref]
     return _solve_utility(p, b, b_p, function (m, x, γp)
@@ -557,4 +568,21 @@ function allocate(rule::MyStoneGearyRule, p::MyAllocationProblem)::MyAllocationR
         end
         return sum(γp[k] * t[k] for k in 1:Kp)
     end)
+end
+
+# Stone–Geary with no γ > 0: the baselines b (shares), held under a finite β cap (spec §6: the cap
+# applies to every allocator). Free hedge names are bought up to the least holding that meets every
+# shared limit with the other names at b; without them the constant baselines must meet the cap.
+# Otherwise n_prev is kept, with :infeasible (or :solver_failed from the hedge solve).
+function _stone_geary_baselines(p::MyAllocationProblem, b::Vector{Float64})::MyAllocationResult
+    c = p.constraints
+    isfinite(c.β_max) || return _result(p, b, :no_preferred)
+    hedge = _free_hedges(p)
+    if isempty(hedge)
+        dot(c.β, b .* p.prices) / p.W <= c.β_max && return _result(p, b, :no_preferred)
+        return _result(p, copy(c.n_prev), :infeasible)
+    end
+    n, status = _min_hedge(p, b, Int[], hedge, b[hedge])
+    status == :optimal || return _result(p, copy(c.n_prev), status)
+    return _result(p, n, :no_preferred)
 end

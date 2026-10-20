@@ -73,6 +73,38 @@ end
     @test r.status == :infeasible && r.n == [1.0, 2.0, 3.0]
 end
 
+@testset "Stone–Geary with no γ > 0 keeps the β cap" begin
+    sg = build(MyStoneGearyRule, (baseline_frac=0.1,))
+    γ = [-0.2, -0.1, -0.3, -0.1]; β = [1.0, 1.0, 1.0, -0.8]; S = [10.0, 20.0, 40.0, 25.0]
+    b = floor.(0.1 * 1000 ./ S)                                  # [10, 5, 2, 4]: Σwβ = 0.20 at b
+    n_prev = [1.0, 2.0, 3.0, 4.0]
+    # σ_g_max = Inf: the helper's far-slack 1e6 cone stalls Clarabel on this LP (SLOW_PROGRESS), and
+    # the SCS fallback then meets the β row only to SCS's default tolerance (7e-5 over the cap)
+    Q(; β_max=0.15, hedge=nothing, w_max=1.0) =
+        P(γ=γ, prices=S, β=β, β_max=β_max, hedge=hedge, w_max=w_max, n_prev=n_prev, σ_g_max=Inf)
+    # the hedge (name 4) is bought up to the least weight that meets the cap: 0.1 + 0.05/0.8
+    r = allocate(sg, Q(hedge=[false, false, false, true]))
+    @test r.status == :no_preferred && r.n[1:3] == b[1:3]
+    @test dot(r.w, β) ≈ 0.15 atol=1e-6
+    @test r.w[4] ≈ 0.1 + 0.05 / 0.8 atol=1e-6
+    # no rescue (no hedge names, or a hedge capped below what the cap needs): previous holdings
+    for q in (Q(), Q(hedge=[false, false, false, true], w_max=0.12))
+        r = allocate(sg, q)
+        @test r.status == :infeasible && r.n == n_prev
+    end
+    r = allocate(sg, Q(β_max=0.25))                               # baselines already meet the cap
+    @test r.status == :no_preferred && r.n == b
+end
+
+@testset "CES η = 0.5 at W = 1e6 (budget only)" begin
+    # the rescaled cone keeps CES η < 1 accurate at large share counts (unscaled: 22% share error)
+    rng = MersenneTwister(5660); K = 33; W = 1e6
+    γ = 0.05 .+ 0.2 .* rand(rng, K); S = 20.0 .+ 380.0 .* rand(rng, K)
+    r = allocate(build(MyCESRule, (η=0.5,)), P(γ=γ, prices=S, W=W, σ_g_max=Inf))
+    @test r.status == :optimal
+    @test r.n ≈ W .* (γ ./ S) .^ 0.5 ./ sum(S .* (γ ./ S) .^ 0.5) rtol=1e-6
+end
+
 @testset "constraint-set validation" begin
     @test_throws DimensionMismatch build(MyConstraintSet, (w_max=0.1, s_max=1.0, σ_g_max=1.0, K_turnover=1.0,
         c̄=0.0, sector=["A", "B"], n_prev=[0.0, 0.0], β=[1.0]))

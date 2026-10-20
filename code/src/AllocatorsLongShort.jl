@@ -115,7 +115,8 @@ function allocate(rule::MyLongShortCDRule, p::MyAllocationProblem)::MyAllocation
     n[L] .= x[1:nL]
     n[Sh] .= -x[nL+1:end]
     if !isempty(H)
-        n = _min_hedge(p, n, vcat(L[U], Sh), L[H], fill(1e-8, length(H)); signed=true, rows! = rows!)
+        n = first(_min_hedge(p, n, vcat(L[U], Sh), L[H], fill(1e-8, length(H));
+            signed=true, rows! = rows!))
     end
     return _result(p, n, :optimal)
 end
