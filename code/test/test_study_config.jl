@@ -1,0 +1,33 @@
+using Test, Dates, VLINFORMS2026
+include("helpers.jl")
+const REPO = normpath(joinpath(@__DIR__, "..", ".."))
+same(a, b) = all(isequal(getfield(a, f), getfield(b, f)) for f in fieldnames(MyStudySettings))
+@testset "settings and config file" begin
+    s = MyStudySettings()
+    @test (s.xi_short, s.xi_long, s.gtilde_window, s.N_per_sector, s.w_max, s.ces_eta, s.pool_H) == (21, 63, 252, 3, 0.10, 0.5, 5)
+    @test isnan(s.lambda) && isnan(s.vol_cap_annual) && s.hedge && s.repick_on_band_exit
+    cfg = load_study(joinpath(REPO, "config", "study.toml"))
+    @test same(cfg.settings, s)                                        # the file holds the spec defaults
+    @test cfg.grid.n_seeds == 30 && cfg.grid.base_seed == 5660 && length(cfg.grid.allocators) == 6
+    @test cfg.grid.screens == [:bandit, :gamma, :random] && cfg.grid.hedge == [true, false]
+    bad = joinpath(mktempdir(), "bad.toml"); write(bad, "[market]\nxi_shrot = 21\n")
+    @test_throws ArgumentError load_study(bad)
+    @test_throws ArgumentError build(MyStudySettings, (beta_min=-0.1,))
+    @test_throws ArgumentError build(MyStudySettings, (N_per_sector=0,))
+    @test with_settings(s; hedge=false).hedge == false && s.hedge
+end
+@testset "study context" begin
+    md = synthetic_md(ρ=0.3)
+    fit = fit_base_sim(md, md.dates[1], md.dates[800])
+    c = build(MyCalibration, (base_sim=fit.params, σ_m=fit.σ_m, m_m=fit.m_m, v_m=fit.v_m, λ=0.5,
+        train_start=md.dates[1], train_stop=md.dates[800]))
+    s = build(MyStudySettings, (train_start=md.dates[1], train_stop=md.dates[800], start=md.dates[801], stop=md.dates[900]))
+    ctx = build_context(md, c, s)
+    @test ctx.rows == 801:900 && ctx.G == xi_gain(md.spy_close[1:800]; short=21, long=63, q=0.99)
+    @test ctx.γ[10, :] == gamma_weights(ctx.sim.α[10, :], ctx.sim.β[10, :], ctx.g̃[810], ctx.ξ[810]; β_floor=0.1)
+    @test ctx.pool[10] == hedge_pool(ctx.sim.β[10, :], down_day_beta(md, 810; lookback=252); H=5)
+    q = build_context(perturb_after(md, md.dates[850]), c, s)          # canary
+    @test q.ξ[1:850] == ctx.ξ[1:850] && isequal(q.g̃[1:850], ctx.g̃[1:850])
+    @test q.γ[1:50, :] == ctx.γ[1:50, :] && q.pool[1:50] == ctx.pool[1:50]
+    @test_throws ArgumentError build_context(md, c, with_settings(s; start=md.dates[200], train_stop=md.dates[150]))
+end

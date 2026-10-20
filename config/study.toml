@@ -1,0 +1,74 @@
+# Defaults of the screened-utility panel study. Dates are calendar days; windows are in trading days.
+
+[window]
+start = 2025-01-02        # first run day (date)
+stop = 2026-09-04         # last run day (date)
+train_start = 2014-01-03  # calibration start (date)
+train_stop = 2024-12-31   # calibration end (date)
+W0 = 100000.0             # initial wealth ($)
+
+[market]
+xi_short = 21             # short growth window for xi (trading days)
+xi_long = 63              # long growth window for xi (trading days)
+xi_quantile = 0.99        # quantile that sets the xi gain (dimensionless)
+gtilde_window = 252       # window of the market growth average (trading days)
+beta_floor = 0.1          # floor on beta in gamma weights (dimensionless)
+
+[sim]
+ewls_half_life = 63.0     # EWLS half-life (trading days)
+ewls_prior_weight = 63.0  # EWLS prior weight (trading days)
+
+[covariance]
+omega_window = 126        # residual covariance window (trading days)
+lambda = "calibrated"     # risk preference (dimensionless); "calibrated" = from calibration
+
+[triggers]
+T = 21                    # MPC horizon (trading days)
+z = 1.96                  # band half-width (standard deviations)
+D_max = 0.08              # drawdown limit (fraction of wealth)
+cash_revisit = 21         # days between cash revisits (trading days)
+n_paths = 1000            # projection paths (count)
+
+[screens]
+N_per_sector = 3          # names picked per sector (count)
+repick_interval = 21      # days between re-picks (trading days)
+repick_on_band_exit = true  # re-pick when the band is exited (flag)
+bandit_lookback = 252     # bandit training lookback (trading days)
+bandit_horizon = 21       # reward window (trading days)
+bandit_eps_floor = 0.05   # exploration floor (probability)
+bandit_iters_per_arm = 50 # iterations per arm (count)
+bandit_min_iters = 500    # minimum iterations (count)
+bandit_max_iters = 5000   # maximum iterations (count)
+
+[limits]
+w_max = 0.10              # single-name weight cap (fraction of wealth)
+vol_cap_annual = "calibrated"  # volatility cap (1/yr); "calibrated" = SPY 2014-2024
+s_max = 1.0               # share cap multiplier (dimensionless)
+turnover_frac = 0.10      # turnover limit (fraction of wealth)
+
+[allocators]
+ces_eta = 0.5             # CES elasticity parameter (dimensionless)
+sg_baseline = 0.01        # Stone-Geary baseline weight (fraction of wealth)
+ls_long = 1.30            # 130/30 gross long (fraction of wealth)
+ls_short = 0.30           # 130/30 gross short (fraction of wealth)
+ls_net = 1.00             # 130/30 net exposure (fraction of wealth)
+borrow_rate = 0.0075      # short borrow fee (per year)
+
+[costs]
+half_spread_bps = 5.0     # half bid-ask spread (basis points)
+impact_kappa = 0.001      # impact coefficient (dimensionless)
+
+[hedge]
+hedge = true              # beta hedge on (flag)
+beta_ref = 1.0            # reference portfolio beta (dimensionless)
+kappa_beta = 1.0          # beta cap strength (dimensionless)
+beta_min = 0.0            # lower beta bound (dimensionless)
+pool_H = 5                # hedge pool size (count)
+downday_lookback = 252    # down-day beta lookback (trading days)
+
+[grid]
+n_seeds = 30              # seeds per cell (count)
+base_seed = 5660          # first seed (integer)
+allocators = ["CD", "CES", "SG", "MinVar", "Tangent", "LS"]  # allocator labels
+screens = ["bandit", "gamma", "random"]                       # screen labels
+hedge = [true, false]     # hedge on/off cells (flags)
