@@ -92,4 +92,25 @@ so their comparison is exploratory, not out-of-sample. The user's 13-name list (
 GS, BAC, WFC, C, F, GM, JNJ) and the 15-name sensitivity list (the same plus WMT and PG) were chosen in advance,
 without 2025 data.
 
+## Data and its limitations
+
+- **Split basis across the price files.** The three price files are each split-adjusted only as of their own
+  creation, so a split between two files' creation dates shows up as a one-day jump at their boundary.
+  `load_market_data` reconciles these: at each boundary it tests every universe ticker (overnight
+  |log(open/previous close)| > 0.4, the ratio within e^0.1 of a common split ratio, volume moving inversely
+  within a factor of 3, SPY's overnight move within 5%) and puts the earlier rows on the newest file's basis
+  (prices ÷ k, volume × k), logging each adjustment. On the current data it adjusts seven names: ORLY (15),
+  NFLX (10), NOW (5) and FAST (2) at 2025-01-02, and KLAC (10), MNST (2) and APH (2) at 2026-01-02. Afterwards
+  no universe ticker moves more than 0.4 in log overnight across a boundary. Growth rates within a file and
+  dollar volume are unchanged, so the 2014–2024 calibration reproduces to within 2e-15. Results committed
+  before this reconciliation (2026-10-20) carried a fake one-day loss on 2026-01-02 for any run holding KLAC,
+  MNST or APH (a fake gain for a 130/30 short in them), and the fake 2025-01-02 jumps distorted the online SIM
+  estimates, γ and short candidacy of ORLY, NFLX, NOW and FAST.
+- **Spin-offs and ticker reuse are not adjusted.** The loader warns about any other one-day close move beyond
+  0.9 in log. Two remain, both in the 2014–2024 training window, where they enter the SIM fits of those names:
+  IR on 2020-03-02 (−1.37) and NI on 2015-07-02 (−0.98).
+- **Survivorship and sectors.** The universe holds only tickers with a complete 2014–2026 history and a current
+  GICS sector, and the sectors are current membership, not point-in-time.
+- **Dividends** are not included, in the portfolios or in SPY.
+
 Throughout, performance is measured by growth rates g = ln(S_end/S_start)/(k·Δt) in 1/yr, with no simple or log returns.

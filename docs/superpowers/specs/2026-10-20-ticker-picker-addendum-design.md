@@ -7,6 +7,8 @@ Items marked **(my call)** were chosen by Claude, not the user. Everything else 
 
 ## 1. Why
 
+> **Note (2026-10-20, added after the split reconciliation):** the diagnostic figures in this section (SPY 0.74, the L8b-list Sharpe ratios 1.36, 1.35 and 1.39, and the quota-free γ screen's 0.39 → 0.64) were computed before the data loader reconciled the split basis across the three price files (ORLY, NFLX, NOW and FAST at 2025-01-02; KLAC, MNST and APH at 2026-01-02). They are kept unchanged as the record of what motivated this addendum. For current numbers see `results/tables/head_to_head_K13.csv` (and `results/tables/group_summary.csv` for Tier 1).
+
 Tier 1 (732 runs, base spec §10) found every allocator × screen median Sharpe below SPY buy-and-hold over 2025-01-02 → 2026-09-04 (SPY 0.74). A diagnostic then showed the machinery is not the cause:
 
 - The study engine run on the user's CHEME-5660 L8b 13-name list (AAPL, MSFT, INTC, MU, AMD, NVDA, GS, BAC, WFC, C, F, GM, JNJ) reproduces L8b's 2025 monthly Cobb-Douglas result (Sharpe 1.36 vs L8b's 1.35). With every study limit and the hedge on, the list still gets 1.39 over the run window.
