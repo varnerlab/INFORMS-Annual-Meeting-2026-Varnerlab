@@ -18,11 +18,15 @@ include("helpers.jl")
     bad = build(MyStudyRun, (settings=with_settings(ctx.settings; bandit_lookback=10_000), allocator="CD", screen=:bandit, seed=1))
     out = mktempdir()
     g1 = @test_logs (:warn, r"run failed") match_mode=:any run_study_grid(md, ctx.calib, [r1, r2, bad]; outdir=out)
+    fp = g1.fingerprint
+    @test fp == data_fingerprint(md, ctx.calib)
     @test length(g1.ran) == 2
-    @test g1.errors == [study_hash(bad)]
-    @test isfile(joinpath(out, "runs", study_hash(bad) * ".error.txt"))
+    @test g1.errors == [study_hash(bad; fingerprint=fp)]
+    @test isfile(joinpath(out, "runs", study_hash(bad; fingerprint=fp) * ".error.txt"))
     g2 = @test_logs (:warn, r"run failed") match_mode=:any run_study_grid(md, ctx.calib, [r1, r2, bad]; outdir=out)
-    @test sort(g2.skipped) == sort(study_hash.([r1, r2]))
+    @test sort(g2.skipped) == sort(study_hash.([r1, r2]; fingerprint=fp))
+    g3 = run_study_grid(md, ctx.calib, [r1, r2]; outdir=out, fresh=true)          # --fresh ignores the cache
+    @test isempty(g3.skipped) && sort(g3.ran) == sort(study_hash.([r1, r2]; fingerprint=fp))
     df = rebuild_study_summary(out, "t")
     @test nrow(df) == 3
     @test isfile(joinpath(out, "t_summary.csv"))
@@ -47,4 +51,30 @@ end
     @test all(r -> r.settings.basket_K == 15, filter(r -> occursin("l8b_15", r.label), f))
     md, ctx = study_ctx(); res = run_study(ctx, study_run(ctx, "CD", :gamma))
     @test study_stats(res).basket_size == median(length.(res.repicks.basket))
+end
+
+@testset "run identity: canonical key and data fingerprint" begin
+    run = build(MyStudyRun, (settings=MyStudySettings(), allocator="CD", screen=:gamma, seed=5660, label="x"))
+    # the hash does not depend on whether the caller's Main has `using Dates` (a fresh process has not)
+    code = "using VLINFORMS2026; print(study_hash(build(MyStudyRun, (settings=MyStudySettings(), allocator=\"CD\", " *
+        "screen=:gamma, seed=5660, label=\"x\"))))"
+    fresh = read(`$(Base.julia_cmd()) --startup-file=no --project=$(normpath(joinpath(@__DIR__, ".."))) -e $(code)`, String)
+    @test fresh == study_hash(run)
+    @test study_hash(run; fingerprint="abc") != study_hash(run)
+    # the fingerprint sees the prices and the calibration
+    md, ctx = study_ctx(); c = ctx.calib
+    fp = data_fingerprint(md, c)
+    @test fp == data_fingerprint(deepcopy(md), deepcopy(c)) && length(fp) == 40
+    md2 = deepcopy(md); md2.close[end, 1] *= 1 + 1e-12
+    @test data_fingerprint(md2, c) != fp
+    c2 = deepcopy(c); c2.λ = 0.4
+    @test data_fingerprint(md, c2) != fp
+    c3 = deepcopy(c); t = first(sort(collect(keys(c3.base_sim)))); c3.base_sim[t].α += 1e-9
+    @test data_fingerprint(md, c3) != fp
+    # a data fix invalidates the cached runs: nothing is skipped
+    out = mktempdir(); r1 = study_run(ctx, "CD", :gamma)
+    @test length(run_study_grid(md, c, [r1]; outdir=out).ran) == 1
+    @test length(run_study_grid(md, c, [r1]; outdir=out).skipped) == 1
+    g = run_study_grid(md2, c, [r1]; outdir=out)
+    @test isempty(g.skipped) && length(g.ran) == 1 && g.fingerprint == data_fingerprint(md2, c)
 end

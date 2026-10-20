@@ -3,13 +3,13 @@
 # `label`, over every growth-scorecard metric and run statistic the committed summaries carry. The new
 # settings fields change every run's hash, so the join is on the label, not the hash.
 # Exits 1 unless, for both files, every committed label is present (n_missing == 0) and every metric is
-# exactly equal (max_abs_diff == 0.0). Usage (from the repo root): julia scripts/15_regression_check.jl
+# exactly equal (max_abs_diff == 0.0). Usage (from the repo root): julia scripts/15_regression_check.jl [rev],
+# where `rev` is the git revision holding the baseline summaries (default HEAD).
 using Pkg
 Pkg.activate(normpath(joinpath(@__DIR__, "..", "code")); io=devnull)
 using VLINFORMS2026, CSV, DataFrames
 
 const REPO = normpath(joinpath(@__DIR__, ".."))
-const REF = "HEAD"
 const FILES = ["results/tier1_summary.csv", "results/fixed_summary.csv"]
 # Growth-scorecard metrics (yr⁻¹ or dimensionless) and run statistics present in the committed summaries.
 const METRICS = [:sharpe, :max_drawdown, :alpha, :alpha_t, :beta, :realized_growth, :terminal, :vol,
@@ -17,10 +17,13 @@ const METRICS = [:sharpe, :max_drawdown, :alpha, :alpha_t, :beta, :realized_grow
     :n_cash_revisit, :n_basket_change, :n_repicks, :n_basket_changes, :mean_names, :mean_invested,
     :mean_portfolio_beta, :cap_bind_share, :mean_hedge_weight, :mean_pool_size]
 
-function main()
+function main(args=ARGS)
+    length(args) <= 1 || error("usage: julia scripts/15_regression_check.jl [rev]")
+    ref = isempty(args) ? "HEAD" : args[1]
+    println("baseline revision: ", ref)
     pass = true
     for f in FILES
-        old = CSV.read(IOBuffer(read(Cmd(`git show $(REF):$(f)`; dir=REPO))), DataFrame)
+        old = CSV.read(IOBuffer(read(Cmd(`git show $(ref):$(f)`; dir=REPO))), DataFrame)
         new = CSV.read(joinpath(REPO, f), DataFrame)
         r = compare_summaries(old, new; key=:label, cols=METRICS)
         nerr = count(!=("ok"), string.(new.status))

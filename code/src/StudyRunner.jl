@@ -13,12 +13,65 @@ function study_key(run::MyStudyRun)::NamedTuple
         (Tuple(getfield(run.settings, f) for f in fs)..., run.allocator, run.screen, run.seed))
 end
 
-"""
-    study_hash(run::MyStudyRun)::String
+# Canonical text of a study-key value: independent of the caller's imports (a `Date` is its ISO string,
+# never `repr`, which prints `Date(…)` or `Dates.Date(…)` depending on what `Main` has loaded).
+_canon(x::Date) = string(x)
+_canon(x::Bool) = string(x)
+_canon(x::Integer) = string(x)
+_canon(x::AbstractFloat) = repr(Float64(x))
+_canon(x::Symbol) = ":" * String(x)
+_canon(x::AbstractString) = repr(String(x))
+_canon(x::AbstractVector) = "[" * join((_canon(v) for v in x), ",") * "]"
+_canon(x) = repr(x)
 
-`bytes2hex(sha1(repr(study_key(run))))`, the 40-character file stem of the run's results.
 """
-study_hash(run::MyStudyRun)::String = bytes2hex(sha1(repr(study_key(run))))
+    study_key_string(run::MyStudyRun)::String
+
+Canonical serialization of `study_key(run)`: `name=value` pairs joined by `;`, with dates as ISO strings,
+so the text does not depend on the caller's `using` statements.
+"""
+study_key_string(run::MyStudyRun)::String = join(("$(k)=$(_canon(v))" for (k, v) in pairs(study_key(run))), ";")
+
+"""
+    study_hash(run::MyStudyRun; fingerprint::AbstractString="")::String
+
+The 40-character file stem of the run's results: `bytes2hex(sha1(study_key_string(run)))`, with
+`"|data=" * fingerprint` appended when `fingerprint` (a `data_fingerprint`) is non-empty. `run_study_grid`
+and the scripts pass the fingerprint, so a change to the market data or the calibration gives new hashes.
+"""
+function study_hash(run::MyStudyRun; fingerprint::AbstractString="")::String
+    txt = study_key_string(run)
+    isempty(fingerprint) || (txt *= "|data=" * fingerprint)
+    return bytes2hex(sha1(txt))
+end
+
+"""
+    data_fingerprint(md::MyMarketData, calib::MyCalibration)::String
+
+SHA-1 (40 hex characters) of everything a run reads besides its settings: every field of `md` (dates as
+ISO strings, tickers, sectors, and the open, close, volume, SPY and g_f arrays by their Float64 bit
+patterns, with their sizes) and of `calib` (`base_sim` by sorted ticker, `σ_m`, `m_m`, `v_m`, `λ`,
+`train_start`, `train_stop`). Part of each run's identity in `run_study_grid`.
+"""
+function data_fingerprint(md::MyMarketData, calib::MyCalibration)::String
+    ctx = SHA.SHA1_CTX()
+    txt(x::AbstractString) = SHA.update!(ctx, Vector{UInt8}(codeunits(x * "\x1f")))
+    num(x::AbstractArray{<:Real}) = (txt(string(size(x))); SHA.update!(ctx, collect(reinterpret(UInt8, Float64.(vec(x))))))
+    txt("dates"); foreach(d -> txt(string(d)), md.dates)
+    txt("tickers"); foreach(txt, md.tickers)
+    txt("sector"); foreach(txt, md.sector)
+    for f in (:open, :close, :volume, :spy_open, :spy_close, :g_f)
+        txt(String(f)); num(getfield(md, f))
+    end
+    txt("base_sim")
+    for t in sort!(collect(keys(calib.base_sim)))
+        e = calib.base_sim[t]
+        txt(t); num([e.α, e.β, e.σ_ε, e.r²])
+    end
+    txt("calib"); num([calib.σ_m, calib.m_m, calib.v_m, calib.λ])
+    txt(string(calib.train_start)); txt(string(calib.train_stop))
+    return bytes2hex(SHA.digest!(ctx))
+end
 
 """
     study_stats(res::MyStudyResult)::NamedTuple
@@ -56,16 +109,19 @@ function study_stats(res::MyStudyResult)::NamedTuple
 end
 
 """
-    run_and_save_study(ctx::MyStudyContext, run::MyStudyRun; outdir="results")::String
+    run_and_save_study(ctx::MyStudyContext, run::MyStudyRun; outdir="results",
+        fingerprint=data_fingerprint(ctx.md, ctx.calib))::String
 
 Run `run_study(ctx, run)`, score it with `growth_scorecard(equity, spy_close, g_f)` on the result's dates
-(equity in USD, SPY close in USD, g_f in yr⁻¹) and write `outdir/runs/<hash>.jld2` with keys
-`study_key`, `result`, `scorecard`, `stats` (`study_stats`), `wall_seconds` (s) and `label`. The file is
-written to `<hash>.jld2.tmp` and then renamed, so a reader never sees a partial file. Returns the hash.
-Throws whatever the run throws (`run_study_grid` catches it).
+(equity in USD, SPY close in USD, g_f in yr⁻¹) and write `outdir/runs/<hash>.jld2`, with
+hash = `study_hash(run; fingerprint)`, holding `study_key`, `data_fingerprint`, `result`, `scorecard`,
+`stats` (`study_stats`), `wall_seconds` (s) and `label`. The file is written to `<hash>.jld2.tmp` and then
+renamed, so a reader never sees a partial file. Returns the hash. Throws whatever the run throws
+(`run_study_grid` catches it).
 """
-function run_and_save_study(ctx::MyStudyContext, run::MyStudyRun; outdir::AbstractString="results")::String
-    h = study_hash(run)
+function run_and_save_study(ctx::MyStudyContext, run::MyStudyRun; outdir::AbstractString="results",
+        fingerprint::AbstractString=data_fingerprint(ctx.md, ctx.calib))::String
+    h = study_hash(run; fingerprint=fingerprint)
     runs = _runs_dir(outdir); mkpath(runs)
     t0 = time_ns()
     res = run_study(ctx, run)
@@ -75,29 +131,38 @@ function run_and_save_study(ctx::MyStudyContext, run::MyStudyRun; outdir::Abstra
     st = study_stats(res)
     wall = (time_ns() - t0) / 1e9
     final = joinpath(runs, h * ".jld2"); tmp = final * ".tmp"
-    jldsave(tmp; study_key=study_key(run), result=res, scorecard=sc, stats=st, wall_seconds=wall, label=run.label)
+    jldsave(tmp; study_key=study_key(run), data_fingerprint=String(fingerprint), result=res, scorecard=sc, stats=st,
+        wall_seconds=wall, label=run.label)
     mv(tmp, final; force=true)
     return h
 end
 
 """
-    run_study_grid(md::MyMarketData, calib::MyCalibration, runs::Vector{MyStudyRun}; outdir="results")
+    run_study_grid(md::MyMarketData, calib::MyCalibration, runs::Vector{MyStudyRun}; outdir="results", fresh=false)
 
-Run every study run whose `outdir/runs/<hash>.jld2` is missing, threaded as in `run_grid`. Duplicate
-runs (equal hash) run once; the first in `runs` determines the stored label. One `MyStudyContext` is
-built per distinct `context_key` that still has work and shared by its runs (a context that fails to
-build fails its runs, each writing an error file). A failure writes `<hash>.error.txt` and the sweep
-continues; errored hashes are retried on the next call. Returns `(ran, skipped, errors)`, each a sorted
-`Vector{String}` of hashes.
+Run every study run whose `outdir/runs/<hash>.jld2` is missing, threaded as in `run_grid`. The hash is
+`study_hash(run; fingerprint)` with `fingerprint = data_fingerprint(md, calib)`, computed once, so cached
+runs from other data or another calibration are not reused. With `fresh = true` the cache is ignored for
+the selected runs: their existing `<hash>.jld2` and `<hash>.error.txt` are deleted and every run reruns
+(use it after a code change, which the hash cannot see). Duplicate runs (equal hash) run once; the first
+in `runs` determines the stored label. One `MyStudyContext` is built per distinct `context_key` that still
+has work and shared by its runs (a context that fails to build fails its runs, each writing an error
+file). A failure writes `<hash>.error.txt` and the sweep continues; errored hashes are retried on the
+next call. Returns `(ran, skipped, errors, fingerprint)`: sorted `Vector{String}`s of hashes and the
+fingerprint (pass it to `study_hash` for `rebuild_study_summary(...; hashes)`).
 """
 function run_study_grid(md::MyMarketData, calib::MyCalibration, runs::Vector{MyStudyRun};
-        outdir::AbstractString="results")
+        outdir::AbstractString="results", fresh::Bool=false)
     rdir = _runs_dir(outdir); mkpath(rdir)
+    fp = data_fingerprint(md, calib)
     seen = Set{String}(); todo = Tuple{String,MyStudyRun}[]; skipped = String[]
     for r in runs
-        h = study_hash(r)
+        h = study_hash(r; fingerprint=fp)
         h in seen && continue
         push!(seen, h)
+        if fresh
+            rm(joinpath(rdir, h * ".jld2"); force=true); rm(joinpath(rdir, h * ".error.txt"); force=true)
+        end
         isfile(joinpath(rdir, h * ".jld2")) ? push!(skipped, h) : push!(todo, (h, r))
     end
     ctxs = Dict{Any,Any}()
@@ -113,10 +178,11 @@ function run_study_grid(md::MyMarketData, calib::MyCalibration, runs::Vector{MyS
     function run_one(h, r)
         c = ctxs[context_key(r.settings)]
         c isa Exception && throw(c)
-        run_and_save_study(c, r; outdir=outdir)
+        run_and_save_study(c, r; outdir=outdir, fingerprint=fp)
     end
-    out = _run_items(todo, run_one; outdir=outdir, label_of=r -> r.label, key_repr=r -> repr(study_key(r)))
-    return (ran=out.ran, skipped=sort!(skipped), errors=out.errors)
+    out = _run_items(todo, run_one; outdir=outdir, label_of=r -> r.label,
+        key_repr=r -> study_key_string(r) * "|data=" * fp)
+    return (ran=out.ran, skipped=sort!(skipped), errors=out.errors, fingerprint=fp)
 end
 
 _study_label(a::AbstractString, scr, hedge::Bool, seed::Integer) = "$(a)|$(scr)|hedge=$(hedge)|seed=$(seed)"

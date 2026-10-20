@@ -1,5 +1,7 @@
 # Task 13: run the Tier 1 grid (default), the fixed-schedule grid (--fixed), the addendum's size sweep and
-# fixed lists (--universe) or a 2-run smoke test (--smoke).
+# fixed lists (--universe) or a 2-run smoke test (--smoke). A run's cache key holds its settings and a
+# fingerprint of the market data and calibration, but not the code: after a code change pass --fresh, which
+# reruns the selected runs instead of reusing results/runs/, and check that the run reports skipped = 0.
 using Pkg
 Pkg.activate(normpath(joinpath(@__DIR__, "..", "code")); io=devnull)
 using VLINFORMS2026, Dates, Statistics, DataFrames
@@ -13,7 +15,9 @@ const CALIB = joinpath(REPO, "results", "calibration.jld2")
 const MD_START, MD_STOP = Date(2014, 1, 3), Date(2026, 9, 4)
 
 function main(args=ARGS)
-    fixed, smoke, universe = "--fixed" in args, "--smoke" in args, "--universe" in args
+    fixed, smoke, universe, fresh = "--fixed" in args, "--smoke" in args, "--universe" in args, "--fresh" in args
+    bad = filter(a -> !(a in ("--fixed", "--smoke", "--universe", "--fresh")), args)
+    isempty(bad) || error("unknown arguments: ", join(bad, " "))
     count((fixed, smoke, universe)) <= 1 || error("pass at most one of --fixed, --universe, --smoke")
     md = load_market_data(DATA_DIR; start=MD_START, stop=MD_STOP)
     s, grid = load_study(CONFIG)
@@ -29,10 +33,18 @@ function main(args=ARGS)
     else
         runs, outdir, experiment = tier1_runs(s, grid), OUT_DIR, "tier1"
     end
-    println(length(runs), " runs, ", Threads.nthreads(), " threads, experiment ", experiment)
-    res = run_study_grid(md, calib, runs; outdir=outdir)
-    df = rebuild_study_summary(outdir, experiment; hashes=study_hash.(runs))
-    println("ran=", length(res.ran), " skipped=", length(res.skipped), " errors=", length(res.errors))
+    println(length(runs), " runs, ", Threads.nthreads(), " threads, experiment ", experiment, fresh ? ", fresh" : "")
+    res = run_study_grid(md, calib, runs; outdir=outdir, fresh=fresh)
+    df = rebuild_study_summary(outdir, experiment; hashes=study_hash.(runs; fingerprint=res.fingerprint))
+    println("ran=", length(res.ran), " skipped=", length(res.skipped), " errors=", length(res.errors),
+        " (data fingerprint ", res.fingerprint, ")")
+    if !isempty(res.skipped)
+        println("=" ^ 72)
+        println("SKIPPED ", length(res.skipped), " of ", length(unique(study_hash.(runs; fingerprint=res.fingerprint))),
+            " runs: their cached results in ", joinpath(outdir, "runs"), " were reused.")
+        println("The cache cannot see code changes; after one, rerun with --fresh and check skipped = 0.")
+        println("=" ^ 72)
+    end
     ok = df[string.(df.status) .== "ok", :]
     isempty(ok) || println("mean wall seconds per run: ", mean(skipmissing(ok.wall_seconds)))
     isempty(res.errors) || (println(stderr, "study finished with ", length(res.errors), " errors"); exit(1))

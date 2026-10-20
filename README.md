@@ -12,13 +12,18 @@ growth rates g = ln(S_end/S_start)/(k·Δt) in 1/yr with Δt = 1/252.
 2. `julia scripts/10_calibrate.jl`: calibrate on 2014-01-03 → 2024-12-31. Writes `results/calibration.jld2` and
    `results/calibration_summary.toml` (λ, σ_m, annualized vol cap, m_m, v_m, ξ gain G, universe and sector counts).
 3. `julia -t auto scripts/11_run_study.jl`: Tier 1 grid (allocators × screens × hedge × seeds). Per-run files in
-   `results/runs/` (not committed; reruns skip finished runs), summary in `results/tier1_summary.csv`.
+   `results/runs/` (not committed), summary in `results/tier1_summary.csv`.
    `--smoke` runs 2 runs (CD × γ screen × hedge on/off) into `results/smoke/`.
+   A run's file name hashes its settings and a fingerprint of the market data and calibration, so reruns skip
+   finished runs only while the data and calibration are unchanged. The hash cannot see code: **after a code
+   change, rerun every grid with `--fresh`** (it ignores and replaces the cached files of the selected runs) and
+   check that the printed `skipped` count is 0. A run that reuses cached files prints a `SKIPPED` banner.
 4. `julia -t auto scripts/11_run_study.jl --fixed`: fixed-schedule grid (no re-pick on band exit), `results/fixed_summary.csv`.
-5. `julia scripts/15_regression_check.jl`: compares the rerun `results/tier1_summary.csv` and
-   `results/fixed_summary.csv` with the versions committed at `HEAD`, joined on `label`, over every
-   growth-scorecard metric and run statistic. Exits 1 unless every committed run is present and every value
-   is exactly equal. Run it after a code change and before committing new summaries.
+5. `julia scripts/15_regression_check.jl [rev]`: compares the rerun `results/tier1_summary.csv` and
+   `results/fixed_summary.csv` with the versions committed at git revision `rev` (default `HEAD`), joined on
+   `label`, over every growth-scorecard metric and run statistic. Exits 1 unless every committed run is present
+   and every value is exactly equal. Run it after a code change that should not move the results (after the
+   `--fresh` reruns) and before committing new summaries.
 6. `julia -t auto scripts/11_run_study.jl --universe`: the ticker-picker addendum's 3,804 runs (universe-wide
    screens and random controls at K ∈ {5, 8, 13, 21, 34}, plus the user's 13- and 15-name lists), summary in
    `results/universe_summary.csv`.
