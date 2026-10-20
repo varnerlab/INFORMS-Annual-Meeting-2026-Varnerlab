@@ -22,8 +22,10 @@ end
     fit_base_sim(md::MyMarketData, start::Date, stop::Date)
 
 Fit a SIM per ticker on growth rates (yr⁻¹, Δt = 1/252) between consecutive trading days inside
-[`start`, `stop`]. Returns `(params = Dict{String,MySIMParameterEstimate}, σ_m)` where `σ_m`
-(yr⁻¹) is the sample SD (N−1) of SPY growth over the same days.
+[`start`, `stop`]. Returns `(params, σ_m, m_m, v_m)`: `params::Dict{String,MySIMParameterEstimate}`;
+`σ_m` (yr⁻¹) the sample SD (N−1) of SPY growth over the same days; `m_m` (yr⁻¹) the mean and
+`v_m` (yr⁻²) the population variance (`corrected=false`) of that SPY growth, the training market
+moments that seed `ewls_init`.
 """
 function fit_base_sim(md::MyMarketData, start::Date, stop::Date)
     idx = findall(d -> start <= d <= stop, md.dates)
@@ -35,23 +37,35 @@ function fit_base_sim(md::MyMarketData, start::Date, stop::Date)
     for (j, t) ∈ enumerate(md.tickers)
         params[t] = estimate_sim(g_m, G[:, j])
     end
-    return (params = params, σ_m = std(g_m))
+    return (params = params, σ_m = std(g_m), m_m = mean(g_m), v_m = var(g_m; corrected = false))
 end
 
 """
-    ewls_init(α₀, β₀, σ_ε₀; half_life=63.0, prior_weight=63.0)::MyEWLSState
+    ewls_init(α₀, β₀, σ_ε₀; half_life=63.0, prior_weight=63.0, market_mean=0.0, market_variance=1.0)::MyEWLSState
 
-Initialize EWLS from a prior (α₀ yr⁻¹, β₀, σ_ε₀ yr⁻¹). Decay η = 2^(−1/half_life) per observation;
-`prior_weight` seeds the sufficient statistics so the state reproduces the prior on day 0.
+Initialize EWLS from a prior (α₀ yr⁻¹, β₀, σ_ε₀ yr⁻¹) worth `prior_weight` = N₀ pseudo-observations
+(CHEME-5660 `AdaptivePortfolio.ewls_init`). The prior second-moment matrix is N₀·E[x xᵀ], x = [1, g_M],
+with `market_mean` m (yr⁻¹) and `market_variance` v (yr⁻², population variance) the training-period
+moments of market growth, so E[g_M²] = v + m². The defaults (0, 1) reproduce the legacy
+unit-variance seed exactly. Decay η = 2^(−1/half_life) per observation (`half_life = Inf` gives η = 1).
+The state returns the prior on day 0.
 """
-function ewls_init(α₀::Real, β₀::Real, σ_ε₀::Real; half_life::Real = 63.0, prior_weight::Real = 63.0)::MyEWLSState
+function ewls_init(α₀::Real, β₀::Real, σ_ε₀::Real; half_life::Real = 63.0, prior_weight::Real = 63.0,
+        market_mean::Real = 0.0, market_variance::Real = 1.0)::MyEWLSState
+    half_life > 0 || throw(ArgumentError("half_life must be positive"))
+    isfinite(prior_weight) && prior_weight > 0 || throw(ArgumentError("prior_weight must be finite and positive"))
+    isfinite(market_variance) && market_variance > 0 || throw(ArgumentError("market_variance must be finite and positive"))
+    isfinite(market_mean) || throw(ArgumentError("market_mean must be finite"))
+    all(isfinite, (α₀, β₀, σ_ε₀)) && σ_ε₀ >= 0 || throw(ArgumentError("the prior (α₀, β₀, σ_ε₀) must be finite with σ_ε₀ ≥ 0"))
+    m, v, N₀ = Float64(market_mean), Float64(market_variance), Float64(prior_weight)
+    Exx = v + m^2
     s = MyEWLSState()
-    s.Sw   = prior_weight
-    s.Swx  = 0.0
-    s.Swy  = prior_weight * α₀
-    s.Swxx = prior_weight * 1.0
-    s.Swxy = prior_weight * β₀
-    s.Swyy = prior_weight * (α₀^2 + β₀^2 + σ_ε₀^2)
+    s.Sw   = N₀
+    s.Swx  = N₀ * m
+    s.Swy  = N₀ * (α₀ + β₀ * m)
+    s.Swxx = N₀ * Exx
+    s.Swxy = N₀ * (α₀ * m + β₀ * Exx)
+    s.Swyy = N₀ * (α₀^2 + 2α₀ * β₀ * m + β₀^2 * Exx + σ_ε₀^2)
     s.η = 2.0^(-1.0 / half_life)
     s.α = α₀; s.β = β₀; s.σ_ε = σ_ε₀
     return s

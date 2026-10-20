@@ -1,5 +1,6 @@
 using Test, Dates, Random, Statistics
 using VLINFORMS2026
+include("helpers.jl")
 
 @testset "SIM / EWLS / market state" begin
     gm = randn(MersenneTwister(5660), 2000) .* 3; gi = 0.5 .+ 1.2 .* gm .+ randn(MersenneTwister(1), 2000)
@@ -66,4 +67,30 @@ using VLINFORMS2026
         d2 = wd[100]; ms2 = market_state(spy, wd, d2)
         @test ms2.ḡ_M ≈ mean(252 .* diff(log.(spy[1:100])))
     end
+end
+
+@testset "ewls_init market prior (CHEME-5660 seeding)" begin
+    m, v = 0.12, 7.0
+    s = ewls_init(0.05, 1.0, 2.0; market_mean=m, market_variance=v)
+    @test s.Swx ≈ 63m && s.Swxx ≈ 63(v + m^2)
+    β = (s.Sw*s.Swxy - s.Swx*s.Swy) / (s.Sw*s.Swxx - s.Swx^2); α = (s.Swy - β*s.Swx) / s.Sw
+    @test β ≈ 1.0 rtol=1e-12
+    @test α ≈ 0.05 rtol=1e-10
+    l = ewls_init(0.05, 1.0, 2.0)                                  # legacy default unchanged
+    @test (l.Swx, l.Swxx, l.Swxy, l.Swyy) == (0.0, 63.0, 63.0, 63 * (0.05^2 + 1.0 + 4.0))
+    # 64 data points with the prior's market moments pull β exactly halfway to the data's β = 0;
+    # the legacy unit-variance seed is ~7× weaker in growth units and lets β fall below 0.2.
+    x = [isodd(k) ? m + sqrt(v) : m - sqrt(v) for k in 1:64]
+    p = ewls_init(0.0, 1.0, 1.0; half_life=Inf, prior_weight=64.0, market_mean=m, market_variance=v)
+    q = ewls_init(0.0, 1.0, 1.0; half_life=Inf, prior_weight=64.0)
+    foreach(xk -> (ewls_update!(p, 0.0, xk); ewls_update!(q, 0.0, xk)), x)
+    @test p.β ≈ 0.5 rtol=1e-9
+    @test q.β < 0.2
+end
+
+@testset "fit_base_sim market moments" begin
+    md = synthetic_md(ρ=0.3)
+    fit = fit_base_sim(md, md.dates[1], md.dates[800])
+    g = growth_rates(md.spy_close[1:800])
+    @test fit.m_m ≈ mean(g) && fit.v_m ≈ var(g; corrected=false) && fit.σ_m ≈ std(g)
 end
