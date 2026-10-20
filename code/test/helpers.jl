@@ -132,3 +132,44 @@ function held_value(res, md::MyMarketData)
     return [sum((n * md.close[index_of(md, d), col[tk]] for (tk, n) in pos); init=0.0)
         for (d, pos) in zip(res.dates, positions_by_day(res))]
 end
+
+# ---- Study fixtures (Task 10; reused by Task 11) ----
+
+# Synthetic market for the study-loop tests: 2014–2019 weekdays, 4 sectors × 12 names with
+# β = range(−0.6, 1.6; length=12) repeated per sector (names 1–3 of each sector have β < 0, name 4
+# has β = 0), α = 0, residual SD 3 yr⁻¹, SPY growth N(0.1, 2.5²) yr⁻¹. Volume 1e6 shares/day,
+# g_f = 0.04 yr⁻¹, opens at the geometric midpoints of consecutive closes (USD/share).
+function study_md(; seed::Int=5660)
+    rng = MersenneTwister(seed)
+    dates = filter(d -> dayofweek(d) <= 5, collect(Date(2014,1,1):Day(1):Date(2019,12,31)))
+    n = length(dates); Δt = 1/252
+    sectors = ["S$(s)" for s in 1:4 for _ in 1:12]
+    β = repeat(collect(range(-0.6, 1.6; length=12)), 4)
+    gm = 0.1 .+ 2.5 .* randn(rng, n - 1)
+    g = gm * β' .+ 3.0 .* randn(rng, n - 1, 48)
+    cl = 100 .* exp.(vcat(zeros(1, 48), cumsum(g .* Δt; dims=1)))
+    spy = 100 .* exp.(vcat(0.0, cumsum(gm .* Δt)))
+    op = vcat(cl[1:1, :], sqrt.(cl[1:end-1, :] .* cl[2:end, :]))
+    spy_op = vcat(spy[1], sqrt.(spy[1:end-1] .* spy[2:end]))
+    return build(MyMarketData, (dates=dates, tickers=["T$(lpad(i,2,'0'))" for i in 1:48], open=op, close=cl,
+        volume=fill(1e6, n, 48), spy_open=spy_op, spy_close=spy, sector=sectors, g_f=fill(0.04, n)))
+end
+
+# (md, ctx) for the study-loop tests: calibration from fit_base_sim on 2014-01-01 → 2017-12-29 with
+# λ = 0.5; settings start = first trading day ≥ 2018-07-02, stop = 2018-12-31, that training window.
+# `md` (default study_md()) is the market to build on; every other keyword overrides a setting.
+function study_ctx(; md::Union{Nothing,MyMarketData}=nothing, kw...)
+    md = something(md, study_md())
+    tr0, tr1 = Date(2014, 1, 1), Date(2017, 12, 29)
+    fit = fit_base_sim(md, tr0, tr1)
+    calib = build(MyCalibration, (base_sim=fit.params, σ_m=fit.σ_m, m_m=fit.m_m, v_m=fit.v_m, λ=0.5,
+        train_start=tr0, train_stop=tr1))
+    start = md.dates[searchsortedfirst(md.dates, Date(2018, 7, 2))]
+    s = build(MyStudySettings, merge((start=start, stop=Date(2018, 12, 31), train_start=tr0, train_stop=tr1),
+        NamedTuple(kw)))
+    return md, build_context(md, calib, s)
+end
+
+# One study run on ctx's settings.
+study_run(ctx::MyStudyContext, allocator::String, screen::Symbol; seed::Int=5660) =
+    build(MyStudyRun, (settings=ctx.settings, allocator=allocator, screen=screen, seed=seed))

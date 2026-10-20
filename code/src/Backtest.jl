@@ -269,12 +269,13 @@ end
 _BTTrades() = _BTTrades(Date[], String[], Int[], Float64[], Float64[], Float64[])
 
 # Cash (USD) after the buys `q[k]` (shares > 0), each scaled by f and truncated, at `px` (USD/share)
-# with trade costs; the fills apply them in this order with this arithmetic, so the sign is exact.
+# with trade costs (`half_spread_bps` in bps, impact `κ` dimensionless, as in `trade_cost`); the fills
+# apply them in this order with this arithmetic, so the sign is exact.
 function _bt_cash_after_buys(cash::Float64, q::Vector{Int}, px::Vector{Float64}, adv::Vector{Float64},
-        buys::Vector{Int}, f::Float64)::Float64
+        buys::Vector{Int}, f::Float64; half_spread_bps::Float64=5.0, κ::Float64=0.001)::Float64
     for k in buys
         qk = trunc(Int, f * q[k])
-        qk == 0 || (cash -= qk * px[k] + trade_cost(qk, px[k], adv[k]))
+        qk == 0 || (cash -= qk * px[k] + trade_cost(qk, px[k], adv[k]; half_spread_bps=half_spread_bps, κ=κ))
     end
     return cash
 end
@@ -285,32 +286,35 @@ end
 # sales execute first, then buys. If cash after the sells cannot pay for every buy at the open plus
 # costs, every buy is scaled by one factor f ∈ [0, 1] (the largest, by bisection) and truncated, so
 # cash ≥ 0 after the fills; if that leaves no buy at all, each dropped buy is logged with qty 0.
-# Updates `held` and the trade log; returns cash (USD).
-function _bt_fill!(held::Vector{Int}, cash::Float64, order, md::MyMarketData, t::Int, tr::_BTTrades)::Float64
+# Costs use `half_spread_bps` (bps) and impact `κ` (dimensionless), as in `trade_cost`; the defaults are
+# the trial's. Updates `held` and the trade log; returns cash (USD).
+function _bt_fill!(held::Vector{Int}, cash::Float64, order, md::MyMarketData, t::Int, tr::_BTTrades;
+        half_spread_bps::Float64=5.0, κ::Float64=0.001)::Float64
+    ckw = (half_spread_bps=half_spread_bps, κ=κ)
     cols = order.cols
     q = [trunc(Int, order.n[k]) - held[j] for (k, j) in enumerate(cols)]
     px = [md.open[t, j] for j in cols]
     for k in eachindex(q)
-        q[k] < 0 && (cash = _bt_execute!(held, cash, tr, md, t, cols[k], q[k], px[k], order.adv[k], 1.0))
+        q[k] < 0 && (cash = _bt_execute!(held, cash, tr, md, t, cols[k], q[k], px[k], order.adv[k], 1.0; ckw...))
     end
     buys = findall(>(0), q)
     isempty(buys) && return cash
     f = 1.0
-    if _bt_cash_after_buys(cash, q, px, order.adv, buys, 1.0) < 0
+    if _bt_cash_after_buys(cash, q, px, order.adv, buys, 1.0; ckw...) < 0
         lo, hi = 0.0, 1.0
         for _ in 1:_BT_BISECT_ITERS
             mid = (lo + hi) / 2
-            _bt_cash_after_buys(cash, q, px, order.adv, buys, mid) >= 0 ? (lo = mid) : (hi = mid)
+            _bt_cash_after_buys(cash, q, px, order.adv, buys, mid; ckw...) >= 0 ? (lo = mid) : (hi = mid)
         end
         f = lo
     end
     for k in buys
         qk = trunc(Int, f * q[k])
-        qk == 0 || (cash = _bt_execute!(held, cash, tr, md, t, cols[k], qk, px[k], order.adv[k], f))
+        qk == 0 || (cash = _bt_execute!(held, cash, tr, md, t, cols[k], qk, px[k], order.adv[k], f; ckw...))
     end
     if all(k -> trunc(Int, f * q[k]) == 0, buys)          # cash could not pay for any buy: log the drops
         for k in buys
-            cash = _bt_execute!(held, cash, tr, md, t, cols[k], 0, px[k], order.adv[k], f)
+            cash = _bt_execute!(held, cash, tr, md, t, cols[k], 0, px[k], order.adv[k], f; ckw...)
         end
     end
     return cash
@@ -321,10 +325,12 @@ end
 _bt_projection_seed(seed::Int, d::Date)::Int = seed * 1_000_003 + Dates.value(d)
 
 # One fill of `qk` shares (signed) of column j at `px` (USD/share) on day t: pay qk·px plus the trade
-# cost from cash, update the position, log the trade with its buy scale factor. Returns cash (USD).
+# cost (`half_spread_bps` in bps, impact `κ` dimensionless) from cash, update the position, log the
+# trade with its buy scale factor. Returns cash (USD).
 function _bt_execute!(held::Vector{Int}, cash::Float64, tr::_BTTrades, md::MyMarketData, t::Int, j::Int,
-        qk::Int, px::Float64, adv::Float64, scale::Float64)::Float64
-    cost = trade_cost(qk, px, adv)
+        qk::Int, px::Float64, adv::Float64, scale::Float64; half_spread_bps::Float64=5.0,
+        κ::Float64=0.001)::Float64
+    cost = trade_cost(qk, px, adv; half_spread_bps=half_spread_bps, κ=κ)
     held[j] += qk
     push!(tr.date, md.dates[t]); push!(tr.ticker, md.tickers[j]); push!(tr.qty, qk)
     push!(tr.price, px); push!(tr.cost, cost); push!(tr.scale, scale)

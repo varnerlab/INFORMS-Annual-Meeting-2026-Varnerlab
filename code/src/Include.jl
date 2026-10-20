@@ -37,6 +37,7 @@ include("Screens.jl")
 include("StudySettings.jl")
 include("Context.jl")
 include("GrowthScorecard.jl")
+include("StudyBacktest.jl")
 
 export MyMarketData, build, load_market_data, growth_rates, index_of, DATA_FILES,
     MySIMParameterEstimate, MyEWLSState, MyEWVarState, estimate_sim, fit_base_sim, ewls_init, ewls_update!,
@@ -62,3 +63,4 @@ export AbstractScreen, MyBanditScreen, MyGammaScreen, MyRandomScreen, excess_gro
     train_ticker_bandit, rank_arms, pick, short_candidates
 export MyStudySettings, load_study, with_settings, context_key, MyStudyContext, build_context
 export growth_scorecard
+export MyStudyRun, MyStudyResult, make_rule, make_screen, run_study
