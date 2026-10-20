@@ -14,8 +14,8 @@ abstract type AbstractPortfolioRule end
 """
     MyCobbDouglasRule
 
-Cobb-Douglas (the trial's rule): maximize Σ_{γᵢ>0} γᵢ·log nᵢ; names with γᵢ ≤ 0 sit at the floor ε.
-No parameters.
+Cobb-Douglas (the trial's rule): maximize Σ_{γᵢ>0} γᵢ·log nᵢ; names with γᵢ ≤ 0 sit at the floor ε,
+except hedge names (`MyAllocationProblem.hedge`), which are free above it. No parameters.
 """
 mutable struct MyCobbDouglasRule <: AbstractPortfolioRule
     MyCobbDouglasRule() = new()
@@ -24,10 +24,10 @@ end
 """
     MyCESRule
 
-CES utility: maximize Σ_{γᵢ>0} γᵢ·nᵢ^ρ with ρ = 1 − 1/η, a monotone transform of
-(Σ γᵢ nᵢ^ρ)^(1/ρ) (CHEME-5660 `allocate_ces`: nᵢ ∝ (γᵢ/Sᵢ)^η under a budget alone).
-Field `η` (elasticity of substitution, dimensionless); only η > 1 is supported. Names with γᵢ ≤ 0
-sit at the floor ε.
+CES utility (Σ_{γᵢ>0} γᵢ nᵢ^ρ)^(1/ρ) with ρ = 1 − 1/η (CHEME-5660 `allocate_ces`: nᵢ ∝ (γᵢ/Sᵢ)^η
+under a budget alone). Field `η` (elasticity of substitution, dimensionless, > 0): η > 1 (0 < ρ < 1)
+maximizes Σ γᵢ nᵢ^ρ; 0 < η < 1 (ρ < 0) minimizes Σ γᵢ nᵢ^ρ; η = 1 is Cobb-Douglas. Names with
+γᵢ ≤ 0 sit at the floor ε, except hedge names, which are free above it.
 """
 mutable struct MyCESRule <: AbstractPortfolioRule
     η::Float64
@@ -39,7 +39,7 @@ end
 
 Stone–Geary utility: maximize Σ_{γᵢ>0} γᵢ·log(nᵢ − bᵢ) with nᵢ ≥ bᵢ for every name, where the
 baseline bᵢ = floor(`baseline_frac`·W/Sᵢ) shares (`baseline_frac` dimensionless, e.g. 0.01 = a 1% core
-position). Names with γᵢ ≤ 0 are held at bᵢ.
+position). Names with γᵢ ≤ 0 are held at bᵢ, except hedge names, which are free above it.
 """
 mutable struct MyStoneGearyRule <: AbstractPortfolioRule
     baseline_frac::Float64
@@ -58,6 +58,8 @@ The constraint set shared by every portfolio rule:
 - `sector`: GICS sector per name
 - `n_prev`: holdings before the solve (shares)
 - `ε`: floor for names with γ ≤ 0 under the log/CES utilities (shares, default 1e-3)
+- `β`: each name's signed β on the market (dimensionless, default 0)
+- `β_max`: cap on the portfolio β Σ βᵢwᵢ (dimensionless; cash has β = 0; default `Inf` = no cap)
 """
 mutable struct MyConstraintSet
     w_max::Float64
@@ -68,6 +70,8 @@ mutable struct MyConstraintSet
     sector::Vector{String}
     n_prev::Vector{Float64}
     ε::Float64
+    β::Vector{Float64}
+    β_max::Float64
     MyConstraintSet() = new()
 end
 
@@ -76,7 +80,10 @@ end
 
 One allocation decision: `γ` (preference weights, dimensionless), `μ_g` (expected growth, yr⁻¹),
 `Σ_g` (growth covariance, yr⁻²), `prices` (USD/share), `W` (equity, USD), `g_f` (risk-free growth,
-yr⁻¹) and the shared `constraints::MyConstraintSet`.
+yr⁻¹), the shared `constraints::MyConstraintSet` and `hedge` (one flag per name: a hedge-pool name).
+In the γ-based rules a hedge name with γᵢ ≤ 0 is a free variable above its floor with no utility
+term, so it is bought only when the β or volatility cap makes it worth its budget; in the 130/30 it
+is long-only.
 """
 mutable struct MyAllocationProblem
     γ::Vector{Float64}
@@ -86,6 +93,7 @@ mutable struct MyAllocationProblem
     W::Float64
     g_f::Float64
     constraints::MyConstraintSet
+    hedge::Vector{Bool}
     MyAllocationProblem() = new()
 end
 
@@ -117,7 +125,7 @@ build(::Type{MyCobbDouglasRule}, data::NamedTuple)::MyCobbDouglasRule = MyCobbDo
 """
     build(::Type{MyCESRule}, data::NamedTuple)::MyCESRule
 
-Build a CES rule from `(η = …,)` (elasticity, dimensionless, finite and > 0; `allocate` needs η > 1).
+Build a CES rule from `(η = …,)` (elasticity of substitution, dimensionless, finite and > 0).
 """
 function build(::Type{MyCESRule}, data::NamedTuple)::MyCESRule
     _require(data, MyCESRule, :η)
@@ -145,7 +153,9 @@ end
     build(::Type{MyConstraintSet}, data::NamedTuple)::MyConstraintSet
 
 Build the shared constraint set from `w_max`, `s_max`, `σ_g_max` (yr⁻¹), `K_turnover` (USD),
-`c̄` (USD/share), `sector`, `n_prev` (shares) and optional `ε` (shares, default 1e-3).
+`c̄` (USD/share), `sector`, `n_prev` (shares) and optional `ε` (shares, default 1e-3), `β`
+(dimensionless, default zeros, one per name) and `β_max` (dimensionless, default `Inf` = no β cap;
+`NaN` and `-Inf` throw).
 """
 function build(::Type{MyConstraintSet}, data::NamedTuple)::MyConstraintSet
     for f ∈ (:w_max, :s_max, :σ_g_max, :K_turnover, :c̄, :sector, :n_prev)
@@ -160,13 +170,17 @@ function build(::Type{MyConstraintSet}, data::NamedTuple)::MyConstraintSet
     model.sector = String.(collect(data.sector))
     model.n_prev = Float64.(collect(data.n_prev))
     model.ε = Float64(get(data, :ε, 1e-3))
+    model.β = Float64.(collect(get(data, :β, zeros(length(model.sector)))))
+    model.β_max = Float64(get(data, :β_max, Inf))
     model.w_max > 0 || throw(ArgumentError("w_max must be positive"))
     model.s_max > 0 || throw(ArgumentError("s_max must be positive"))
     model.σ_g_max >= 0 || throw(ArgumentError("σ_g_max must be ≥ 0"))
     (model.K_turnover >= 0 && model.c̄ >= 0) || throw(ArgumentError("K_turnover and c̄ must be ≥ 0"))
     model.ε >= 0 || throw(ArgumentError("ε must be ≥ 0"))
-    length(model.sector) == length(model.n_prev) ||
-        throw(DimensionMismatch("sector and n_prev must have one entry per name"))
+    (isnan(model.β_max) || model.β_max == -Inf) &&
+        throw(ArgumentError("β_max must be a number or Inf, got $(model.β_max)"))
+    length(model.sector) == length(model.n_prev) == length(model.β) ||
+        throw(DimensionMismatch("sector, n_prev and β must have one entry per name"))
     return model
 end
 
@@ -174,8 +188,9 @@ end
     build(::Type{MyAllocationProblem}, data::NamedTuple)::MyAllocationProblem
 
 Build an allocation problem from `γ`, `μ_g` (yr⁻¹), `Σ_g` (yr⁻², any K×K matrix type), `prices`
-(USD/share), `W` (USD), `g_f` (yr⁻¹) and `constraints::MyConstraintSet`. Checks that every per-name
-input has the same length K and that prices and W are positive.
+(USD/share), `W` (USD), `g_f` (yr⁻¹), `constraints::MyConstraintSet` and optional `hedge` (Bool per
+name, default all `false`). Checks that every per-name input has the same length K and that prices
+and W are positive.
 """
 function build(::Type{MyAllocationProblem}, data::NamedTuple)::MyAllocationProblem
     for f ∈ (:γ, :μ_g, :Σ_g, :prices, :W, :g_f, :constraints)
@@ -189,6 +204,7 @@ function build(::Type{MyAllocationProblem}, data::NamedTuple)::MyAllocationProbl
     model.W = Float64(data.W)
     model.g_f = Float64(data.g_f)
     model.constraints = data.constraints
+    model.hedge = Bool.(collect(get(data, :hedge, fill(false, length(model.γ)))))
     _check_problem(model)
     return model
 end
@@ -212,8 +228,8 @@ end
 function _check_problem(p::MyAllocationProblem)
     K = length(p.γ)
     c = p.constraints
-    all(length(v) == K for v in (p.μ_g, p.prices, c.sector, c.n_prev)) ||
-        throw(DimensionMismatch("γ, μ_g, prices, sector and n_prev must all have length $(K)"))
+    all(length(v) == K for v in (p.μ_g, p.prices, c.sector, c.n_prev, c.β, p.hedge)) ||
+        throw(DimensionMismatch("γ, μ_g, prices, sector, n_prev, β and hedge must all have length $(K)"))
     size(p.Σ_g) == (K, K) || throw(DimensionMismatch("Σ_g must be $(K)×$(K), got $(size(p.Σ_g))"))
     all(s -> isfinite(s) && s > 0, p.prices) || throw(ArgumentError("prices must be positive and finite"))
     (isfinite(p.W) && p.W > 0) || throw(ArgumentError("W must be positive and finite"))
@@ -256,6 +272,9 @@ w = n·S/W (dimensionless, `Vector{AffExpr}`). Constraints, following engine `Al
   wᵢ ≥ −w_max·κ, i.e. |wᵢ| ≤ w_max·κ.
 - **Sector cap** (only when `s_max < 1`): Σ_{i∈s} wᵢ ≤ s_max·κ per sector; with `signed=true` the
   net sector weight is capped on both sides, |Σ_{i∈s} wᵢ| ≤ s_max·κ.
+- **β cap** (only when β_max is finite): Σ βᵢwᵢ ≤ β_max·κ (dimensionless) on the signed βᵢ, cash at
+  β = 0; with `signed=true` on the signed weights. A constant row (pinned names only) is checked
+  directly, like the per-name cap.
 - **Volatility cap:** ‖Lᵀw‖ ≤ σ_g_max·κ (yr⁻¹) as a second-order cone, LLᵀ = Σ_g + 1e-8·I (yr⁻²);
   skipped when σ_g_max is infinite.
 - **Turnover budget:** c̄·Σ_{free i} |nᵢ − κ·n_prevᵢ| ≤ K_turnover·κ (USD), on the non-pinned names
@@ -301,6 +320,15 @@ function add_shared_constraints!(m::JuMP.Model, n::AbstractVector, p::MyAllocati
             _add_le!(m, ws, c.s_max * κ)
             signed && _add_le!(m, -ws, c.s_max * κ)
         end
+    end
+
+    # β cap: Σ βᵢwᵢ ≤ β_max (zero-β names add no term, so an all-pinned row stays constant)
+    if isfinite(c.β_max)
+        wβ = AffExpr(0.0)
+        for i in 1:K
+            iszero(c.β[i]) || add_to_expression!(wβ, c.β[i], w[i])
+        end
+        _add_le!(m, wβ, c.β_max * κ)
     end
 
     # Volatility cap: ‖Lᵀw‖ ≤ σ_g_max
@@ -360,29 +388,85 @@ function _solve_with_fallback(build_model::Function)
     return (nothing, any(in(_INFEASIBLE), statuses) ? :infeasible : :solver_failed)
 end
 
-# Utility solve over the preferred names (γ > 0): `pins` gives every name's value when pinned,
-# `lb` the lower bound (shares) of each preferred name's variable, and `objective!(m, x, γ_p)` adds
-# the cone constraints and the objective. Pinned names enter the shared constraints as constants.
+# Cost per unit of weight (dimensionless) on the free hedge names, subtracted from the utility
+# objective **(plan decision)**. A hedge name has no utility term, so without it the objective is
+# flat along the hedge weights whenever no limit binds, and an interior-point solver returns an
+# arbitrary holding there. Per share the cost is 1e-6·Sᵢ/W (4e-8 for a 40 USD name at W = 1000 USD,
+# 2e-9 for a 200 USD name at W = 1e5 USD), below Clarabel's dual accuracy, so on its own it leaves
+# hedge holdings of several percent of equity on the flat direction; `_min_hedge` then settles them.
+const _HEDGE_TIEBREAK = 1e-6
+
+# Free hedge names of a utility rule: hedge-pool names with γ ≤ 0.
+_free_hedges(p::MyAllocationProblem) = findall(i -> p.hedge[i] && p.γ[i] <= 0, eachindex(p.γ))
+
+# Second, lexicographic stage for the free hedge names `hedge` **(implementation decision: the
+# tie-break alone is below solver accuracy)**. With the names in `fixed` held at their first-stage
+# shares `n1` (as fixed variables, so their turnover still counts) and every other name at the
+# constant n1ᵢ, minimize Σ wᵢ over the hedge names (variables ≥ `floors`, shares) under the shared
+# constraints (`signed` as in add_shared_constraints!) plus the rule's own rows `rows!(m, w)`. The
+# utility depends on the fixed names only, so this keeps the first-stage utility and holds a hedge
+# above its floor only as far as a binding limit (β or volatility cap) needs it. Returns n1 with the
+# hedge entries replaced (shares), or n1 unchanged when this stage does not solve.
+function _min_hedge(p::MyAllocationProblem, n1::Vector{Float64}, fixed::Vector{Int}, hedge::Vector{Int},
+        floors::Vector{Float64}; signed::Bool=false, rows!::Function=(m, w) -> nothing)::Vector{Float64}
+    x, status = _solve_with_fallback(function (opt)
+        m = Model(opt)
+        set_silent(m)
+        y = @variable(m, [1:length(fixed)])
+        fix.(y, n1[fixed])
+        h = @variable(m, [k = 1:length(hedge)], lower_bound = floors[k])
+        n = AffExpr[AffExpr(v) for v in n1]
+        for (k, i) in enumerate(fixed)
+            n[i] = AffExpr(0.0, y[k] => 1.0)
+        end
+        for (k, i) in enumerate(hedge)
+            n[i] = AffExpr(0.0, h[k] => 1.0)
+        end
+        w = add_shared_constraints!(m, n, p; signed=signed)
+        rows!(m, w)
+        @objective(m, Min, sum(w[i] for i in hedge))
+        return m, h
+    end)
+    status == :optimal || return n1
+    n = copy(n1)
+    n[hedge] .= x
+    return n
+end
+
+# Utility solve over the preferred names (γ > 0) and the free hedge names: `pins` gives every name's
+# value when pinned and is also each free hedge name's lower bound (shares), `lb` the lower bound
+# (shares) of each preferred name's variable, and `objective!(m, x, γ_p)` adds the cone constraints
+# on the preferred shares x and returns the utility expression. The objective is the utility minus
+# _HEDGE_TIEBREAK·Σ wᵢ over the free hedge names (which get no utility term); when there are any,
+# `_min_hedge` then settles their holdings with the preferred shares fixed. Pinned names enter the
+# shared constraints as constants.
 function _solve_utility(p::MyAllocationProblem, pins::Vector{Float64}, lb::Vector{Float64},
         objective!::Function)::MyAllocationResult
-    pref = findall(p.γ .> 0)
-    K = length(p.γ); Kp = length(pref)
+    pref = findall(p.γ .> 0); hedge = _free_hedges(p)
+    K = length(p.γ); Kp = length(pref); Kh = length(hedge)
     function build_model(opt)
         m = Model(opt)
         set_silent(m)
         x = @variable(m, [k = 1:Kp], lower_bound = lb[k])
+        h = @variable(m, [k = 1:Kh], lower_bound = pins[hedge[k]])
         n = AffExpr[AffExpr(pins[i]) for i in 1:K]
         for (k, i) in enumerate(pref)
             n[i] = AffExpr(0.0, x[k] => 1.0)
         end
-        objective!(m, x, p.γ[pref])
-        add_shared_constraints!(m, n, p)
-        return m, x
+        for (k, i) in enumerate(hedge)
+            n[i] = AffExpr(0.0, h[k] => 1.0)
+        end
+        U = objective!(m, x, p.γ[pref])
+        w = add_shared_constraints!(m, n, p)
+        @objective(m, Max, Kh == 0 ? U : U - _HEDGE_TIEBREAK * sum(w[i] for i in hedge))
+        return m, vcat(x, h)
     end
     x, status = _solve_with_fallback(build_model)
     status == :optimal || return _result(p, copy(p.constraints.n_prev), status)
     n = copy(pins)
-    n[pref] .= x
+    n[pref] .= x[1:Kp]
+    n[hedge] .= x[Kp+1:end]
+    Kh > 0 && (n = _min_hedge(p, n, pref, hedge, pins[hedge]))
     return _result(p, n, :optimal)
 end
 
@@ -391,7 +475,11 @@ end
 
 Solve one allocation under the shared constraints (`add_shared_constraints!`). Shares `n` are
 continuous (shares), weights w = n·S/W. Status `:no_preferred` when no γᵢ > 0 (utility rules return
-their pins, no solve); `:infeasible` or `:solver_failed` return `n = constraints.n_prev`.
+their pins, no solve); `:infeasible` or `:solver_failed` return `n = constraints.n_prev`. In the
+utility rules a hedge name (`p.hedge`) with γᵢ ≤ 0 is a free variable above its pin, with no utility
+term and a cost of 1e-6 per unit of weight (the tie-break); a second solve with the other names'
+shares fixed then minimizes the hedge weight, so a hedge sits above its pin only as far as a binding
+β or volatility cap needs it. Every other γᵢ ≤ 0 name is pinned.
 """
 function allocate end
 
@@ -399,7 +487,7 @@ function allocate end
     allocate(::MyCobbDouglasRule, p::MyAllocationProblem)::MyAllocationResult
 
 Cobb-Douglas: maximize Σ_{γ>0} γᵢ·log nᵢ (nᵢ in shares) via exponential cones, with nᵢ ≥ 1e-8 and
-γ ≤ 0 names pinned at ε shares.
+γ ≤ 0 names pinned at ε shares (free hedge names: nᵢ ≥ ε, no utility term).
 """
 function allocate(::MyCobbDouglasRule, p::MyAllocationProblem)::MyAllocationResult
     _check_problem(p)
@@ -411,29 +499,39 @@ function allocate(::MyCobbDouglasRule, p::MyAllocationProblem)::MyAllocationResu
         for k in 1:Kp
             @constraint(m, [t[k], 1.0, x[k]] in MOI.ExponentialCone())   # t ≤ log n
         end
-        @objective(m, Max, sum(γp[k] * t[k] for k in 1:Kp))
+        return sum(γp[k] * t[k] for k in 1:Kp)
     end)
 end
 
 """
     allocate(rule::MyCESRule, p::MyAllocationProblem)::MyAllocationResult
 
-CES: maximize Σ_{γ>0} γᵢ·tᵢ with (nᵢ, 1, tᵢ) ∈ PowerCone(ρ), ρ = 1 − 1/η, i.e. tᵢ ≤ nᵢ^ρ (nᵢ in
-shares); γ ≤ 0 names pinned at ε shares. Throws `ArgumentError` for η ≤ 1.
+CES with ρ = 1 − 1/η, nᵢ in shares, γ ≤ 0 names pinned at ε shares (free hedge names: nᵢ ≥ ε, no
+utility term). Under a budget alone nᵢ ∝ (γᵢ/Sᵢ)^η for every η (CHEME-5660 `allocate_ces`).
+- η > 1 (0 < ρ < 1): maximize Σ_{γ>0} γᵢ·tᵢ with (nᵢ, 1, tᵢ) ∈ PowerCone(ρ), i.e. tᵢ ≤ nᵢ^ρ.
+- 0 < η < 1 (ρ < 0): minimize Σ_{γ>0} γᵢ·tᵢ with (tᵢ, nᵢ, 1) ∈ PowerCone(η), i.e. tᵢ^η·nᵢ^(1−η) ≥ 1,
+  tᵢ ≥ nᵢ^ρ. This maximizes (Σ γᵢ nᵢ^ρ)^(1/ρ), since 1/ρ < 0.
+- η = 1: `allocate(MyCobbDouglasRule(), p)`.
 """
 function allocate(rule::MyCESRule, p::MyAllocationProblem)::MyAllocationResult
-    rule.η > 1 || throw(ArgumentError("η ≤ 1 not supported yet"))
+    rule.η == 1 && return allocate(MyCobbDouglasRule(), p)
     _check_problem(p)
-    ρ = 1 - 1 / rule.η
+    η = rule.η; ρ = 1 - 1 / η
     pins = fill(p.constraints.ε, length(p.γ))
     any(>(0), p.γ) || return _result(p, pins, :no_preferred)
     Kp = count(>(0), p.γ)
     return _solve_utility(p, pins, zeros(Kp), function (m, x, γp)
         t = @variable(m, [1:Kp])
-        for k in 1:Kp
-            @constraint(m, [x[k], 1.0, t[k]] in MOI.PowerCone(ρ))         # |t| ≤ n^ρ
+        if η > 1
+            for k in 1:Kp
+                @constraint(m, [x[k], 1.0, t[k]] in MOI.PowerCone(ρ))     # |t| ≤ n^ρ
+            end
+            return sum(γp[k] * t[k] for k in 1:Kp)
         end
-        @objective(m, Max, sum(γp[k] * t[k] for k in 1:Kp))
+        for k in 1:Kp
+            @constraint(m, [t[k], x[k], 1.0] in MOI.PowerCone(η))         # t ≥ n^ρ, ρ < 0
+        end
+        return -sum(γp[k] * t[k] for k in 1:Kp)
     end)
 end
 
@@ -441,8 +539,9 @@ end
     allocate(rule::MyStoneGearyRule, p::MyAllocationProblem)::MyAllocationResult
 
 Stone–Geary: maximize Σ_{γ>0} γᵢ·log(nᵢ − bᵢ) via exponential cones on the excess shares, with
-bᵢ = floor(baseline_frac·W/Sᵢ) shares, nᵢ ≥ bᵢ, and γ ≤ 0 names held at bᵢ. Returns `:infeasible`
-with n_prev when Σ bᵢSᵢ > W (USD); `:no_preferred` returns n = b.
+bᵢ = floor(baseline_frac·W/Sᵢ) shares, nᵢ ≥ bᵢ, and γ ≤ 0 names held at bᵢ (free hedge names:
+nᵢ ≥ bᵢ, no utility term). Returns `:infeasible` with n_prev when Σ bᵢSᵢ > W (USD), or when the
+baselines break another limit (e.g. Σ βᵢbᵢSᵢ/W > β_max); `:no_preferred` returns n = b.
 """
 function allocate(rule::MyStoneGearyRule, p::MyAllocationProblem)::MyAllocationResult
     _check_problem(p)
@@ -456,6 +555,6 @@ function allocate(rule::MyStoneGearyRule, p::MyAllocationProblem)::MyAllocationR
         for k in 1:Kp
             @constraint(m, [t[k], 1.0, x[k] - b_p[k]] in MOI.ExponentialCone())  # t ≤ log(n − b)
         end
-        @objective(m, Max, sum(γp[k] * t[k] for k in 1:Kp))
+        return sum(γp[k] * t[k] for k in 1:Kp)
     end)
 end

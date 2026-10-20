@@ -93,13 +93,13 @@ const _MIN_EXCESS_REL = 1e-6
 const _TURNOVER_RTOL = 1e-7
 
 # Copy of p with the volatility cap switched off (σ_g_max = Inf: add_shared_constraints! then adds no
-# cone). Every other limit, and n_prev, is unchanged.
+# cone). Every other limit (the β cap included), n_prev and the hedge flags are unchanged.
 function _without_vol_cap(p::MyAllocationProblem)::MyAllocationProblem
     c = p.constraints
     cs = build(MyConstraintSet, (w_max=c.w_max, s_max=c.s_max, σ_g_max=Inf, K_turnover=c.K_turnover,
-        c̄=c.c̄, sector=c.sector, n_prev=c.n_prev, ε=c.ε))
+        c̄=c.c̄, sector=c.sector, n_prev=c.n_prev, ε=c.ε, β=c.β, β_max=c.β_max))
     return build(MyAllocationProblem, (γ=p.γ, μ_g=p.μ_g, Σ_g=p.Σ_g, prices=p.prices, W=p.W, g_f=p.g_f,
-        constraints=cs))
+        constraints=cs, hedge=p.hedge))
 end
 
 # Model over free shares n ≥ 0 (no pins) under the shared constraints of p; returns (m, n, w). With
@@ -129,8 +129,8 @@ end
     max_investable(p::MyAllocationProblem; vol_cap::Bool=false)::Float64
 
 Largest investable fraction of equity (dimensionless) over long-only shares n ≥ 0 (no ε pins):
-s_dir = min(1, max Σwᵢ) subject to the budget, per-name cap, sector cap and turnover budget of
-`add_shared_constraints!`. With `vol_cap=true` the volatility cone √(wᵀΣ_g w) ≤ σ_g_max (yr⁻¹) is
+s_dir = min(1, max Σwᵢ) subject to the budget, per-name cap, sector cap, β cap and turnover budget
+of `add_shared_constraints!`. With `vol_cap=true` the volatility cone √(wᵀΣ_g w) ≤ σ_g_max (yr⁻¹) is
 included as well. s_dir sets the size of the min-variance and tangent mixes (R24). Returns `NaN`
 when the limits have no feasible point (or both solvers fail); the rules then report `:infeasible` /
 `:solver_failed` and keep the previous holdings.
@@ -141,8 +141,9 @@ function max_investable(p::MyAllocationProblem; vol_cap::Bool=false)::Float64
 end
 
 # R24 scale: w = c·w_mix with c = min(1, σ_g_max/√(w_mixᵀΣ_g w_mix)), the rest cash. Down-scaling keeps
-# the budget, per-name and sector rows; turnover can change, so a scaled n (c < 1) that breaks the
-# budget keeps n_prev with :infeasible. s_star = Σw of the returned portfolio.
+# the budget, per-name and sector rows, and the β row when β_max ≥ 0 (the study settings require
+# beta_min ≥ 0); turnover can change, so a scaled n (c < 1) that breaks the budget keeps n_prev with
+# :infeasible. s_star = Σw of the returned portfolio.
 function _scale_to_vol_cap(p::MyAllocationProblem, n_mix::AbstractVector, status::Symbol)::MyAllocationResult
     cs = p.constraints
     w_mix = n_mix .* p.prices ./ p.W
@@ -173,7 +174,7 @@ end
 
 Minimum variance in two-fund form (R24), over long-only shares n ≥ 0 (shares, no ε pins):
 1. **Mix:** minimize wᵀΣ_g w (yr⁻²) at Σwᵢ = s_dir = `max_investable(p)` (to within 1e-7) under the
-   budget, per-name, sector and turnover limits, without the volatility cap.
+   budget, per-name, sector, β and turnover limits, without the volatility cap.
 2. **Scale:** w = c·w_mix with c = min(1, σ_g_max/√(w_mixᵀΣ_g w_mix)); the rest is cash.
 
 `s_star` = Σwᵢ of the returned portfolio. Returns n = n_prev with `:infeasible` / `:solver_failed`
@@ -192,9 +193,9 @@ end
     allocate(::MyTangentRule, p::MyAllocationProblem)::MyAllocationResult
 
 Tangent portfolio in two-fund form (R24), with excess growth e = μ_g − g_f (yr⁻¹), over long-only
-shares (no ε pins). Every solve uses the budget, per-name, sector and turnover limits and Σwᵢ = s_dir
-= `max_investable(p)` (to within 1e-7), without the volatility cap; the cap enters only in the final
-scale.
+shares (no ε pins). Every solve uses the budget, per-name, sector, β and turnover limits and
+Σwᵢ = s_dir = `max_investable(p)` (to within 1e-7), without the volatility cap; the cap enters only
+in the final scale.
 
 1. **Best excess growth** δ = max eᵀw (yr⁻¹) over that set (a cone LP). When δ is not positive
    (δ ≤ 1e-6·s_dir·max|eᵢ|, the solver tolerance), no feasible portfolio has positive excess growth

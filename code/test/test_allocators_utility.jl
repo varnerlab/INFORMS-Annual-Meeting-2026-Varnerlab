@@ -10,7 +10,7 @@ include("helpers.jl")
     @test allocate(build(MyStoneGearyRule,(baseline_frac=0.01,)), P()).n ≈ b .+ (γ ./ sum(γ)) .* R ./ S rtol=1e-5
     r = allocate(MyCobbDouglasRule(), P())
     @test r.status == :optimal && r.w ≈ r.n .* S ./ 1000 && r.s_star ≈ sum(r.w)
-    @test_throws ArgumentError allocate(build(MyCESRule,(η=1.0,)), P())
+    @test allocate(build(MyCESRule,(η=1.0,)), P()).n ≈ allocate(MyCobbDouglasRule(), P()).n rtol=1e-8
 end
 
 @testset "non-preferred names are pinned (ε for CD/CES, bᵢ for Stone–Geary)" begin

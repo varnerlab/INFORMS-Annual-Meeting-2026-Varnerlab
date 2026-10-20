@@ -28,16 +28,19 @@ end
 
 # Allocation problem for the allocator tests (Tasks 4 and 5). Defaults: 3 assets, γ = [0.2, 0.5, 0.3],
 # prices [10, 20, 40] USD/share, W = 1000 USD, μ_g = 0.1 yr⁻¹, Σ_g = 4I yr⁻², g_f = 0, and every
-# limit slack (w_max = s_max = 1, σ_g_max = 1e6 yr⁻¹, c̄ = 0, n_prev = 0). Per-asset defaults are
-# sized from length(γ), so overriding γ changes the asset count; each name is its own sector.
+# limit slack (w_max = s_max = 1, σ_g_max = 1e6 yr⁻¹, c̄ = 0, n_prev = 0), β = 0 with no β cap
+# (β_max = Inf) and no hedge names. Per-asset defaults are sized from length(γ), so overriding γ
+# changes the asset count; each name is its own sector.
 function P(; γ=[0.2, 0.5, 0.3], prices=[10.0, 20.0, 40.0], W=1000.0, μ_g=nothing, Σ_g=nothing,
         g_f=0.0, w_max=1.0, s_max=1.0, σ_g_max=1e6, K_turnover=0.10 * W, c̄=0.0, sector=nothing,
-        n_prev=nothing, ε=1e-3)
+        n_prev=nothing, ε=1e-3, β=nothing, β_max=Inf, hedge=nothing)
     K = length(γ)
     cs = build(MyConstraintSet, (w_max=w_max, s_max=s_max, σ_g_max=σ_g_max, K_turnover=K_turnover,
-        c̄=c̄, sector=something(sector, ["S$(i)" for i in 1:K]), n_prev=something(n_prev, zeros(K)), ε=ε))
+        c̄=c̄, sector=something(sector, ["S$(i)" for i in 1:K]), n_prev=something(n_prev, zeros(K)), ε=ε,
+        β=something(β, zeros(K)), β_max=β_max))
     return build(MyAllocationProblem, (γ=γ, μ_g=something(μ_g, fill(0.1, K)),
-        Σ_g=something(Σ_g, 4.0 .* Matrix(I, K, K)), prices=prices, W=W, g_f=g_f, constraints=cs))
+        Σ_g=something(Σ_g, 4.0 .* Matrix(I, K, K)), prices=prices, W=W, g_f=g_f, constraints=cs,
+        hedge=something(hedge, fill(false, K))))
 end
 
 # 5-asset version of P (prices 10..50 USD/share).
