@@ -168,10 +168,20 @@ end
 @testset "scaled cap for screen picks only" begin                     # Review Focus 4
     md, ctx = study_ctx(); run = study_run(ctx, "CD", :gamma); t = first(ctx.rows)
     cols = [1, 2, 3, 4, 5, 6]; hedge = [false, false, false, true, true, false]
-    p = VLINFORMS2026._study_problem(ctx, run, t, cols, hedge, zeros(Int, 48), 1e5; basket=[1, 2, 3, 4, 6])
+    p = VLINFORMS2026._study_problem(ctx, run, t, cols, hedge, zeros(Int, length(md.tickers)), 1e5; basket=[1, 2, 3, 4, 6])
     @test p.constraints.w_cap ≈ [0.3, 0.3, 0.3, 0.3, 0.10, 0.3]        # K = 5 picks; pick 4 is also pooled; 5 is pool-only
-    q = VLINFORMS2026._study_problem(ctx, run, t, cols, hedge, zeros(Int, 48), 1e5; basket=collect(1:33))
+    q = VLINFORMS2026._study_problem(ctx, run, t, cols, hedge, zeros(Int, length(md.tickers)), 1e5; basket=collect(1:33))
     @test all(==(0.10), q.constraints.w_cap)                         # 1.5/33 < 0.10
+end
+@testset "130/30 short columns keep w_max even when picked" begin
+    md, ctx = study_ctx(); run = study_run(ctx, "LS", :gamma); t = first(ctx.rows); s = 1
+    neg = findfirst(<(0), ctx.γ[s, :]); pos = findfirst(>(0), ctx.γ[s, :])
+    @test neg !== nothing && pos !== nothing
+    cols = [pos, neg]; hedge = [false, false]
+    p = VLINFORMS2026._study_problem(ctx, run, t, cols, hedge, zeros(Int, length(md.tickers)), 1e5; basket=[pos, neg])
+    @test p.constraints.w_cap ≈ [0.75, 0.10]                 # 1.5/2 for the long pick; w_max for the short
+    q = VLINFORMS2026._study_problem(ctx, study_run(ctx, "CD", :gamma), t, cols, hedge, zeros(Int, length(md.tickers)), 1e5; basket=[pos, neg])
+    @test q.constraints.w_cap ≈ [0.75, 0.75]                          # a long-only rule gives no short
 end
 @testset "new screens and the fixed list run end to end" begin
     md, ctx = study_ctx(basket_K=8, fixed_tickers=md_tickers_13())
@@ -179,6 +189,6 @@ end
     for scr in (:global_gamma, :liquid_gamma, :corr_gamma, :random_global, :random_liquid, :fixed)
         res = run_study(ctx, study_run(ctx, "CD", scr))
         @test all(res.cash .>= 0) && all(isfinite, res.equity)
-        scr == :fixed ? (@test allequal(res.repicks.basket)) : (@test all(length.(res.repicks.basket) .== 8))
+        scr == :fixed ? (@test allequal(res.repicks.basket) && res.repicks.basket[1] == sort(md_tickers_13())) : (@test all(length.(res.repicks.basket) .== 8))
     end
 end

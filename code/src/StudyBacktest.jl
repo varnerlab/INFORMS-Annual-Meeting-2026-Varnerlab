@@ -213,7 +213,8 @@ s = t − first(ctx.rows) + 1, S = close[t, cols] (USD/share) and Ω = `omega_wi
   n_prev = held[cols], ε = 1e-3 shares, the online β, and β_max = `beta_cap(ξ[t])` with the
   `beta_ref`, `kappa_beta`, `beta_min` settings when `hedge` is on (else Inf).
 - Per-name caps: `w_cap[i] = max(w_max, w_max_scale/length(basket))` when `cols[i] ∈ basket` (the screen
-  picks, a pick that is also pooled included), else `w_max`; the default empty `basket` gives `w_max` everywhere.
+  picks, a pick that is also pooled included), else `w_max`; a 130/30 short column (γ < 0, not a hedge name)
+  keeps `w_max` even if picked; the default empty `basket` gives `w_max` everywhere.
 - prices = S, W = V, g_f = g_f[t] (yr⁻¹).
 """
 function _study_problem(ctx::MyStudyContext, run::MyStudyRun, t::Int, cols::Vector{Int}, hedge::Vector{Bool},
@@ -230,7 +231,9 @@ function _study_problem(ctx::MyStudyContext, run::MyStudyRun, t::Int, cols::Vect
         ctx.sim.σ_m[s]; residuals=E)
     σ_g_max = isnan(st.vol_cap_annual) ? ctx.calib.σ_m : st.vol_cap_annual / sqrt(_BT_DT)
     cap_pick = isempty(basket) ? st.w_max : max(st.w_max, st.w_max_scale / length(basket))
-    w_cap = [c in basket ? cap_pick : st.w_max for c in cols]
+    # a column the 130/30 rule shorts (γ < 0, not a hedge name) keeps w_max even when the screen picked it
+    is_short(i) = run.allocator == "LS" && ctx.γ[s, cols[i]] < 0 && !hedge[i]
+    w_cap = [(cols[i] in basket && !is_short(i)) ? cap_pick : st.w_max for i in eachindex(cols)]
     cs = build(MyConstraintSet, (w_max=st.w_max, w_cap=w_cap, s_max=st.s_max, σ_g_max=σ_g_max,
         K_turnover=st.turnover_frac * V, c̄=st.half_spread_bps * 1e-4 * mean(S),     # bps → fraction
         sector=md.sector[cols], n_prev=Float64.(held[cols]), ε=_BT_ε, β=β,
