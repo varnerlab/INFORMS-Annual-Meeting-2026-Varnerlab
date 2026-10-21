@@ -21,9 +21,9 @@ function make_fixture(dir::String; dtb3::Bool=false)::String
     end
     CSV.write(joinpath(dir, "sp500-sectors.csv"),
               DataFrame(Symbol=["AAA","GAP"], var"GICS Sector"=["Tech","Energy"]))
-    if dtb3   # real FRED format: first observation after the first trading day, holiday as empty field
+    if dtb3   # real FRED format: a holiday as an empty field; Jan 2 (no FRED row) and Jan 6 (empty) are gaps
         write(joinpath(dir, "DTB3.csv"),
-              "observation_date,DTB3\n2025-01-03,4.0\n2025-01-06,\n2025-01-07,5.0\n")
+              "observation_date,DTB3\n2024-12-31,4.2\n2025-01-03,4.0\n2025-01-06,\n2025-01-07,5.0\n")
     end
     return dir
 end
@@ -115,9 +115,19 @@ end
 end
 @testset "risk-free rate from DTB3" begin
     md = load_market_data(make_fixture(mktempdir(); dtb3=true); start=Date(2025,1,2), stop=Date(2025,1,8))
-    # Jan 2 precedes the first observation (takes it); Jan 6 is empty (forward-filled from Jan 3)
-    pct = [4.0, 4.0, 4.0, 5.0, 5.0]
-    @test md.g_f == log.(1 .+ pct ./ 100)
+    # Day t takes the last observation dated before t (H.15 publishes day t's rate on day t+1); Jan 6 is
+    # empty, so Jan 7 still takes Jan 3. A 91-day bill at bank discount d (ACT/360) grows at
+    # −ln(1 − d·91/360)·365/91 per year.
+    pct = [4.2, 4.2, 4.0, 4.0, 5.0]
+    @test md.g_f ≈ -log.(1 .- pct ./ 100 .* 91 ./ 360) .* 365 ./ 91 rtol=1e-14
+    @test md.g_f[1] ≈ 0.042811 atol=1e-6                                # log(1.042) = 0.041142 would be wrong
+end
+@testset "risk-free rate: no observation before a trading day is an error" begin
+    dir = make_fixture(mktempdir(); dtb3=true)
+    write(joinpath(dir, "DTB3.csv"), "observation_date,DTB3\n2025-01-02,4.0\n2025-01-03,4.0\n")
+    # Jan 2 has no earlier observation: a later one must not be borrowed
+    @test_throws ArgumentError load_market_data(dir; start=Date(2025,1,2), stop=Date(2025,1,8))
+    @test load_market_data(dir; start=Date(2025,1,3), stop=Date(2025,1,8)).g_f[1] ≈ -log(1 - 0.04 * 91 / 360) * 365 / 91
 end
 @testset "real data" begin
     dir = joinpath(@__DIR__, "..", "..", "data")

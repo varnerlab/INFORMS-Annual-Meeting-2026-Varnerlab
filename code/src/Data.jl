@@ -8,6 +8,7 @@ const DATA_FILES = [
 const SECTORS_FILE = "sp500-sectors.csv"
 const DTB3_FILE = "DTB3.csv"
 const DEFAULT_G_F = 0.04   # yr⁻¹, used when DTB3.csv is absent
+const DTB3_DAYS = 91       # maturity of the 3-month bill DTB3 quotes (calendar days)
 
 """
     growth_rates(x::AbstractVecOrMat; Δt=1/252)
@@ -106,8 +107,12 @@ end
 """
     _risk_free(dir::String, dates::Vector{Date})::Vector{Float64}
 
-Risk-free growth rate g_f = log(1 + DTB3/100) (yr⁻¹) on `dates`, forward-filled from FRED DTB3
-(leading days take the first observation). Constant 0.04 yr⁻¹ with a warning if the file is absent.
+Risk-free growth rate g_f (yr⁻¹) on `dates` from FRED DTB3, the 3-month bill's bank-discount rate d
+(percent, ACT/360). A bill of `DTB3_DAYS` = D days bought at d costs 1 − d·D/360 per dollar at
+maturity, so its continuously compounded growth rate is g_f = −ln(1 − d·D/360)·365/D. Day t takes the
+last observation dated before t: the Fed publishes day t's rate on day t+1, so it is not known at
+t's close. Throws `ArgumentError` when a date has no earlier observation (a later one is never
+borrowed). Constant 0.04 yr⁻¹ with a warning if the file is absent.
 """
 function _risk_free(dir::String, dates::Vector{Date})::Vector{Float64}
     path = joinpath(dir, DTB3_FILE)
@@ -119,8 +124,15 @@ function _risk_free(dir::String, dates::Vector{Date})::Vector{Float64}
     obs = Date.(df[!, 1])
     rate = df[!, 2]
     ok = findall(!ismissing, rate)
-    obs, rate = obs[ok], Float64.(rate[ok]) ./ 100
-    return [log(1 + rate[clamp(searchsortedlast(obs, d), 1, length(obs))]) for d in dates]
+    obs, d = obs[ok], Float64.(rate[ok]) ./ 100
+    D = DTB3_DAYS
+    g_f = Vector{Float64}(undef, length(dates))
+    for (k, t) in enumerate(dates)
+        i = searchsortedlast(obs, t - Day(1))
+        i == 0 && throw(ArgumentError("$(DTB3_FILE) has no observation before $(t)"))
+        g_f[k] = -log(1 - d[i] * D / 360) * 365 / D
+    end
+    return g_f
 end
 
 """

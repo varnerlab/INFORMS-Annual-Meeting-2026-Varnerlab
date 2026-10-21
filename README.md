@@ -82,6 +82,10 @@ Rulings made during the build, each of which changes behavior:
   order could buy. A target worth at most 0.1% of equity trades to 0, which removes the ε pins of the log utilities
   and solver dust, as whole-share rounding used to. Stone–Geary baselines are exact (`sg_baseline`·W/Sᵢ shares, not
   floored). The legacy `run_backtest`, used to validate the trial, keeps whole shares.
+- The risk-free growth rate converts DTB3 correctly (user, 2026-10-21). DTB3 is a bank-discount rate d on a 360-day
+  basis, so a 91-day bill grows at g_f = −ln(1 − d·91/360)·365/91 per year; the old log(1 + d) understated g_f by
+  about 0.0015 yr⁻¹. Day t takes the last observation dated before t, because the Fed publishes a day's rate the
+  next day. A date with no earlier observation is an error, not filled from a later one.
 
 Ticker-picker addendum (spec `docs/superpowers/specs/2026-10-20-ticker-picker-addendum-design.md`), "my call"
 items the code implements:
