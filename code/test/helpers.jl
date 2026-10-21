@@ -115,11 +115,11 @@ with(cfg::MyRunConfig; kw...) =
 
 # Share positions (ticker => shares) after every trade dated on or before each of res.dates.
 function positions_by_day(res)
-    pos = Dict{String,Int}(); out = Vector{Dict{String,Int}}(undef, length(res.dates)); k = 1
-    tr = res.trades
+    tr = res.trades; T = eltype(tr.qty)                 # Int (whole shares) or Float64 (the study's)
+    pos = Dict{String,T}(); out = Vector{Dict{String,T}}(undef, length(res.dates)); k = 1
     for (t, d) in enumerate(res.dates)
         while k <= length(tr.date) && tr.date[k] <= d
-            pos[tr.ticker[k]] = get(pos, tr.ticker[k], 0) + tr.qty[k]; k += 1
+            pos[tr.ticker[k]] = get(pos, tr.ticker[k], zero(T)) + tr.qty[k]; k += 1
         end
         out[t] = copy(pos)
     end

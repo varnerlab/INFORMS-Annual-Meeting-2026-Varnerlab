@@ -4,7 +4,7 @@
 Per-fill cost (USD): half-spread `half_spread_bps·1e-4·price·|q|` plus linear impact
 `κ·(|q|/adv)·price·|q|`. Zero commission. Returns 0 when `q = 0`.
 """
-function trade_cost(q::Int, price::Float64, adv::Float64; half_spread_bps::Float64 = 5.0,
+function trade_cost(q::Real, price::Float64, adv::Float64; half_spread_bps::Float64 = 5.0,
         κ::Float64 = 0.001)::Float64
     q == 0 && return 0.0
     n = abs(q)

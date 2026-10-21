@@ -6,8 +6,9 @@ include("helpers.jl")
     γ = [0.2,0.5,0.3]; S = [10.,20.,40.]
     @test allocate(MyCobbDouglasRule(), P()).n .* S ≈ 1000 .* γ ./ sum(γ) rtol=1e-5
     @test allocate(build(MyCESRule,(η=2.0,)), P()).n ≈ 1000 .* (γ./S).^2 ./ sum(S .* (γ./S).^2) rtol=1e-5
-    b = floor.(0.01*1000 ./ S); R = 1000 - sum(b .* S)
-    @test allocate(build(MyStoneGearyRule,(baseline_frac=0.01,)), P()).n ≈ b .+ (γ ./ sum(γ)) .* R ./ S rtol=1e-5
+    b = 0.01*1000 ./ S; R = 1000 - sum(b .* S)                         # fractional baselines
+    # rtol 1e-4: with every baseline > 0 Clarabel stops at ALMOST_OPTIMAL (utility gap 2e-9, shares off by 5e-5)
+    @test allocate(build(MyStoneGearyRule,(baseline_frac=0.01,)), P()).n ≈ b .+ (γ ./ sum(γ)) .* R ./ S rtol=1e-4
     r = allocate(MyCobbDouglasRule(), P())
     @test r.status == :optimal && r.w ≈ r.n .* S ./ 1000 && r.s_star ≈ sum(r.w)
     @test allocate(build(MyCESRule,(η=1.0,)), P()).n ≈ allocate(MyCobbDouglasRule(), P()).n rtol=1e-8
@@ -22,7 +23,7 @@ end
     @test r.n[[1,3]] .* S[[1,3]] ≈ 900 .* [0.4, 0.6] rtol=1e-4
     @test allocate(MyCobbDouglasRule(), P(γ=γ)).n[2] == 1e-3
     @test allocate(build(MyCESRule,(η=2.0,)), P(γ=γ)).n[2] == 1e-3
-    b = floor.(0.01*10_000 ./ S); R = 10_000 - sum(b .* S)
+    b = 0.01*10_000 ./ S; R = 10_000 - sum(b .* S)
     r = allocate(build(MyStoneGearyRule,(baseline_frac=0.01,)), P(γ=γ, W=10_000.0))
     @test r.n[2] == b[2]
     @test r.n[[1,3]] ≈ b[[1,3]] .+ [0.4, 0.6] .* R ./ S[[1,3]] rtol=1e-4
@@ -48,7 +49,8 @@ end
     r = allocate(MyCobbDouglasRule(), P(γ=[-0.1,-0.2,-0.3])); @test r.status == :no_preferred && all(r.n .== 1e-3)
     r = allocate(build(MyCESRule,(η=2.0,)), P(γ=[-0.1,0.0,-0.3])); @test r.status == :no_preferred && all(r.n .== 1e-3)
     r = allocate(build(MyStoneGearyRule,(baseline_frac=0.01,)), P(γ=[-0.1,-0.2,-0.3], W=10_000.0))
-    @test r.status == :no_preferred && r.n == floor.(100 ./ [10.,20.,40.]) && r.s_star ≈ sum(r.w)
+    @test r.status == :no_preferred && r.n == 100 ./ [10.,20.,40.] && r.s_star ≈ sum(r.w)   # fractional: 2.5 shares at 40
+    @test r.w ≈ [0.01, 0.01, 0.01]
 end
 
 @testset "infeasible keeps previous holdings" begin

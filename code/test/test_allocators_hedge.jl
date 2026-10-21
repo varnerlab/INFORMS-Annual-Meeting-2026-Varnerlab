@@ -30,10 +30,10 @@ end
         r = allocate(rule, P(γ=γ, prices=S, β=β, β_max=0.4, hedge=hedge, w_max=0.5))
         @test r.status == :optimal
         @test r.w[3] > 0.05                                       # the hedge leaves its floor
-        @test r.n[4] == (sg ? 0.0 : 1e-3)                          # a non-pool γ ≤ 0 name stays pinned
+        @test r.n[4] == (sg ? 0.01 * 1000 / S[4] : 1e-3)           # a non-pool γ ≤ 0 name stays pinned (SG: at its baseline)
         @test dot(r.w, β) <= 0.4 + 1e-6
         r0 = allocate(rule, P(γ=γ, prices=S, β=β, β_max=Inf, hedge=hedge, w_max=0.2))   # budget slack
-        @test r0.n[3] <= (sg ? 0.0 : 1e-3) + 1e-2                  # tie-break keeps it at the floor
+        @test r0.n[3] <= (sg ? 0.01 * 1000 / S[3] : 1e-3) + 1e-2   # tie-break keeps it at the floor
     end
 end
 
@@ -76,17 +76,17 @@ end
 @testset "Stone–Geary with no γ > 0 keeps the β cap" begin
     sg = build(MyStoneGearyRule, (baseline_frac=0.1,))
     γ = [-0.2, -0.1, -0.3, -0.1]; β = [1.0, 1.0, 1.0, -0.8]; S = [10.0, 20.0, 40.0, 25.0]
-    b = floor.(0.1 * 1000 ./ S)                                  # [10, 5, 2, 4]: Σwβ = 0.20 at b
+    b = 0.1 * 1000 ./ S                                          # [10, 5, 2.5, 4] shares: Σwβ = 0.22 at b
     n_prev = [1.0, 2.0, 3.0, 4.0]
     # σ_g_max = Inf: the helper's far-slack 1e6 cone stalls Clarabel on this LP (SLOW_PROGRESS), and
     # the SCS fallback then meets the β row only to SCS's default tolerance (7e-5 over the cap)
     Q(; β_max=0.15, hedge=nothing, w_max=1.0) =
         P(γ=γ, prices=S, β=β, β_max=β_max, hedge=hedge, w_max=w_max, n_prev=n_prev, σ_g_max=Inf)
-    # the hedge (name 4) is bought up to the least weight that meets the cap: 0.1 + 0.05/0.8
+    # the hedge (name 4) is bought up to the least weight that meets the cap: 0.1 + 0.07/0.8
     r = allocate(sg, Q(hedge=[false, false, false, true]))
     @test r.status == :no_preferred && r.n[1:3] == b[1:3]
     @test dot(r.w, β) ≈ 0.15 atol=1e-6
-    @test r.w[4] ≈ 0.1 + 0.05 / 0.8 atol=1e-6
+    @test r.w[4] ≈ 0.1 + 0.07 / 0.8 atol=1e-6
     # no rescue (no hedge names, or a hedge capped below what the cap needs): previous holdings
     for q in (Q(), Q(hedge=[false, false, false, true], w_max=0.12))
         r = allocate(sg, q)

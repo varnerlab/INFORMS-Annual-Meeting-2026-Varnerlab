@@ -9,6 +9,17 @@ include("helpers.jl")
     @test minimum(res.trades.date) == res.dates[2]
     @test run_study(ctx, study_run(ctx, "CD", :gamma)).equity == res.equity                     # deterministic
 end
+@testset "study loop: fractional fills reach the target; targets under 0.1% of equity are zero" begin
+    md, ctx = study_ctx(); res = run_study(ctx, study_run(ctx, "CD", :gamma))
+    d = res.dates[1]; t = index_of(md, d); V = res.equity[1]; col = Dict(tk => j for (j, tk) in enumerate(md.tickers))
+    fill = res.trades[res.trades.date .== res.dates[2], :]
+    @test any(!isinteger, fill.qty) && allequal(fill.scale)            # from cash: buys only, one scale factor
+    f = fill.scale[1]; qty = Dict(zip(fill.ticker, fill.qty))
+    big = [tk for (tk, w) in res.targets[d] if abs(w) > 1e-3]; dust = [tk for (tk, w) in res.targets[d] if abs(w) <= 1e-3]
+    @test !isempty(big) && !isempty(dust)                              # CD pins γ ≤ 0 names at ε shares
+    @test all(isapprox(qty[tk], f * res.targets[d][tk] * V / md.close[t, col[tk]]; rtol=1e-10) for tk in big)
+    @test !any(tk in keys(qty) for tk in dust)
+end
 @testset "study loop: the first decision is the documented problem" begin
     md, ctx = study_ctx(); run = study_run(ctx, "CD", :gamma); res = run_study(ctx, run)
     t = first(ctx.rows); basket = [findfirst(==(x), md.tickers) for x in res.repicks.basket[1]]
@@ -126,13 +137,13 @@ end
     @test keys(res.targets[d]) == keys(book)                         # targets = the held book
     @test all(isapprox(res.targets[d][tk], n * md.close[t, col[tk]] / V; rtol=1e-12) for (tk, n) in book)
     @test res.decisions.invested_frac[f] ≈ sum(values(res.targets[d]))
-    cols = sort([col[tk] for tk in keys(book)]); held = zeros(Int, length(md.tickers))
+    cols = sort([col[tk] for tk in keys(book)]); held = zeros(length(md.tickers))
     for (tk, n) in book
         held[col[tk]] = n
     end
     pool = Set(res.repicks.pool[repick(f)])
     p = VLINFORMS2026._study_problem(ctx, run, t, cols, [md.tickers[j] in pool for j in cols], held, V)
-    n = Float64.(held[cols]); S = md.close[t, cols]
+    n = held[cols]; S = md.close[t, cols]
     proj = project_gbm(n, S, V - dot(n, S), p.μ_g, p.Σ_g, md.g_f[t]; T=ctx.settings.T, N=ctx.settings.n_paths,
         rng=MersenneTwister(VLINFORMS2026._bt_projection_seed(run.seed, d)))
     @test res.projections[d].μ == proj.μ && res.projections[d].σ == proj.σ   # the band projects the held book

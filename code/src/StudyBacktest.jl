@@ -1,6 +1,6 @@
 # Study backtest loop (spec §5–§8): one run (allocator × screen × seed × settings) replayed day by day
 # against a `MyStudyContext`, with run_backtest's fill, cost and accounting helpers. Decisions are made
-# after the close on day t from data dated ≤ t; their orders fill at the open of day t+1 in whole
+# after the close on day t from data dated ≤ t; their orders fill at the open of day t+1 in fractional
 # shares. The basket is re-picked inside the loop (every `repick_interval` trading days, and at a band
 # exit when `repick_on_band_exit`); with `hedge` on, the hedge pool joins every problem and the
 # ξ-driven β cap applies to every decision.
@@ -77,7 +77,8 @@ end
 
 Output of `run_study`, one entry per trading day of the run in `dates`, `equity` (USD, at the close),
 `cash` (USD, at the close) and `borrow_fees` (USD charged that day). Also:
-- `trades::DataFrame`: as `MyBacktestResult.trades` (`date`, `ticker`, `qty`, `price`, `cost`, `scale`).
+- `trades::DataFrame`: as `MyBacktestResult.trades` (`date`, `ticker`, `qty`, `price`, `cost`, `scale`),
+  with `qty` in fractional shares (Float64).
 - `decisions::DataFrame`: `date`, `reason` (trigger), `status` (allocator), `n_names` (names with
   |target weight| > 1e-3), `invested_frac` (Σ target weights, net for 130/30), `μ_T`, `σ_T`
   (projected value mean/SD at the horizon T, USD), `beta_target` (Σ wᵢβᵢ of the target weights with
@@ -197,7 +198,7 @@ _study_beta_max(s::MyStudySettings, ξ_t::Real)::Float64 =
     s.hedge ? beta_cap(ξ_t; β_ref=s.beta_ref, κ_β=s.kappa_beta, β_min=s.beta_min) : Inf
 
 """
-    _study_problem(ctx, run, t::Int, cols::Vector{Int}, hedge::Vector{Bool}, held::Vector{Int},
+    _study_problem(ctx, run, t::Int, cols::Vector{Int}, hedge::Vector{Bool}, held::AbstractVector{<:Real},
         V::Float64; basket::Vector{Int}=Int[])::MyAllocationProblem
 
 The allocation problem after the close of market-data row `t` for the ticker columns `cols` (hedge
@@ -218,7 +219,7 @@ s = t − first(ctx.rows) + 1, S = close[t, cols] (USD/share) and Ω = `omega_wi
 - prices = S, W = V, g_f = g_f[t] (yr⁻¹).
 """
 function _study_problem(ctx::MyStudyContext, run::MyStudyRun, t::Int, cols::Vector{Int}, hedge::Vector{Bool},
-        held::Vector{Int}, V::Float64; basket::Vector{Int}=Int[])::MyAllocationProblem
+        held::AbstractVector{<:Real}, V::Float64; basket::Vector{Int}=Int[])::MyAllocationProblem
     st = run.settings; md = ctx.md
     s = t - first(ctx.rows) + 1
     S = md.close[t, cols]
@@ -243,7 +244,7 @@ function _study_problem(ctx::MyStudyContext, run::MyStudyRun, t::Int, cols::Vect
 end
 
 """
-    _study_decision(ctx, run, rule, t::Int, basket, pool, shorts, held::Vector{Int}, V::Float64)::NamedTuple
+    _study_decision(ctx, run, rule, t::Int, basket, pool, shorts, held::AbstractVector{<:Real}, V::Float64)::NamedTuple
 
 One decision after the close of market-data row `t` (holdings `held` in shares, equity `V` in USD).
 Returns the book it leaves, `(status, cols, n, S, μ_g, Σ_g, β, β_max, hedge, trade)`: ticker columns,
@@ -261,7 +262,7 @@ hedge flags of those columns, the β cap (dimensionless) and whether to queue or
   all cash. `trade = true`.
 """
 function _study_decision(ctx::MyStudyContext, run::MyStudyRun, rule::AbstractPortfolioRule, t::Int,
-        basket::Vector{Int}, pool::Vector{Int}, shorts::Vector{Int}, held::Vector{Int}, V::Float64)::NamedTuple
+        basket::Vector{Int}, pool::Vector{Int}, shorts::Vector{Int}, held::AbstractVector{<:Real}, V::Float64)::NamedTuple
     s = t - first(ctx.rows) + 1
     cols, hedge = _study_problem_columns(rule, basket, pool, shorts, view(ctx.γ, s, :))
     if isempty(cols)
@@ -285,14 +286,21 @@ function _study_decision(ctx::MyStudyContext, run::MyStudyRun, rule::AbstractPor
         hedge=hedge, trade=trade)
 end
 
+# The executable shares of a book: shares n of names at close prices S (USD/share), with every name whose
+# value is at most `_BT_HELD_W`·V (equity V, USD) set to 0 shares. This removes the ε pins of the log
+# utilities and solver dust, which whole-share rounding used to remove **(plan decision)**.
+_study_lots(n::AbstractVector{<:Real}, S::AbstractVector{<:Real}, V::Real)::Vector{Float64} =
+    [abs(n[i] * S[i]) > _BT_HELD_W * V ? Float64(n[i]) : 0.0 for i in eachindex(n)]
+
 """
     run_study(ctx::MyStudyContext, run::MyStudyRun)::MyStudyResult
 
 Replay `run` on the context's rows `ctx.rows`, with equity starting at `W0` (USD) in cash at the start
 close. `run.settings` must share the context's `context_key`. On each trading day t (row s), in order:
 
-1. **Fill** the orders queued on day t−1 at `open[t]` as `run_backtest` does (whole shares, sells
-   first, buys scaled if cash would go negative), with costs from `half_spread_bps` and `impact_kappa`.
+1. **Fill** the orders queued on day t−1 at `open[t]` as `run_backtest` does, but in fractional
+   shares (sells first, buys scaled if cash would go negative), with costs from `half_spread_bps` and
+   `impact_kappa`.
 2. **Accrue** positive cash by exp(g_f[t]·Δt) and charge `borrow_fee` at `borrow_rate` on the short
    notional at `close[t]` (USD). Skipped on the first day.
 3. **Mark** V = cash + Σ nᵢ·close[t, i] (USD).
@@ -306,14 +314,14 @@ close. `run.settings` must share the context's `context_key`. On each trading da
    and no trigger fired, the reason becomes `:basket_change`.
 6. **Decide** when the reason is not `:in_spec` (`_study_decision`): `allocate` on the problem of
    `_study_problem_columns` and `_study_problem` (non-finite shares count as `:solver_failed`, R29).
-   After a solve, queue orders for t+1 (held names outside the problem target 0; none on the last
-   day). After `:infeasible` or `:solver_failed`, queue no orders and keep every holding (spec §6).
+   After a solve, queue orders for t+1 at the executable shares `_study_lots` (a target worth at most
+   0.1% of V trades to 0; held names outside the problem target 0; none on the last day). After `:infeasible` or `:solver_failed`, queue no orders and keep every holding (spec §6).
    An empty 130/30 problem records `:no_preferred` and targets every holding to 0. Then
    `project_gbm` of the resulting book (the targets, or the kept holdings) with cash V − n·S and
    `rng = MersenneTwister(seed·1_000_003 + Dates.value(date))` (R28), and the decision row. τ resets
    to 0 and `last_alloc_was_cash = (status == :no_preferred)`. The projection becomes the trigger's
-   band, except for a book that holds no whole share (every target, or every kept holding,
-   truncates to 0 shares): such a book has no band, so the band-exit trigger cannot fire and
+   band, except for a book with no executable shares (every target, or every kept holding, is worth at
+   most 0.1% of V): such a book has no band, so the band-exit trigger cannot fire and
    `cash_revisit` (or the horizon or drawdown trigger) governs the return from cash; its
    projection is still recorded **(plan decision)**.
 7. **Daily row:** ξ[t], the β cap, the holdings' β and hedge weight, the pool size.
@@ -337,8 +345,8 @@ function run_study(ctx::MyStudyContext, run::MyStudyRun)::MyStudyResult
 
     nd = length(ctx.rows)
     equity = Vector{Float64}(undef, nd); cash_hist = Vector{Float64}(undef, nd); fees = zeros(nd)
-    held = zeros(Int, length(md.tickers)); cash = st.W0
-    tr = _BTTrades()
+    held = zeros(Float64, length(md.tickers)); cash = st.W0
+    tr = _BTTrades{Float64}()
     dec = (date=Date[], reason=Symbol[], status=Symbol[], n_names=Int[], invested_frac=Float64[],
         μ_T=Float64[], σ_T=Float64[], beta_target=Float64[], beta_max=Float64[], cap_binds=Bool[],
         hedge_weight=Float64[])
@@ -399,6 +407,7 @@ function run_study(ctx::MyStudyContext, run::MyStudyRun)::MyStudyResult
             proj = project_gbm(b.n, b.S, V - dot(b.n, b.S), b.μ_g, b.Σ_g, md.g_f[t]; T=st.T, N=st.n_paths,
                 rng=MersenneTwister(_bt_projection_seed(run.seed, d)))
             β_target = dot(w, b.β)
+            lots = _study_lots(b.n, b.S, V)
 
             targets[d] = Dict(md.tickers[b.cols[i]] => w[i] for i in eachindex(b.cols))
             projections[d] = proj
@@ -413,10 +422,10 @@ function run_study(ctx::MyStudyContext, run::MyStudyRun)::MyStudyResult
             if b.trade && t < i1
                 leaving = [j for j in eachindex(held) if held[j] != 0 && !(j in b.cols)]
                 oc = vcat(b.cols, leaving)
-                pending = (cols=oc, n=vcat(b.n, zeros(length(leaving))), adv=[_bt_adv(md, t, j) for j in oc])
+                pending = (cols=oc, n=vcat(lots, zeros(length(leaving))), adv=[_bt_adv(md, t, j) for j in oc])
             end
-            # an all-cash book (no whole share) gets no band: cash_revisit governs the return from cash
-            trig.τ = 0; trig.projection = all(x -> trunc(Int, x) == 0, b.n) ? nothing : proj
+            # an all-cash book (no executable shares) gets no band: cash_revisit governs the return from cash
+            trig.τ = 0; trig.projection = all(iszero, lots) ? nothing : proj
             trig.initial = false
             trig.last_alloc_was_cash = (b.status == :no_preferred)
         end

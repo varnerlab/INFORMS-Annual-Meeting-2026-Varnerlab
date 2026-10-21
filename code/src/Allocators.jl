@@ -38,7 +38,7 @@ end
     MyStoneGearyRule
 
 Stone–Geary utility: maximize Σ_{γᵢ>0} γᵢ·log(nᵢ − bᵢ) with nᵢ ≥ bᵢ for every name, where the
-baseline bᵢ = floor(`baseline_frac`·W/Sᵢ) shares (`baseline_frac` dimensionless, e.g. 0.01 = a 1% core
+baseline bᵢ = `baseline_frac`·W/Sᵢ shares (`baseline_frac` dimensionless, e.g. 0.01 = a 1% core
 position). Names with γᵢ ≤ 0 are held at bᵢ, except hedge names, which are free above it.
 """
 mutable struct MyStoneGearyRule <: AbstractPortfolioRule
@@ -554,7 +554,7 @@ end
     allocate(rule::MyStoneGearyRule, p::MyAllocationProblem)::MyAllocationResult
 
 Stone–Geary: maximize Σ_{γ>0} γᵢ·log(nᵢ − bᵢ) via exponential cones on the excess shares, with
-bᵢ = floor(baseline_frac·W/Sᵢ) shares, nᵢ ≥ bᵢ, and γ ≤ 0 names held at bᵢ (free hedge names:
+bᵢ = baseline_frac·W/Sᵢ shares (fractional), nᵢ ≥ bᵢ, and γ ≤ 0 names held at bᵢ (free hedge names:
 nᵢ ≥ bᵢ, no utility term). Returns `:infeasible` with n_prev when Σ bᵢSᵢ > W (USD), or when the
 baselines break another limit (e.g. Σ βᵢbᵢSᵢ/W > β_max). With no γ > 0 (`:no_preferred`) it returns
 n = b, except under a finite β_max: with free hedge names it returns the least hedge holding above b
@@ -563,7 +563,7 @@ returns n_prev with `:infeasible` (`:solver_failed` if the hedge solve fails).
 """
 function allocate(rule::MyStoneGearyRule, p::MyAllocationProblem)::MyAllocationResult
     _check_problem(p)
-    b = floor.(rule.baseline_frac * p.W ./ p.prices)                      # baseline shares
+    b = rule.baseline_frac * p.W ./ p.prices                             # baseline shares (fractional)
     sum(b .* p.prices) > p.W && return _result(p, copy(p.constraints.n_prev), :infeasible)
     any(>(0), p.γ) || return _stone_geary_baselines(p, b)
     pref = findall(p.γ .> 0); Kp = length(pref)

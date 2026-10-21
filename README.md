@@ -77,6 +77,11 @@ Rulings made during the build, each of which changes behavior:
 - After a decision that leaves the book all cash, no band is set, so only cash revisit, horizon or drawdown can trigger the next decision (as in the trial).
 - An empty 130/30 problem records `:no_preferred` and goes to cash instead of erroring.
 - A study context that fails to build writes error files for its runs, and the sweep continues.
+- Study fills are in fractional shares (user, 2026-10-21), not the spec's whole shares. Whole-share rounding made a
+  fill depend on the split basis: putting earlier rows on the newest file's basis changed how many shares a 2025
+  order could buy. A target worth at most 0.1% of equity trades to 0, which removes the ε pins of the log utilities
+  and solver dust, as whole-share rounding used to. Stone–Geary baselines are exact (`sg_baseline`·W/Sᵢ shares, not
+  floored). The legacy `run_backtest`, used to validate the trial, keeps whole shares.
 
 Ticker-picker addendum (spec `docs/superpowers/specs/2026-10-20-ticker-picker-addendum-design.md`), "my call"
 items the code implements:

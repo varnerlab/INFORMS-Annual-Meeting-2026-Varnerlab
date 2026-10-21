@@ -8,7 +8,7 @@ const _BT_DT = 1 / 252          # trading-day step Δt (yr)
 const _BT_ADV_DAYS = 63         # trailing trading days in the ADV mean (R26)
 const _BT_C̄_FRAC = 5e-4         # turnover cost per share c̄ = 5e-4·mean(prices) (USD/share)
 const _BT_ε = 1e-3              # floor for γ ≤ 0 names under the utility rules (shares)
-const _BT_HELD_W = 1e-3         # |wᵢ| above which a name counts toward n_names (dimensionless)
+const _BT_HELD_W = 1e-3         # |wᵢ| above which a name counts as held: toward n_names, and in the study's orders (dimensionless)
 const _BT_BISECT_ITERS = 60     # bisection steps for the R25 buy scale factor
 
 """
@@ -244,7 +244,7 @@ function _bt_residuals(model::MyShrunkResidualCovariance, md::MyMarketData, t::I
 end
 
 # Value (USD) of the share positions at day t's close.
-function _bt_holdings_value(held::Vector{Int}, md::MyMarketData, t::Int)::Float64
+function _bt_holdings_value(held::AbstractVector{<:Real}, md::MyMarketData, t::Int)::Float64
     v = 0.0
     for j in eachindex(held)
         held[j] == 0 || (v += held[j] * md.close[t, j])
@@ -253,7 +253,7 @@ function _bt_holdings_value(held::Vector{Int}, md::MyMarketData, t::Int)::Float6
 end
 
 # Short notional (USD) at day t's close.
-function _bt_short_notional(held::Vector{Int}, md::MyMarketData, t::Int)::Float64
+function _bt_short_notional(held::AbstractVector{<:Real}, md::MyMarketData, t::Int)::Float64
     v = 0.0
     for j in eachindex(held)
         held[j] < 0 && (v -= held[j] * md.close[t, j])
@@ -261,38 +261,45 @@ function _bt_short_notional(held::Vector{Int}, md::MyMarketData, t::Int)::Float6
     return v
 end
 
-# Trade log columns.
-struct _BTTrades
-    date::Vector{Date}; ticker::Vector{String}; qty::Vector{Int}
+# Trade log columns; `qty` has the holdings' type (Int: whole shares, Float64: fractional shares).
+struct _BTTrades{T<:Real}
+    date::Vector{Date}; ticker::Vector{String}; qty::Vector{T}
     price::Vector{Float64}; cost::Vector{Float64}; scale::Vector{Float64}
 end
-_BTTrades() = _BTTrades(Date[], String[], Int[], Float64[], Float64[], Float64[])
+_BTTrades{T}() where {T<:Real} = _BTTrades{T}(Date[], String[], T[], Float64[], Float64[], Float64[])
+_BTTrades() = _BTTrades{Int}()
 
-# Cash (USD) after the buys `q[k]` (shares > 0), each scaled by f and truncated, at `px` (USD/share)
-# with trade costs (`half_spread_bps` in bps, impact `κ` dimensionless, as in `trade_cost`); the fills
-# apply them in this order with this arithmetic, so the sign is exact.
-function _bt_cash_after_buys(cash::Float64, q::Vector{Int}, px::Vector{Float64}, adv::Vector{Float64},
-        buys::Vector{Int}, f::Float64; half_spread_bps::Float64=5.0, κ::Float64=0.001)::Float64
+# A share quantity as the holdings type T can hold it: whole shares rounded toward zero (Int, the
+# trial's), or the exact fractional quantity (Float64, the study's).
+_bt_lot(::Type{Int}, x::Real)::Int = trunc(Int, x)
+_bt_lot(::Type{Float64}, x::Real)::Float64 = Float64(x)
+
+# Cash (USD) after the buys `q[k]` (shares > 0), each scaled by f and cut to a lot (`_bt_lot`), at `px`
+# (USD/share) with trade costs (`half_spread_bps` in bps, impact `κ` dimensionless, as in `trade_cost`);
+# the fills apply them in this order with this arithmetic, so the sign is exact.
+function _bt_cash_after_buys(cash::Float64, q::Vector{T}, px::Vector{Float64}, adv::Vector{Float64},
+        buys::Vector{Int}, f::Float64; half_spread_bps::Float64=5.0, κ::Float64=0.001)::Float64 where {T<:Real}
     for k in buys
-        qk = trunc(Int, f * q[k])
+        qk = _bt_lot(T, f * q[k])
         qk == 0 || (cash -= qk * px[k] + trade_cost(qk, px[k], adv[k]; half_spread_bps=half_spread_bps, κ=κ))
     end
     return cash
 end
 
-# Fill queued orders at the open of day t (R25 as amended by R27). Orders are whole shares
-# q = trunc(n_target) − held: the target is rounded toward zero first, so a fill ends at trunc(n_target)
-# (an ε pin of 1e-3 shares exits fully, and a reduction never stops above its target). Sells and short
+# Fill queued orders at the open of day t (R25 as amended by R27). Orders are q = lot(n_target) − held
+# (`_bt_lot`). With whole shares (Int holdings, the trial's) the target is rounded toward zero first, so
+# a fill ends at trunc(n_target) (an ε pin of 1e-3 shares exits fully, and a reduction never stops above
+# its target); with fractional shares (Float64 holdings) a fill ends at the target. Sells and short
 # sales execute first, then buys. If cash after the sells cannot pay for every buy at the open plus
-# costs, every buy is scaled by one factor f ∈ [0, 1] (the largest, by bisection) and truncated, so
+# costs, every buy is scaled by one factor f ∈ [0, 1] (the largest, by bisection) and cut to a lot, so
 # cash ≥ 0 after the fills; if that leaves no buy at all, each dropped buy is logged with qty 0.
 # Costs use `half_spread_bps` (bps) and impact `κ` (dimensionless), as in `trade_cost`; the defaults are
 # the trial's. Updates `held` and the trade log; returns cash (USD).
-function _bt_fill!(held::Vector{Int}, cash::Float64, order, md::MyMarketData, t::Int, tr::_BTTrades;
-        half_spread_bps::Float64=5.0, κ::Float64=0.001)::Float64
+function _bt_fill!(held::Vector{T}, cash::Float64, order, md::MyMarketData, t::Int, tr::_BTTrades{T};
+        half_spread_bps::Float64=5.0, κ::Float64=0.001)::Float64 where {T<:Real}
     ckw = (half_spread_bps=half_spread_bps, κ=κ)
     cols = order.cols
-    q = [trunc(Int, order.n[k]) - held[j] for (k, j) in enumerate(cols)]
+    q = [_bt_lot(T, order.n[k]) - held[j] for (k, j) in enumerate(cols)]
     px = [md.open[t, j] for j in cols]
     for k in eachindex(q)
         q[k] < 0 && (cash = _bt_execute!(held, cash, tr, md, t, cols[k], q[k], px[k], order.adv[k], 1.0; ckw...))
@@ -309,12 +316,12 @@ function _bt_fill!(held::Vector{Int}, cash::Float64, order, md::MyMarketData, t:
         f = lo
     end
     for k in buys
-        qk = trunc(Int, f * q[k])
+        qk = _bt_lot(T, f * q[k])
         qk == 0 || (cash = _bt_execute!(held, cash, tr, md, t, cols[k], qk, px[k], order.adv[k], f; ckw...))
     end
-    if all(k -> trunc(Int, f * q[k]) == 0, buys)          # cash could not pay for any buy: log the drops
+    if all(k -> _bt_lot(T, f * q[k]) == 0, buys)          # cash could not pay for any buy: log the drops
         for k in buys
-            cash = _bt_execute!(held, cash, tr, md, t, cols[k], 0, px[k], order.adv[k], f; ckw...)
+            cash = _bt_execute!(held, cash, tr, md, t, cols[k], zero(T), px[k], order.adv[k], f; ckw...)
         end
     end
     return cash
@@ -327,9 +334,9 @@ _bt_projection_seed(seed::Int, d::Date)::Int = seed * 1_000_003 + Dates.value(d)
 # One fill of `qk` shares (signed) of column j at `px` (USD/share) on day t: pay qk·px plus the trade
 # cost (`half_spread_bps` in bps, impact `κ` dimensionless) from cash, update the position, log the
 # trade with its buy scale factor. Returns cash (USD).
-function _bt_execute!(held::Vector{Int}, cash::Float64, tr::_BTTrades, md::MyMarketData, t::Int, j::Int,
-        qk::Int, px::Float64, adv::Float64, scale::Float64; half_spread_bps::Float64=5.0,
-        κ::Float64=0.001)::Float64
+function _bt_execute!(held::Vector{T}, cash::Float64, tr::_BTTrades{T}, md::MyMarketData, t::Int, j::Int,
+        qk::T, px::Float64, adv::Float64, scale::Float64; half_spread_bps::Float64=5.0,
+        κ::Float64=0.001)::Float64 where {T<:Real}
     cost = trade_cost(qk, px, adv; half_spread_bps=half_spread_bps, κ=κ)
     held[j] += qk
     push!(tr.date, md.dates[t]); push!(tr.ticker, md.tickers[j]); push!(tr.qty, qk)

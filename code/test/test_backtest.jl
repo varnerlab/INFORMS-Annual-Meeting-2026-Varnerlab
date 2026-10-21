@@ -271,6 +271,19 @@ end
     end
 end
 
+@testset "fractional holdings fill to the exact target" begin
+    md = bt_md(); order = (cols=[1, 2, 3], n=[12.345, 0.5, 0.0], adv=[1e4, 1e4, 1e4])
+    held = [0.0, 0.0, 3.25]; tr = VLINFORMS2026._BTTrades{Float64}()
+    cash = VLINFORMS2026._bt_fill!(held, 1e6, order, md, 30, tr)
+    @test held == [12.345, 0.5, 0.0] && sort(tr.qty) == [-3.25, 0.5, 12.345] && all(tr.scale .== 1.0)
+    @test cash ≈ 1e6 - sum(tr.qty .* tr.price) - sum(tr.cost)
+    # short of cash: every buy is scaled by one factor, with no rounding
+    held = zeros(3); tr = VLINFORMS2026._BTTrades{Float64}()
+    cash = VLINFORMS2026._bt_fill!(held, 500.0, order, md, 30, tr)
+    f = tr.scale[1]
+    @test 0 < f < 1 && allequal(tr.scale) && held[1:2] ≈ f .* [12.345, 0.5] && abs(cash) < 1e-6
+end
+
 @testset "R25: overnight gap scales buys, cash stays ≥ 0" begin
     md = bt_md(); i = 22                       # fill day of the initial decision (start = day 21)
     md.open[i, :] .*= 1.10                     # +10% gap at the open
