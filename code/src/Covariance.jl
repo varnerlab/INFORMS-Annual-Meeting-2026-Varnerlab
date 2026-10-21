@@ -75,37 +75,54 @@ function _draw_basket(rng, sector_idx::Vector{Vector{Int}}, n::Int)::Vector{Int}
     return basket
 end
 
+# Anchor rows of the shrinkage calibration: each last trading day of a month (row a with
+# month(dates[a+1]) ≠ month(dates[a])) that has 252 growth days behind it from row i0 and 21 ahead
+# through row i1.
+_shrinkage_anchors(dates::AbstractVector{Date}, i0::Int, i1::Int)::Vector{Int} =
+    [a for a in (i0 + 252):(i1 - 21) if month(dates[a + 1]) != month(dates[a])]
+
+# The calibration's forecast at anchor row a, for growth rates g (growth days × names, g[k] into row
+# k+1) and g_m: α, β from OLS on the trailing 252 growth days, and per λ the residual part of the
+# study's Σ_g (`growth_covariance` with σ_M = 0): residuals of that α, β over the trailing `window`
+# growth days, each scaled by its own SD over the window. Returns (α, β, Σs).
+function _shrinkage_covariances(g::AbstractMatrix, g_m::AbstractVector, a::Int, λs::AbstractVector;
+        window::Int=126)
+    tr = (a - 252):(a - 1); tw = (a - window):(a - 1)
+    fits = [estimate_sim(g_m[tr], g[tr, j]) for j in axes(g, 2)]
+    α = [f.α for f in fits]; β = [f.β for f in fits]
+    E = residual_matrix(g[tw, :], g_m[tw], α, β)
+    σ̂ = std.(eachcol(E))
+    Σs = [growth_covariance(build(MyShrunkResidualCovariance, (λ=λ, window=window)), β, σ̂, 0.0; residuals=E)
+        for λ in λs]
+    return (α=α, β=β, Σs=Σs)
+end
+
 """
-    shrinkage_loss(md, start, stop; grid=0:0.1:1, n_portfolios=200, seed=5660)::Vector{Float64}
+    shrinkage_loss(md, start, stop; grid=0:0.1:1, n_portfolios=200, seed=5660, window=126)::Vector{Float64}
 
 Mean QLIKE (r/p − log(r/p) − 1) per λ ∈ `grid` of the RESIDUAL-portfolio variance: predicted
-p = wᵀD^{1/2}R_λD^{1/2}w (D = diag(σ_ε²) from the anchor's OLS), realized r = sample variance over
-the next 21 trading days of wᵀε_t (ε from the anchor's OLS α, β). Monthly (21-trading-day) anchors
-run from `start` + 252 trading days through `stop` − 21. At each anchor β, α, σ_ε come from OLS on
-the trailing 252 days and the residual correlation from the trailing 126 days. Baskets: up to 33
-names (round-robin across sectors), Dirichlet(1) weights. Portfolios with non-finite or
-non-positive r are skipped. Uses data through `stop` only.
+p = wᵀ[(1−λ)·Ω̂_ε + λ·diag(Ω̂_ε)]w, the study's residual covariance (`_study_problem`), with Ω̂_ε the
+sample covariance of the SIM residuals over the trailing `window` trading days; realized r = sample
+variance over the next 21 trading days of wᵀε_t. At each anchor α, β come from OLS on the trailing
+252 days (the study's online EWLS estimates have no run-up inside the training window). Anchors are
+the month-ends from `start` + 252 trading days through `stop` − 21. Baskets: up to 33 names
+(round-robin across sectors), Dirichlet(1) weights. Portfolios with non-finite or non-positive r
+are skipped. Uses data through `stop` only.
 """
 function shrinkage_loss(md::MyMarketData, start::Date, stop::Date;
-        grid=0:0.1:1, n_portfolios::Int=200, seed::Int=5660)::Vector{Float64}
+        grid=0:0.1:1, n_portfolios::Int=200, seed::Int=5660, window::Int=126)::Vector{Float64}
     rng = MersenneTwister(seed)
     g = growth_rates(md.close); g_m = growth_rates(md.spy_close)    # g[k] is the return into dates[k+1]
-    nt = size(g, 2)
     i0 = searchsortedfirst(md.dates, start); i1 = searchsortedlast(md.dates, stop)
-    anchors = collect((i0 + 252):21:(i1 - 21))
-    isempty(anchors) && throw(ArgumentError("window too short: need at least 252 + 21 trading days"))
+    anchors = _shrinkage_anchors(md.dates, i0, i1)
+    isempty(anchors) && throw(ArgumentError("window too short: need a month-end with 252 trading days before it and 21 after"))
     sector_idx = [findall(==(s), md.sector) for s in unique(md.sector)]
     λs = collect(Float64, grid)
     loss = zeros(length(λs)); count = 0
     for a in anchors
-        tr = (a - 252):(a - 1); tr126 = (a - 126):(a - 1); fw = a:(a + 20)
-        fits = [estimate_sim(g_m[tr], g[tr, j]) for j in 1:nt]
-        α = [f.α for f in fits]; β = [f.β for f in fits]; σε = [f.σ_ε for f in fits]
-        E = residual_matrix(g[tr126, :], g_m[tr126], α, β)
+        (; α, β, Σs) = _shrinkage_covariances(g, g_m, a, λs; window=window)
+        fw = a:(a + 20)
         Ef = residual_matrix(g[fw, :], g_m[fw], α, β)
-        C = cor(E); C[isnan.(C)] .= 0.0; C[diagind(C)] .= 1.0
-        D = Diagonal(σε)
-        Σs = [D * ((1 - λ) .* C .+ λ .* Matrix(I, nt, nt)) * D for λ in λs]
         for _ in 1:n_portfolios
             idx = _draw_basket(rng, sector_idx, 33)
             w = randexp(rng, length(idx)); w ./= sum(w)       # Dirichlet(1)
@@ -125,13 +142,13 @@ function shrinkage_loss(md::MyMarketData, start::Date, stop::Date;
 end
 
 """
-    choose_shrinkage(md, start, stop; grid=0:0.1:1, n_portfolios=200, seed=5660)::Float64
+    choose_shrinkage(md, start, stop; grid=0:0.1:1, n_portfolios=200, seed=5660, window=126)::Float64
 
 The λ ∈ `grid` with the lowest `shrinkage_loss`; ties go to the larger λ.
 """
 function choose_shrinkage(md::MyMarketData, start::Date, stop::Date;
-        grid=0:0.1:1, n_portfolios::Int=200, seed::Int=5660)::Float64
-    L = shrinkage_loss(md, start, stop; grid=grid, n_portfolios=n_portfolios, seed=seed)
+        grid=0:0.1:1, n_portfolios::Int=200, seed::Int=5660, window::Int=126)::Float64
+    L = shrinkage_loss(md, start, stop; grid=grid, n_portfolios=n_portfolios, seed=seed, window=window)
     λs = collect(Float64, grid)
     return λs[findlast(l -> l <= minimum(L), L)]
 end

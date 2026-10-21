@@ -86,6 +86,12 @@ Rulings made during the build, each of which changes behavior:
   basis, so a 91-day bill grows at g_f = −ln(1 − d·91/360)·365/91 per year; the old log(1 + d) understated g_f by
   about 0.0015 yr⁻¹. Day t takes the last observation dated before t, because the Fed publishes a day's rate the
   next day. A date with no earlier observation is an error, not filled from a later one.
+- λ is calibrated with the study's own residual covariance (user, 2026-10-21). At each month-end of the training
+  window, the forecast is (1−λ)·Ω̂_ε + λ·diag(Ω̂_ε), with Ω̂_ε the residual covariance over the trailing
+  `omega_window` days, the estimator `run_study` uses; before, the residual scales came from a 252-day OLS fit and
+  the anchors fell every 21 trading days. α and β come from a trailing 252-day OLS fit, because the online
+  estimates have no warm-up inside 2014–2024. λ is still 0 (forecast loss 0.353 at λ = 0, rising steadily to 0.619
+  at λ = 1).
 
 Ticker-picker addendum (spec `docs/superpowers/specs/2026-10-20-ticker-picker-addendum-design.md`), "my call"
 items the code implements:

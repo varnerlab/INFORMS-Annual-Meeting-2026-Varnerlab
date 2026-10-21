@@ -13,7 +13,7 @@ function main()
     mkpath(OUT_DIR)
     md = load_market_data(DATA_DIR; start=MD_START, stop=MD_STOP)
     s, _ = load_study(CONFIG)
-    c = calibrate(md; train_start=s.train_start, train_stop=s.train_stop)
+    c = calibrate(md; train_start=s.train_start, train_stop=s.train_stop, window=s.omega_window)
     save_calibration(joinpath(OUT_DIR, "calibration.jld2"), c)
     summary = calibration_summary(md, c, s)
     open(joinpath(OUT_DIR, "calibration_summary.toml"), "w") do io

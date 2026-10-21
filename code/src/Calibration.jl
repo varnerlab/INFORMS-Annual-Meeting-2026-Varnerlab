@@ -35,15 +35,16 @@ end
 
 """
     calibrate(md::MyMarketData; train_start::Date, train_stop::Date, seed::Int=5660,
-        n_portfolios::Int=200)::MyCalibration
+        n_portfolios::Int=200, window::Int=126)::MyCalibration
 
 Fit the SIM, SPY growth moments (yr⁻¹, yr⁻²) and residual shrinkage λ on the dates in
-[`train_start`, `train_stop`]. `seed` and `n_portfolios` (count) drive `choose_shrinkage`.
+[`train_start`, `train_stop`]. `seed`, `n_portfolios` (count) and `window` (the study's residual
+covariance window `omega_window`, trading days) drive `choose_shrinkage`.
 """
 function calibrate(md::MyMarketData; train_start::Date, train_stop::Date, seed::Int=5660,
-    n_portfolios::Int=200)::MyCalibration
+    n_portfolios::Int=200, window::Int=126)::MyCalibration
     fit = fit_base_sim(md, train_start, train_stop)
-    λ = choose_shrinkage(md, train_start, train_stop; n_portfolios=n_portfolios, seed=seed)
+    λ = choose_shrinkage(md, train_start, train_stop; n_portfolios=n_portfolios, seed=seed, window=window)
     return build(MyCalibration, (base_sim=fit.params, σ_m=fit.σ_m, m_m=fit.m_m, v_m=fit.v_m, λ=λ,
         train_start=train_start, train_stop=train_stop))
 end

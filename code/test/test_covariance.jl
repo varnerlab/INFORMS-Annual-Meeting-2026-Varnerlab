@@ -25,3 +25,24 @@ end
     @test shrinkage_loss(perturb_after(synthetic_md(ρ=0.8), e), s, e) == L8   # look-ahead canary
     @test choose_shrinkage(synthetic_md(ρ=0.8), s, e) == grid[argmin(L8)]
 end
+
+@testset "shrinkage calibration forecasts with the study's residual covariance at month-ends" begin
+    md = synthetic_md(ρ=0.5)
+    g = growth_rates(md.close); g_m = growth_rates(md.spy_close)
+    i0, i1 = 1, length(md.dates)
+    # anchors: every last trading day of a month with 252 growth days behind it and 21 ahead
+    A = VLINFORMS2026._shrinkage_anchors(md.dates, i0, i1)
+    @test !isempty(A) && A == [a for a in (i0 + 252):(i1 - 21) if month(md.dates[a + 1]) != month(md.dates[a])]
+    # the forecast at an anchor is the residual part of the study's Σ_g (σ_M = 0), with the
+    # trailing-window residuals of the anchor's α, β, so each scale is that window's residual SD
+    a = A[3]; λs = [0.0, 0.4, 1.0]
+    f = VLINFORMS2026._shrinkage_covariances(g, g_m, a, λs; window=126)
+    E = residual_matrix(g[(a-126):(a-1), :], g_m[(a-126):(a-1)], f.α, f.β)
+    for (k, λ) in enumerate(λs)
+        @test f.Σs[k] ≈ growth_covariance(build(MyShrunkResidualCovariance, (λ=λ, window=126)), f.β,
+            std.(eachcol(E)), 0.0; residuals=E) rtol=1e-12
+    end
+    # α, β: OLS on the trailing 252 growth days
+    fit = estimate_sim(g_m[(a-252):(a-1)], g[(a-252):(a-1), 5])
+    @test (f.α[5], f.β[5]) == (fit.α, fit.β)
+end
