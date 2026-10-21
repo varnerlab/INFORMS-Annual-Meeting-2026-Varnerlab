@@ -18,6 +18,8 @@ growth rates g = ln(S_end/S_start)/(k·Δt) in 1/yr with Δt = 1/252.
    finished runs only while the data and calibration are unchanged. The hash cannot see code: **after a code
    change, rerun every grid with `--fresh`** (it ignores and replaces the cached files of the selected runs) and
    check that the printed `skipped` count is 0. A run that reuses cached files prints a `SKIPPED` banner.
+   If a threaded grid run crashes (an intermittent segfault, cause unknown), rerun the same command without
+   `--fresh`: it resumes. Each run file is written whole or not at all, so the finished runs are kept.
 4. `julia -t auto scripts/11_run_study.jl --fixed`: fixed-schedule grid (no re-pick on band exit), `results/fixed_summary.csv`.
 5. `julia scripts/15_regression_check.jl [rev]`: compares the rerun `results/tier1_summary.csv` and
    `results/fixed_summary.csv` with the versions committed at git revision `rev` (default `HEAD`), joined on
