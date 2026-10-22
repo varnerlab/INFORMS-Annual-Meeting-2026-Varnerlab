@@ -50,7 +50,7 @@ fixed_tickers = ["AAPL", "MSFT", "INTC", "MU", "AMD", "NVDA", "GS", "BAC", "WFC"
 w_max = 0.10              # single-name weight cap (fraction of wealth)
 vol_cap_annual = "calibrated"  # annualized volatility cap (1/sqrt(yr)); "calibrated" = SPY 2014-2024
 s_max = 1.0               # sector weight cap (fraction of wealth)
-turnover_frac = 0.10      # turnover limit (fraction of wealth)
+turnover_frac = 0.10      # spread-cost budget per decision: half-spread cost of the share changes <= this x wealth (fraction of wealth)
 w_max_scale = 1.5         # a screen pick's cap is max(w_max, w_max_scale/K) (dimensionless)
 
 [allocators]
@@ -81,6 +81,9 @@ screens = ["bandit", "gamma", "random"]                       # screen labels
 hedge = [true, false]     # hedge on/off cells (flags)
 K = [5, 8, 13, 21, 34]     # basket sizes of the universe-wide screens (count)
 universe_screens = ["global_gamma", "liquid_gamma", "corr_gamma", "random_global", "random_liquid"]  # screen labels
+eta = [0.1, 0.25, 0.5, 2.0, 4.0, 10.0]                     # CES elasticities of the eta sweep, step (b) (dimensionless); Cobb-Douglas is eta = 1
+eta_limits = [0.05, 0.1, 0.25, 0.5, 2.0, 4.0, 10.0, 20.0]  # CES elasticities of the clean-limits runs, step (a) (dimensionless)
+limits_list = "l8b_13"                                      # fixed list of the clean-limits runs (a [grid.fixed_lists] name)
 
 [grid.fixed_lists]        # lists chosen in advance without 2025 data
 l8b_13 = ["AAPL", "MSFT", "INTC", "MU", "AMD", "NVDA", "GS", "BAC", "WFC", "C", "F", "GM", "JNJ"]

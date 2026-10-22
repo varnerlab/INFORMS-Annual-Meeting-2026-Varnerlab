@@ -214,7 +214,7 @@ s = t − first(ctx.rows) + 1, S = close[t, cols] (USD/share) and Ω = `omega_wi
   Σ_g = σ²_M·ββᵀ + (1−λ)·Ω̂_ε + λ·diag(Ω̂_ε) (yr⁻², §7) via `growth_covariance` with σ̂ = std of each
   column of E, σ_M = ctx.sim.σ_m[s] and λ = `lambda` (`calib.λ` when NaN).
 - Limits: `w_max`, `s_max`, σ_g_max = `vol_cap_annual`/√Δt (`calib.σ_m` when NaN, yr⁻¹),
-  K_turnover = `turnover_frac`·V (USD), c̄ = `half_spread_bps`·1e-4·mean(S) (USD/share),
+  spread-cost budget K_turnover = `turnover_frac`·V (USD), c̄ = `half_spread_bps`·1e-4·mean(S) (USD/share),
   n_prev = held[cols], ε = 1e-3 shares, the online β, and β_max = `beta_cap(ξ[t])` with the
   `beta_ref`, `kappa_beta`, `beta_min` settings when `hedge` is on (else Inf).
 - Per-name caps: `w_cap[i] = max(w_max, w_max_scale/length(basket))` when `cols[i] ∈ basket` (the screen

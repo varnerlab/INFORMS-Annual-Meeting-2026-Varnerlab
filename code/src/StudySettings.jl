@@ -14,7 +14,8 @@ in trading days; `D_max`, `w_max`, `s_max`, `turnover_frac`, `ls_*` are fraction
 `xi_short`, `xi_long` are the EMA spans of SPY closes behind ξ;
 `borrow_rate` is per year; `half_spread_bps` is in basis points; `W0` is in dollars. `NaN` for
 `vol_cap_annual` means the SPY volatility over the calibration window. The zero-argument constructor
-fills the defaults. Field names are ASCII so TOML keys equal field names **(plan decision)**.
+fills the defaults. `turnover_frac` sets each decision's spread-cost budget, c̄·Σ|Δnᵢ| ≤ `turnover_frac`·W with c̄ the half-spread cost per share at the basket's mean price. It is kept from the trial; at 5 bps, for a long-only book, it can bind only when a basket's mean share price is more than 100 times its cheapest name's.
+Field names are ASCII so TOML keys equal field names **(plan decision)**.
 """
 mutable struct MyStudySettings
     start::Date; stop::Date; train_start::Date; train_stop::Date
@@ -108,8 +109,10 @@ end
 
 Read `config/study.toml`. Every table except `[grid]` is flattened into settings keys (a key that
 repeats across tables or is not a settings field throws `ArgumentError`); `"calibrated"` for
-`lambda` or `vol_cap_annual` becomes `NaN`. `grid` is `(n_seeds, base_seed, allocators, screens, hedge, K, universe_screens, fixed_lists)`, with
-`fixed_lists` the `[grid.fixed_lists]` table as `name => tickers` pairs sorted by name.
+`lambda` or `vol_cap_annual` becomes `NaN`. `grid` is `(n_seeds, base_seed, allocators, screens, hedge, K, universe_screens, fixed_lists, eta, eta_limits, limits_list)`, with
+`fixed_lists` the `[grid.fixed_lists]` table as `name => tickers` pairs sorted by name, `eta` and `eta_limits` the CES
+elasticities (dimensionless, each finite and > 0) of the η sweep and the clean-limits runs, and `limits_list` the name of the
+fixed list of the clean-limits runs. Throws `ArgumentError` for a missing key, a bad η or an unknown `limits_list`.
 """
 function load_study(path::AbstractString)
     raw = TOML.parsefile(path)
@@ -126,13 +129,20 @@ function load_study(path::AbstractString)
     end
     settings = build(MyStudySettings, NamedTuple(flat))
     g = get(raw, "grid", Dict{String,Any}())
-    for k in ("n_seeds", "base_seed", "allocators", "screens", "hedge", "K", "universe_screens", "fixed_lists")
+    for k in ("n_seeds", "base_seed", "allocators", "screens", "hedge", "K", "universe_screens", "fixed_lists",
+        "eta", "eta_limits", "limits_list")
         haskey(g, k) || throw(ArgumentError("load_study: [grid] is missing $(k)"))
     end
     grid = (n_seeds = Int(g["n_seeds"]), base_seed = Int(g["base_seed"]),
         allocators = String.(g["allocators"]), screens = Symbol.(g["screens"]), hedge = Bool.(g["hedge"]),
         K = Int.(g["K"]), universe_screens = Symbol.(g["universe_screens"]),
-        fixed_lists = sort!([String(n) => String.(v) for (n, v) in g["fixed_lists"]]; by=first))
+        fixed_lists = sort!([String(n) => String.(v) for (n, v) in g["fixed_lists"]]; by=first),
+        eta = Float64.(g["eta"]), eta_limits = Float64.(g["eta_limits"]), limits_list = String(g["limits_list"]))
+    for η in vcat(grid.eta, grid.eta_limits)
+        (isfinite(η) && η > 0) || throw(ArgumentError("load_study: every eta must be finite and > 0, got $(η)"))
+    end
+    grid.limits_list in first.(grid.fixed_lists) ||
+        throw(ArgumentError("load_study: limits_list $(grid.limits_list) names no [grid.fixed_lists] entry"))
     return (settings = settings, grid = grid)
 end
 

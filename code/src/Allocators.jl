@@ -68,7 +68,7 @@ The constraint set shared by every portfolio rule:
 - `w_cap`: per-name weight cap on |wᵢ| (dimensionless, one per name; default `fill(w_max, K)`)
 - `s_max`: per-sector weight cap (dimensionless; `s_max ≥ 1` means no sector cap)
 - `σ_g_max`: cap on the portfolio growth-rate SD √(wᵀΣ_g w) (yr⁻¹)
-- `K_turnover`: turnover budget (USD), c̄·Σ|nᵢ − n_prevᵢ| ≤ K_turnover
+- `K_turnover`: spread-cost budget (USD), c̄·Σ|nᵢ − n_prevᵢ| ≤ K_turnover
 - `c̄`: turnover cost per share (USD/share)
 - `sector`: GICS sector per name
 - `n_prev`: holdings before the solve (shares)
@@ -311,7 +311,7 @@ w = n·S/W (dimensionless, `Vector{AffExpr}`). Constraints, following engine `Al
   directly, like the per-name cap.
 - **Volatility cap:** ‖Lᵀw‖ ≤ σ_g_max·κ (yr⁻¹) as a second-order cone, LLᵀ = Σ_g + 1e-8·I (yr⁻²);
   skipped when σ_g_max is infinite.
-- **Turnover budget:** c̄·Σ_{free i} |nᵢ − κ·n_prevᵢ| ≤ K_turnover·κ (USD), on the non-pinned names
+- **Spread-cost budget** (the trial's turnover rule): c̄·Σ_{free i} |nᵢ − κ·n_prevᵢ| ≤ K_turnover·κ (USD), on the non-pinned names
   only (engine semantics: pinned names' churn is not counted). The slack variables are skipped when
   c̄ = 0 or when no feasible point can violate the budget: c̄·max‖n − n_prev‖₁ ≤ K_turnover, with
   max‖·‖₁ ≤ B_eff/min Sᵢ + Σ n_prevᵢ (long-only; B_eff = W − pinned cost, USD) or
@@ -375,7 +375,7 @@ function add_shared_constraints!(m::JuMP.Model, n::AbstractVector, p::MyAllocati
         @constraint(m, vcat(c.σ_g_max * κ, Ltw) in SecondOrderCone())
     end
 
-    # Turnover budget (ℓ₁ slack on the free names), skipped when it cannot bind
+    # Spread-cost budget (the trial's turnover rule; ℓ₁ slack on the free names), skipped when it cannot bind
     if c.c̄ > 0
         free = [i for i in 1:K if !_is_pinned(n[i])]
         if !isempty(free)

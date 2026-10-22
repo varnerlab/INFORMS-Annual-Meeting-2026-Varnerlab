@@ -1,5 +1,6 @@
 # Task 13: run the Tier 1 grid (default), the fixed-schedule grid (--fixed), the addendum's size sweep and
-# fixed lists (--universe) or a 2-run smoke test (--smoke). A run's cache key holds its settings and a
+# fixed lists (--universe) or a 2-run smoke test (--smoke), the η sweep (--eta) or the clean budget-only limits on
+# the l8b_13 list (--limits). A run's cache key holds its settings and a
 # fingerprint of the market data and calibration, but not the code: after a code change pass --fresh, which
 # reruns the selected runs instead of reusing results/runs/, and check that the run reports skipped = 0.
 using Pkg
@@ -16,9 +17,11 @@ const MD_START, MD_STOP = Date(2014, 1, 3), Date(2026, 9, 4)
 
 function main(args=ARGS)
     fixed, smoke, universe, fresh = "--fixed" in args, "--smoke" in args, "--universe" in args, "--fresh" in args
-    bad = filter(a -> !(a in ("--fixed", "--smoke", "--universe", "--fresh")), args)
+    eta, limits = "--eta" in args, "--limits" in args
+    bad = filter(a -> !(a in ("--fixed", "--smoke", "--universe", "--fresh", "--eta", "--limits")), args)
     isempty(bad) || error("unknown arguments: ", join(bad, " "))
-    count((fixed, smoke, universe)) <= 1 || error("pass at most one of --fixed, --universe, --smoke")
+    count((fixed, smoke, universe, eta, limits)) <= 1 ||
+        error("pass at most one of --fixed, --universe, --smoke, --eta, --limits")
     md = load_market_data(DATA_DIR; start=MD_START, stop=MD_STOP)
     s, grid = load_study(CONFIG)
     calib = load_calibration(CALIB)
@@ -30,6 +33,10 @@ function main(args=ARGS)
         runs, outdir, experiment = fixed_schedule_runs(s, grid), OUT_DIR, "fixed"
     elseif universe
         runs, outdir, experiment = vcat(universe_runs(s, grid), fixed_list_runs(s, grid)), OUT_DIR, "universe"
+    elseif eta
+        runs, outdir, experiment = eta_runs(s, grid), OUT_DIR, "eta"
+    elseif limits
+        runs, outdir, experiment = limits_runs(s, grid), OUT_DIR, "limits"
     else
         runs, outdir, experiment = tier1_runs(s, grid), OUT_DIR, "tier1"
     end

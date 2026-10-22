@@ -234,6 +234,59 @@ end
 _study_label(a::AbstractString, scr, hedge::Bool, seed::Integer) = "$(a)|$(scr)|hedge=$(hedge)|seed=$(seed)"
 
 """
+    _eta_text(η::Real)::String
+
+An elasticity η (dimensionless) as label text: whole numbers without a decimal point (`2.0 → "2"`,
+`0.05 → "0.05"`).
+"""
+_eta_text(η::Real) = isinteger(η) ? string(Int(η)) : string(Float64(η))
+
+"""
+    eta_runs(s::MyStudySettings, grid)::Vector{MyStudyRun}
+
+The η sweep inside the study **(plan decision)**: 2,806 runs with the default grid. Cap on: `"CES"` and `"CESw"` at
+every `grid.eta` except `s.ces_eta`, on `with_settings(s; ces_eta=η)`. Cap off (`w_max = 1`): `"CD"` once, plus `"CES"` and
+`"CESw"` at every `grid.eta`. Each is `tier1_runs` with `allocators=[a]`, labeled
+`<tier1 label>|eta=<η>|cap=<on|off>`; CD's label carries η = 1 but its settings keep `ces_eta = s.ces_eta`, which CD ignores.
+"""
+function eta_runs(s::MyStudySettings, grid)::Vector{MyStudyRun}
+    out = MyStudyRun[]
+    add!(sv, a, η, cap) = for r in tier1_runs(sv, (; grid..., allocators=[a]))
+        push!(out, build(MyStudyRun, (settings=r.settings, allocator=r.allocator, screen=r.screen, seed=r.seed,
+            label=r.label * "|eta=$(_eta_text(η))|cap=$(cap)")))
+    end
+    for a in ("CES", "CESw"), η in grid.eta
+        η == s.ces_eta || add!(with_settings(s; ces_eta=η), a, η, "on")
+    end
+    add!(with_settings(s; w_max=1.0), "CD", 1, "off")
+    for a in ("CES", "CESw"), η in grid.eta
+        add!(with_settings(s; ces_eta=η, w_max=1.0), a, η, "off")
+    end
+    return out
+end
+
+"""
+    limits_runs(s::MyStudySettings, grid)::Vector{MyStudyRun}
+
+The clean budget-only limits on the fixed list `grid.limits_list` **(plan decision)**: 17 runs, `"CD"` (η = 1 in the
+label) plus `"CES"` and `"CESw"` at every `grid.eta_limits`. Each uses screen `:fixed`, seed `grid.base_seed` and
+`with_settings(s; fixed_tickers=list, basket_K=length(list), hedge=false, w_max=1.0, vol_cap_annual=Inf, s_max=1.0)`
+(plus `ces_eta=η` for CES and CESw; CD keeps `s.ces_eta`). Labels look like
+`"CES|fixed:l8b_13|hedge=false|seed=5660|eta=0.05|limits"`.
+"""
+function limits_runs(s::MyStudySettings, grid)::Vector{MyStudyRun}
+    list = collect(String, last(grid.fixed_lists[findfirst(p -> first(p) == grid.limits_list, grid.fixed_lists)]))
+    sl = with_settings(s; fixed_tickers=list, basket_K=length(list), hedge=false, w_max=1.0, vol_cap_annual=Inf, s_max=1.0)
+    out = MyStudyRun[]
+    for (a, η) in vcat(["CD" => 1.0], [(a => e) for a in ("CES", "CESw") for e in grid.eta_limits])
+        sv = a == "CD" ? sl : with_settings(sl; ces_eta=η)
+        push!(out, build(MyStudyRun, (settings=sv, allocator=a, screen=:fixed, seed=grid.base_seed,
+            label=_study_label(a, "fixed:$(grid.limits_list)", false, grid.base_seed) * "|eta=$(_eta_text(η))|limits")))
+    end
+    return out
+end
+
+"""
     tier1_runs(s::MyStudySettings, grid)::Vector{MyStudyRun}
 
 Tier 1 runs: allocators × screens × hedge, each on `s` with `hedge` set, with seeds

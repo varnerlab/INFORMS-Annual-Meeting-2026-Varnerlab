@@ -44,6 +44,13 @@ end
     @test same(cfg.settings, s)
     @test cfg.grid.K == [5, 8, 13, 21, 34] && length(cfg.grid.universe_screens) == 5
     @test first.(cfg.grid.fixed_lists) == ["l8b_13", "l8b_15"] && last(cfg.grid.fixed_lists[2])[14:15] == ["WMT", "PG"]
+    @test cfg.grid.eta == [0.1, 0.25, 0.5, 2.0, 4.0, 10.0]
+    @test cfg.grid.eta_limits == [0.05, 0.1, 0.25, 0.5, 2.0, 4.0, 10.0, 20.0] && cfg.grid.limits_list == "l8b_13"
+    src = read(joinpath(REPO, "config", "study.toml"), String)
+    for (from, to) in ("limits_list = \"l8b_13\"" => "limits_list = \"nope\"", "eta = [0.1," => "eta = [-0.1,")
+        p = joinpath(mktempdir(), "s.toml"); write(p, replace(src, from => to))
+        @test_throws ArgumentError load_study(p)
+    end
     @test_throws ArgumentError build(MyStudySettings, (corr_max=1.5,))
     @test_throws ArgumentError build(MyStudySettings, (fixed_tickers=String[],))
 end

@@ -110,3 +110,31 @@ end
     res.daily.xi .= -1.0
     @test isnan(regime_stats(res, spy).g_bear) && regime_stats(res, spy).n_bear == 0
 end
+
+@testset "η sweep and clean-limits run lists" begin
+    s = MyStudySettings()
+    g = (n_seeds=30, base_seed=5660, allocators=["CD", "CES", "CESw", "SG", "MinVar", "Tangent", "LS"],
+        screens=[:bandit, :gamma, :random], hedge=[true, false], K=[5, 8, 13, 21, 34],
+        universe_screens=[:global_gamma, :liquid_gamma, :corr_gamma, :random_global, :random_liquid],
+        fixed_lists=["l8b_13" => s.fixed_tickers, "l8b_15" => vcat(s.fixed_tickers, ["WMT", "PG"])],
+        eta=[0.1, 0.25, 0.5, 2.0, 4.0, 10.0], eta_limits=[0.05, 0.1, 0.25, 0.5, 2.0, 4.0, 10.0, 20.0],
+        limits_list="l8b_13")
+    e = eta_runs(s, g)
+    on = filter(r -> r.settings.w_max == s.w_max, e); off = filter(r -> r.settings.w_max == 1.0, e)
+    @test length(e) == 2806 && length(on) == 1220 && length(off) == 1586
+    @test all(r -> r.allocator in ("CES", "CESw") && r.settings.ces_eta != 0.5, on)
+    @test count(r -> r.allocator == "CD", off) == 122
+    labels = Set(r.label for r in e)
+    @test "CESw|bandit|hedge=true|seed=5660|eta=2|cap=off" in labels
+    @test "CES|gamma|hedge=false|seed=5660|eta=0.25|cap=on" in labels
+    @test "CD|random|hedge=true|seed=5689|eta=1|cap=off" in labels
+    l = limits_runs(s, g)
+    @test length(l) == 17
+    @test all(r -> r.screen == :fixed && !r.settings.hedge && r.settings.w_max == 1.0 && r.settings.s_max == 1.0 &&
+        r.settings.vol_cap_annual == Inf && r.settings.fixed_tickers == s.fixed_tickers && r.settings.basket_K == 13, l)
+    @test "CES|fixed:l8b_13|hedge=false|seed=5660|eta=0.05|limits" in Set(r.label for r in l)
+    @test "CD|fixed:l8b_13|hedge=false|seed=5660|eta=1|limits" in Set(r.label for r in l)
+    others = vcat(tier1_runs(s, g), fixed_schedule_runs(s, g), universe_runs(s, g), fixed_list_runs(s, g))
+    h = study_hash.(vcat(e, l))
+    @test allunique(h) && isdisjoint(Set(h), Set(study_hash.(others)))
+end
