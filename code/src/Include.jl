@@ -39,6 +39,7 @@ include("Context.jl")
 include("GrowthScorecard.jl")
 include("StudyBacktest.jl")
 include("StudyRunner.jl")
+include("Limits.jl")
 include("StudyTables.jl")
 
 export MyMarketData, build, load_market_data, growth_rates, index_of, DATA_FILES, boundary_split_factor, split_adjustments,
@@ -71,5 +72,6 @@ export MyStudyRun, MyStudyResult, make_rule, make_screen, run_study
 export study_key, regime_stats, study_key_string, study_hash, data_fingerprint, study_stats, run_and_save_study, run_study_grid, tier1_runs, fixed_schedule_runs, eta_runs, limits_runs,
     universe_runs, fixed_list_runs,
     rebuild_study_summary
+export limits_row, limits_day
 export group_summary, SUMMARY_METRICS, paired_win_rate, gamma_percentile, hedge_effect, long_vs_short_hedge,
     passive_references, markdown_table, compare_summaries, sort_table, TABLE_ALLOCATOR_ORDER, TABLE_SCREEN_ORDER

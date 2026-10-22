@@ -5,7 +5,7 @@
 # reruns the selected runs instead of reusing results/runs/, and check that the run reports skipped = 0.
 using Pkg
 Pkg.activate(normpath(joinpath(@__DIR__, "..", "code")); io=devnull)
-using VLINFORMS2026, Dates, Statistics, DataFrames
+using VLINFORMS2026, Dates, Statistics, DataFrames, CSV
 
 const REPO = normpath(joinpath(@__DIR__, ".."))
 const DATA_DIR = joinpath(REPO, "data")
@@ -14,6 +14,24 @@ const SMOKE_DIR = joinpath(REPO, "results", "smoke")
 const CONFIG = joinpath(REPO, "config", "study.toml")
 const CALIB = joinpath(REPO, "results", "calibration.jld2")
 const MD_START, MD_STOP = Date(2014, 1, 3), Date(2026, 9, 4)
+
+# Step (a): the budget-only dial on one day, written to results/limits_day.csv and gated on the closed forms.
+function limits_day_step(md, calib, runs)
+    ctx = build_context(md, calib, runs[1].settings)
+    cols = sort!([findfirst(==(tk), md.tickers) for tk in runs[1].settings.fixed_tickers])
+    s = limits_row(ctx.γ, cols)
+    day = limits_day(ctx, runs, s)
+    mkpath(OUT_DIR)
+    CSV.write(joinpath(OUT_DIR, "limits_day.csv"), day)
+    println("limits day: ", md.dates[ctx.rows[s]], " (run row ", s, ")")
+    s > 1 && println("(fewer than 5 of the 13 names had γ > 0 on the run start)")
+    gap = abs.(day.weight .- day.closed_form)
+    println("largest |weight - closed_form| = ", maximum(gap))
+    bad = day[gap .> 1e-3, :]
+    isempty(bad) || error("limits day: solver weight differs from the closed form by more than 1e-3:\n",
+        join(("$(r.label) $(r.ticker) weight=$(r.weight) closed_form=$(r.closed_form)" for r in eachrow(bad)), "\n"))
+    return day
+end
 
 function main(args=ARGS)
     fixed, smoke, universe, fresh = "--fixed" in args, "--smoke" in args, "--universe" in args, "--fresh" in args
@@ -55,6 +73,7 @@ function main(args=ARGS)
     ok = df[string.(df.status) .== "ok", :]
     isempty(ok) || println("mean wall seconds per run: ", mean(skipmissing(ok.wall_seconds)))
     isempty(res.errors) || (println(stderr, "study finished with ", length(res.errors), " errors"); exit(1))
+    limits && limits_day_step(md, calib, runs)
     return nothing
 end
 
