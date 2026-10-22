@@ -24,3 +24,10 @@ end
     @test all(isapprox(w.weight[k], res.targets[res.dates[1]][w.ticker[k]]; atol=1e-12) for k in 1:nrow(w))
     @test_throws ArgumentError limits_day(ctx, [study_run(ctx, "SG", :fixed)], 1)
 end
+
+@testset "limits day: the gate flags NaN, non-optimal and large gaps" begin
+    day = DataFrame(label=fill("x", 5), ticker=string.(1:5), weight=[0.5, NaN, 0.5, 0.52, Inf],
+        closed_form=[0.5, 0.5, 0.5, 0.5, 0.5], status=[:optimal, :optimal, :infeasible, :optimal, :optimal])
+    @test limits_failures(day).ticker == ["2", "3", "4", "5"]
+    @test isempty(limits_failures(day[1:1, :]))
+end

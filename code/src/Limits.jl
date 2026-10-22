@@ -49,3 +49,16 @@ function limits_day(ctx::MyStudyContext, runs::Vector{MyStudyRun}, s::Int)::Data
     end
     return out
 end
+
+"""
+    limits_failures(day::DataFrame; tol::Real=1e-3)::DataFrame
+
+The rows of a `limits_day` table that fail the gate: a weight or closed form that is not finite, a gap
+|weight − closed_form| (dimensionless) above `tol`, or a `status` other than `:optimal`. A NaN gap fails
+(it is not `≤ tol`).
+"""
+function limits_failures(day::DataFrame; tol::Real=1e-3)::DataFrame
+    ok = [isfinite(w) && isfinite(c) && abs(w - c) <= tol && st == :optimal
+          for (w, c, st) in zip(day.weight, day.closed_form, day.status)]
+    return day[.!ok, :]
+end

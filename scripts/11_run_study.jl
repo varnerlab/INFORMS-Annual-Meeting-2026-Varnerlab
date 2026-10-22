@@ -27,9 +27,9 @@ function limits_day_step(md, calib, runs)
     s > 1 && println("(fewer than 5 of the 13 names had γ > 0 on the run start)")
     gap = abs.(day.weight .- day.closed_form)
     println("largest |weight - closed_form| = ", maximum(gap))
-    bad = day[gap .> 1e-3, :]
-    isempty(bad) || error("limits day: solver weight differs from the closed form by more than 1e-3:\n",
-        join(("$(r.label) $(r.ticker) weight=$(r.weight) closed_form=$(r.closed_form)" for r in eachrow(bad)), "\n"))
+    bad = limits_failures(day; tol=1e-3)
+    isempty(bad) || error("limits day: solver weight not finite, not optimal, or more than 1e-3 from the closed form:\n",
+        join(("$(r.label) $(r.ticker) weight=$(r.weight) closed_form=$(r.closed_form) status=$(r.status)" for r in eachrow(bad)), "\n"))
     return day
 end
 
