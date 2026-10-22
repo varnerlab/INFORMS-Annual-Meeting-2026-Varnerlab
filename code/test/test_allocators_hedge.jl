@@ -1,6 +1,7 @@
 using Test, LinearAlgebra, VLINFORMS2026
 include("helpers.jl")
 const RULES_LONG = (MyCobbDouglasRule(), build(MyCESRule, (η=0.5,)), build(MyCESRule, (η=2.0,)),
+    build(MyCESWeightRule, (η=0.5,)), build(MyCESWeightRule, (η=2.0,)),
     build(MyStoneGearyRule, (baseline_frac=0.01,)))
 
 @testset "CES below one and at one" begin

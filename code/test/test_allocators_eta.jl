@@ -31,3 +31,60 @@ end
         @test r.w ≈ budget_only_weights(rule, [0.2, -0.5, 0.3], [10.0, 20.0, 40.0]; W=1000.0) atol=1e-4
     end
 end
+
+@testset "CESw matches wᵢ ∝ γᵢ^η at every η (budget only)" begin
+    @test budget_only_weights(build(MyCESWeightRule, (η=2.0,)), [0.2, 0.5, 0.3], [10.0, 20.0, 40.0]; W=1000.0) ≈
+        [0.04, 0.25, 0.09] ./ 0.38
+    for (γ, S, W) in CASES, η in ETAS
+        rule = build(MyCESWeightRule, (η=η,))
+        r = allocate(rule, P(γ=γ, prices=S, W=W, σ_g_max=Inf))
+        @test r.status == :optimal
+        @test r.w ≈ γ .^ η ./ sum(γ .^ η) atol=1e-4
+    end
+    for η in (0.05, 20.0)
+        rule = build(MyCESWeightRule, (η=η,)); r = allocate(rule, P(γ=[0.2, -0.5, 0.3], σ_g_max=Inf))
+        @test r.n[2] == 1e-3
+        @test r.w ≈ budget_only_weights(rule, [0.2, -0.5, 0.3], [10.0, 20.0, 40.0]; W=1000.0) atol=1e-4
+    end
+    @test allocate(build(MyCESWeightRule, (η=1.0,)), P()).n ≈ allocate(MyCobbDouglasRule(), P()).n rtol=1e-8
+    @test_throws ArgumentError build(MyCESWeightRule, (η=0.0,))
+end
+
+@testset "a split changes CES's weights, not CESw's" begin
+    S2 = [1.0, 20.0, 40.0]                                            # name 1 splits 10:1, γ unchanged
+    for η in (0.25, 4.0)
+        cw = build(MyCESWeightRule, (η=η,)); ces = build(MyCESRule, (η=η,))
+        @test allocate(cw, P(prices=S2, σ_g_max=Inf)).w ≈ allocate(cw, P(σ_g_max=Inf)).w atol=1e-5
+        @test maximum(abs.(allocate(ces, P(prices=S2, σ_g_max=Inf)).w .- allocate(ces, P(σ_g_max=Inf)).w)) > 0.05
+    end
+end
+
+@testset "CESw under the shared limits" begin
+    Σ = Diagonal([9.0, 16.0, 25.0])
+    for η in (0.5, 2.0)
+        cw = build(MyCESWeightRule, (η=η,))
+        @test maximum(allocate(cw, P(w_max=0.4)).w) ≤ 0.4 + 1e-6
+        r = allocate(cw, P(Σ_g=Σ, σ_g_max=1.5)); @test sqrt(r.w' * Σ * r.w) ≈ 1.5 rtol=1e-5
+        @test sum(allocate(cw, P(sector=["A", "A", "B"], s_max=0.5)).w[1:2]) ≈ 0.5 rtol=1e-5
+        @test allocate(cw, P(γ=[0.2, -0.5, 0.3])).n[2] == 1e-3
+        r = allocate(cw, P(γ=[-0.1, 0.0, -0.3])); @test r.status == :no_preferred && all(r.n .== 1e-3)
+    end
+end
+
+@testset "extreme η with a binding β cap and a hedge name" begin              # Review Focus 2
+    γ = [0.5, 0.4, -0.2, -0.1]; β = [1.2, 1.0, -0.5, -0.5]; S = [10.0, 20.0, 40.0, 25.0]
+    for R in (MyCESRule, MyCESWeightRule), η in (0.05, 20.0)
+        r = allocate(build(R, (η=η,)), P(γ=γ, prices=S, β=β, β_max=0.4, hedge=[false, false, true, false], w_max=0.5))
+        @test r.status == :optimal && dot(r.w, β) ≤ 0.4 + 1e-6 && r.n[4] == 1e-3
+    end
+end
+
+@testset "cap off: concentration stops at the volatility cap" begin            # Review Focus 3
+    Σ = Diagonal([9.0, 16.0, 25.0])
+    for R in (MyCESRule, MyCESWeightRule)
+        r = allocate(build(R, (η=10.0,)), P(Σ_g=Σ, σ_g_max=1.5, w_max=1.0))
+        @test r.status == :optimal
+        @test sqrt(r.w' * Σ * r.w) ≤ 1.5 + 1e-6
+        @test sqrt(r.w' * Σ * r.w) ≈ 1.5 rtol=1e-5
+    end
+end

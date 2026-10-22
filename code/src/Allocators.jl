@@ -35,6 +35,20 @@ mutable struct MyCESRule <: AbstractPortfolioRule
 end
 
 """
+    MyCESWeightRule
+
+Weight-based CES (CESw): U = (Σ_{γᵢ>0} γᵢ·wᵢ^ρ)^(1/ρ) with ρ = 1 − 1/η and dollar weights
+wᵢ = nᵢ·Sᵢ/W (dimensionless). Under a budget alone wᵢ ∝ γᵢ^η, so a split (Sᵢ down, nᵢ up, γᵢ
+unchanged) leaves the book unchanged; every other rule (shared limits, ε pins, hedge names,
+η = 1 as Cobb-Douglas) is that of `MyCESRule`. Field `η` (elasticity of substitution,
+dimensionless, > 0).
+"""
+mutable struct MyCESWeightRule <: AbstractPortfolioRule
+    η::Float64
+    MyCESWeightRule() = new()
+end
+
+"""
     MyStoneGearyRule
 
 Stone–Geary utility: maximize Σ_{γᵢ>0} γᵢ·log(nᵢ − bᵢ) with nᵢ ≥ bᵢ for every name, where the
@@ -134,6 +148,19 @@ function build(::Type{MyCESRule}, data::NamedTuple)::MyCESRule
     η = Float64(data.η)
     (isfinite(η) && η > 0) || throw(ArgumentError("η must be finite and positive, got $(η)"))
     model = MyCESRule(); model.η = η
+    return model
+end
+
+"""
+    build(::Type{MyCESWeightRule}, data::NamedTuple)::MyCESWeightRule
+
+Build a weight-based CES rule from `(η = …,)` (elasticity of substitution, dimensionless, finite and > 0).
+"""
+function build(::Type{MyCESWeightRule}, data::NamedTuple)::MyCESWeightRule
+    _require(data, MyCESWeightRule, :η)
+    η = Float64(data.η)
+    (isfinite(η) && η > 0) || throw(ArgumentError("η must be finite and positive, got $(η)"))
+    model = MyCESWeightRule(); model.η = η
     return model
 end
 
@@ -541,6 +568,25 @@ function allocate(rule::MyCESRule, p::MyAllocationProblem)::MyAllocationResult
 end
 
 """
+    allocate(rule::MyCESWeightRule, p::MyAllocationProblem)::MyAllocationResult
+
+Weight-based CES: the CES of `allocate(::MyCESRule, …)` over the dollar weights wᵢ = nᵢSᵢ/W instead of
+the share counts, γ ≤ 0 names pinned at ε shares (free hedge names: nᵢ ≥ ε, no utility term). The
+cones work on zᵢ = Kp·wᵢ (`_ces_objective` with aᵢ = Kp·Sᵢ/W, in 1/shares), so zᵢ = 1 at equal
+weights over the Kp preferred names **(plan decision)**; the common factor Kp^ρ leaves the argmax
+unchanged. Under a budget alone wᵢ ∝ γᵢ^η. η = 1: `allocate(MyCobbDouglasRule(), p)`.
+"""
+function allocate(rule::MyCESWeightRule, p::MyAllocationProblem)::MyAllocationResult
+    rule.η == 1 && return allocate(MyCobbDouglasRule(), p)
+    _check_problem(p)
+    pins = fill(p.constraints.ε, length(p.γ))
+    any(>(0), p.γ) || return _result(p, pins, :no_preferred)
+    pref = findall(p.γ .> 0); Kp = length(pref)
+    a = Kp .* p.prices[pref] ./ p.W                                      # 1/shares
+    return _solve_utility(p, pins, zeros(Kp), _ces_objective(Float64(rule.η), a))
+end
+
+"""
     _ces_objective(η::Float64, a::Vector{Float64})::Function
 
 The `objective!(m, x, γp)` closure of `_solve_utility` for CES with elasticity η ≠ 1 over the
@@ -628,7 +674,7 @@ end
 
 Dollar weights (dimensionless, Σ = 1) under the budget alone, in closed form. Names with γᵢ ≤ 0 hold
 ε shares (weight ε·Sᵢ/W); the budget B = W − Σ_{γ≤0} ε·Sᵢ (USD) left over is split among the names with
-γᵢ > 0: Cobb-Douglas in proportion to γᵢ, CES in proportion to Sᵢ·(γᵢ/Sᵢ)^η (nᵢ ∝ (γᵢ/Sᵢ)^η, η = 1 is
+γᵢ > 0: Cobb-Douglas in proportion to γᵢ, weight-based CES in proportion to γᵢ^η, CES in proportion to Sᵢ·(γᵢ/Sᵢ)^η (nᵢ ∝ (γᵢ/Sᵢ)^η, η = 1 is
 Cobb-Douglas). With no γ > 0 it returns the pin weights only, as `allocate` does (`:no_preferred`).
 `γ` has no units, `S` is USD/share and `W` is USD.
 """
@@ -647,6 +693,15 @@ function budget_only_weights(rule::MyCESRule, γ::AbstractVector, S::AbstractVec
     w, pref, B = _budget_split(γ, S, W, ε)
     isempty(pref) && return w
     v = S[pref] .* (γ[pref] ./ S[pref]) .^ rule.η
+    w[pref] .= B .* v ./ sum(v)
+    return w
+end
+
+function budget_only_weights(rule::MyCESWeightRule, γ::AbstractVector, S::AbstractVector;
+        W::Real, ε::Real=1e-3)::Vector{Float64}
+    w, pref, B = _budget_split(γ, S, W, ε)
+    isempty(pref) && return w
+    v = γ[pref] .^ rule.η
     w[pref] .= B .* v ./ sum(v)
     return w
 end
