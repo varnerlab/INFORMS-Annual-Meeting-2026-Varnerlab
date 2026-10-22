@@ -407,9 +407,31 @@ const _ACCEPTED = (MOI.OPTIMAL, MOI.ALMOST_OPTIMAL)
 const _INFEASIBLE = (MOI.INFEASIBLE, MOI.ALMOST_INFEASIBLE, MOI.LOCALLY_INFEASIBLE,
     MOI.INFEASIBLE_OR_UNBOUNDED)
 
+# Scoped log of solver outcomes: inside `Base.ScopedValues.with(_SOLVER_LOG => log) do ... end` every
+# `_solve_with_fallback` call pushes one outcome (see `_solver_outcome`) to `log`; outside a scope nothing
+# is recorded. The study uses it to report which solver produced each decision.
+const _SOLVER_LOG = Base.ScopedValues.ScopedValue{Union{Nothing,Vector{Symbol}}}(nothing)
+
+# Outcome of one solve from the statuses of the solvers tried, in order (Clarabel, then SCS):
+# :clarabel (Clarabel OPTIMAL), :clarabel_almost (Clarabel ALMOST_OPTIMAL), :scs (Clarabel not accepted,
+# SCS accepted), :failed (neither accepted).
+function _solver_outcome(statuses::AbstractVector{MOI.TerminationStatusCode})::Symbol
+    isempty(statuses) && return :failed
+    first(statuses) == MOI.OPTIMAL && return :clarabel
+    first(statuses) == MOI.ALMOST_OPTIMAL && return :clarabel_almost
+    return any(in(_ACCEPTED), statuses[2:end]) ? :scs : :failed
+end
+
+const _SOLVER_ORDER = (:none, :clarabel, :clarabel_almost, :scs, :failed)
+
+# Worst outcome of a list, in the order :none < :clarabel < :clarabel_almost < :scs < :failed; :none when empty.
+_worst_solver(outcomes::AbstractVector{Symbol})::Symbol =
+    isempty(outcomes) ? :none : _SOLVER_ORDER[maximum(o -> findfirst(==(o), _SOLVER_ORDER), outcomes)]
+
 # Solve with Clarabel (tight tolerances), then SCS if Clarabel does not reach (almost) optimal.
 # `build_model(optimizer)` returns `(model, x)`. Returns `(x_value or nothing, status)` with status
-# :optimal, :infeasible (either solver certified infeasibility) or :solver_failed.
+# :optimal, :infeasible (either solver certified infeasibility) or :solver_failed. When a `_SOLVER_LOG`
+# scope is active, the outcome of the solve is also pushed to it.
 function _solve_with_fallback(build_model::Function)
     statuses = MOI.TerminationStatusCode[]
     for opt in (optimizer_with_attributes(Clarabel.Optimizer, _CLARABEL_ATTRIBUTES...), SCS.Optimizer)
@@ -417,8 +439,12 @@ function _solve_with_fallback(build_model::Function)
         optimize!(m)
         st = termination_status(m)
         push!(statuses, st)
-        st in _ACCEPTED && return (value.(x), :optimal)
+        if st in _ACCEPTED
+            log = _SOLVER_LOG[]; log === nothing || push!(log, _solver_outcome(statuses))
+            return (value.(x), :optimal)
+        end
     end
+    log = _SOLVER_LOG[]; log === nothing || push!(log, _solver_outcome(statuses))
     return (nothing, any(in(_INFEASIBLE), statuses) ? :infeasible : :solver_failed)
 end
 

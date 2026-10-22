@@ -218,4 +218,6 @@ end
     md, ctx = study_ctx(); res = run_study(ctx, study_run(ctx, "CESw", :gamma))
     @test res.decisions.reason[1] == :initial && minimum(res.cash) ≥ -1e-6
     @test res.equity ≈ res.cash .+ held_value(res, md) rtol=1e-9
+    @test all(in((:none, :clarabel, :clarabel_almost, :scs, :failed)), res.decisions.solver)
+    @test all(res.decisions.solver[res.decisions.status .== :optimal] .!= :none)
 end

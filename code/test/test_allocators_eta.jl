@@ -88,3 +88,18 @@ end
         @test sqrt(r.w' * Σ * r.w) ≈ 1.5 rtol=1e-5
     end
 end
+
+@testset "solver outcomes" begin
+    V = VLINFORMS2026
+    @test V._solver_outcome([MOI.OPTIMAL]) == :clarabel
+    @test V._solver_outcome([MOI.ALMOST_OPTIMAL]) == :clarabel_almost
+    @test V._solver_outcome([MOI.SLOW_PROGRESS, MOI.OPTIMAL]) == :scs
+    @test V._solver_outcome([MOI.SLOW_PROGRESS, MOI.ALMOST_OPTIMAL]) == :scs
+    @test V._solver_outcome([MOI.INFEASIBLE, MOI.INFEASIBLE]) == :failed
+    @test V._worst_solver(Symbol[]) == :none && V._worst_solver([:clarabel, :scs, :clarabel_almost]) == :scs
+    log = Symbol[]
+    r = Base.ScopedValues.with(() -> allocate(MyCobbDouglasRule(), P(σ_g_max=Inf)), V._SOLVER_LOG => log)
+    @test r.status == :optimal && length(log) == 1 && log[1] in (:clarabel, :clarabel_almost)
+    allocate(MyCobbDouglasRule(), P(σ_g_max=Inf))                     # outside a scope: not recorded
+    @test length(log) == 1
+end

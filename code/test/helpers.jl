@@ -1,4 +1,4 @@
-using Dates, Random, LinearAlgebra
+using Dates, Random, LinearAlgebra, DataFrames
 using VLINFORMS2026
 
 # Synthetic market: 2014–2019 weekdays, 4 sectors × 12 names, β = 1, within-sector residual
@@ -176,3 +176,19 @@ study_run(ctx::MyStudyContext, allocator::String, screen::Symbol; seed::Int=5660
 
 # The 13 tickers of the user's fixed list stand in as the first 13 fixture tickers (deterministic).
 md_tickers_13() = study_md().tickers[1:13]
+
+# A hand-built `MyStudyResult` for the statistics tests: `dates`, `decisions` and `targets` as given,
+# equity (USD) and ξ (dimensionless) per date; every other field is empty or zero, and the repicks hold
+# one `:initial` row with basket ["A"].
+function hand_result(; dates::Vector{Date}, equity=fill(1e5, length(dates)), xi=zeros(length(dates)),
+        decisions::DataFrame, targets=Dict{Date,Dict{String,Float64}}())
+    n = length(dates)
+    return build(MyStudyResult, (dates=dates, equity=Float64.(equity), cash=zeros(n), borrow_fees=zeros(n),
+        trades=DataFrame(date=Date[], ticker=String[], qty=Float64[], price=Float64[], cost=Float64[], scale=Float64[]),
+        decisions=decisions,
+        repicks=DataFrame(date=[dates[1]], trigger=[:initial], basket=[["A"]], pool=[String[]], shorts=[String[]],
+            changed=[true]),
+        daily=DataFrame(date=dates, xi=Float64.(xi), beta_max=fill(Inf, n), portfolio_beta=zeros(n),
+            hedge_weight=zeros(n), pool_size=zeros(Int, n)),
+        targets=targets, projections=Dict{Date,MyProjection}()))
+end

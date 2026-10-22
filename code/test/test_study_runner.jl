@@ -78,3 +78,18 @@ end
     g = run_study_grid(md2, c, [r1]; outdir=out)
     @test isempty(g.skipped) && length(g.ran) == 1 && g.fingerprint == data_fingerprint(md2, c)
 end
+
+@testset "concentration and solver counts (hand-built result)" begin
+    d = Date(2025, 1, 2) .+ Day.(0:3)
+    dec = DataFrame(date=d[1:3], reason=[:initial, :band_exit, :cash_revisit],
+        status=[:optimal, :solver_failed, :optimal], n_names=[2, 1, 0], invested_frac=[0.9, 0.5, 0.005],
+        μ_T=zeros(3), σ_T=zeros(3), beta_target=zeros(3), beta_max=fill(Inf, 3), cap_binds=falses(3),
+        hedge_weight=zeros(3), solver=[:clarabel_almost, :failed, :failed])
+    targets = Dict(d[1] => Dict("A" => 0.5, "B" => 0.5, "C" => 0.0005, "D" => -0.1),   # C below 0.1%, D short
+        d[2] => Dict("A" => 0.5), d[3] => Dict("A" => 0.005))                           # d[3]: long 0.005 < 1%
+    st = study_stats(hand_result(dates=collect(d), decisions=dec, targets=targets))
+    @test st.mean_eff_names ≈ 1.5 && st.n_eff_skipped == 1            # decisions 1 and 2: 2 names and 1
+    @test st.n_failed == 1                                             # the :solver_failed decision
+    @test st.n_fallback == 2      # decision 1 (ALMOST_OPTIMAL) and decision 3 (failed hedge sub-solve, Review Focus 4)
+    @test st.n_almost_optimal == 1
+end

@@ -84,7 +84,10 @@ Output of `run_study`, one entry per trading day of the run in `dates`, `equity`
   (projected value mean/SD at the horizon T, USD), `beta_target` (Σ wᵢβᵢ of the target weights with
   the online β, dimensionless), `beta_max` (the β cap, `Inf` with the hedge off), `cap_binds` (an
   accepted status `:optimal`/`:fallback_minvar`/`:long_only_fallback`, a finite cap and
-  beta_target ≥ beta_max − 1e-6) and `hedge_weight` (Σ target weight of the hedge-pool names). After
+  beta_target ≥ beta_max − 1e-6), `hedge_weight` (Σ target weight of the hedge-pool names) and
+  `solver` (Symbol: the worst solver outcome among the decision's solves, in the order `:none` <
+  `:clarabel` < `:clarabel_almost` < `:scs` < `:failed`; `:none` when nothing was solved, as for pins or an
+  empty 130/30; `:failed` is a sub-solve, such as the hedge step, that no solver accepted). After
   an `:infeasible` or `:solver_failed` decision the target book is the whole kept book (see
   `run_study`).
 - `repicks::DataFrame`: `date`, `trigger` (`:initial`, `:timer` or `:band_exit`), `basket`, `pool`
@@ -248,7 +251,9 @@ end
     _study_decision(ctx, run, rule, t::Int, basket, pool, shorts, held::AbstractVector{<:Real}, V::Float64)::NamedTuple
 
 One decision after the close of market-data row `t` (holdings `held` in shares, equity `V` in USD).
-Returns the book it leaves, `(status, cols, n, S, μ_g, Σ_g, β, β_max, hedge, trade)`: ticker columns,
+Returns the book it leaves, `(status, solver, cols, n, S, μ_g, Σ_g, β, β_max, hedge, trade)`: `solver` is the
+worst outcome of the decision's solves (`:none`, `:clarabel`, `:clarabel_almost`, `:scs` or `:failed`, `:none` when
+nothing was solved), then ticker columns,
 shares n (shares), close prices S (USD/share), μ_g (yr⁻¹), Σ_g (yr⁻²), online β (dimensionless) and
 hedge flags of those columns, the β cap (dimensionless) and whether to queue orders.
 
@@ -267,11 +272,12 @@ function _study_decision(ctx::MyStudyContext, run::MyStudyRun, rule::AbstractPor
     s = t - first(ctx.rows) + 1
     cols, hedge = _study_problem_columns(rule, basket, pool, shorts, view(ctx.γ, s, :))
     if isempty(cols)
-        return (status=:no_preferred, cols=Int[], n=Float64[], S=Float64[], μ_g=Float64[], Σ_g=zeros(0, 0),
+        return (status=:no_preferred, solver=:none, cols=Int[], n=Float64[], S=Float64[], μ_g=Float64[], Σ_g=zeros(0, 0),
             β=Float64[], β_max=_study_beta_max(run.settings, ctx.ξ[t]), hedge=Bool[], trade=true)
     end
     p = _study_problem(ctx, run, t, cols, hedge, held, V; basket=basket)
-    r = allocate(rule, p)
+    log = Symbol[]
+    r = Base.ScopedValues.with(() -> allocate(rule, p), _SOLVER_LOG => log)
     all(isfinite, r.n) || (r = _result(p, copy(p.constraints.n_prev), :solver_failed))   # R29
     n = r.n; trade = true
     if r.status in _STUDY_FAILED
@@ -283,7 +289,7 @@ function _study_decision(ctx::MyStudyContext, run::MyStudyRun, rule::AbstractPor
         n = Float64.(held[cols]); trade = false
     end
     c = p.constraints
-    return (status=r.status, cols=cols, n=n, S=p.prices, μ_g=p.μ_g, Σ_g=p.Σ_g, β=c.β, β_max=c.β_max,
+    return (status=r.status, solver=_worst_solver(log), cols=cols, n=n, S=p.prices, μ_g=p.μ_g, Σ_g=p.Σ_g, β=c.β, β_max=c.β_max,
         hedge=hedge, trade=trade)
 end
 
@@ -350,7 +356,7 @@ function run_study(ctx::MyStudyContext, run::MyStudyRun)::MyStudyResult
     tr = _BTTrades{Float64}()
     dec = (date=Date[], reason=Symbol[], status=Symbol[], n_names=Int[], invested_frac=Float64[],
         μ_T=Float64[], σ_T=Float64[], beta_target=Float64[], beta_max=Float64[], cap_binds=Bool[],
-        hedge_weight=Float64[])
+        hedge_weight=Float64[], solver=Symbol[])
     rep = (date=Date[], trigger=Symbol[], basket=Vector{String}[], pool=Vector{String}[],
         shorts=Vector{String}[], changed=Bool[])
     daily = (date=Date[], xi=Float64[], beta_max=Float64[], portfolio_beta=Float64[], hedge_weight=Float64[],
@@ -418,7 +424,7 @@ function run_study(ctx::MyStudyContext, run::MyStudyRun)::MyStudyResult
             push!(dec.beta_target, β_target); push!(dec.beta_max, b.β_max)
             push!(dec.cap_binds, b.status in _STUDY_ACCEPTED && isfinite(b.β_max) &&
                 β_target >= b.β_max - _STUDY_CAP_TOL)
-            push!(dec.hedge_weight, sum(w[b.hedge]; init=0.0))
+            push!(dec.hedge_weight, sum(w[b.hedge]; init=0.0)); push!(dec.solver, b.solver)
 
             if b.trade && t < i1
                 leaving = [j for j in eachindex(held) if held[j] != 0 && !(j in b.cols)]

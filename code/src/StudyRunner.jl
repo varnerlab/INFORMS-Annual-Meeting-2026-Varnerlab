@@ -87,7 +87,25 @@ those that changed the basket, both excluding the initial re-pick. `mean_names` 
 `cap_bind_share` is the share of decisions with `cap_binds` (dimensionless), `NaN` when the β cap is off
 (no decision has a finite cap). Reading "share of days the cap binds" as decision days, the only days the
 cap is enforced, is a **(plan decision)**.
+
+`mean_eff_names` (names) is the mean over decisions of the effective number of names 1/Σw̃ᵢ², where w̃ are
+the long target weights above `_BT_HELD_W` (dimensionless) rescaled to sum to 1; a decision whose such
+weights sum to less than 0.01 is skipped and counted in `n_eff_skipped` (decisions). Rescaling the long
+weights and skipping near-cash decisions is a **(plan decision)**. `n_failed` (decisions) counts
+decisions with status `:infeasible` or `:solver_failed`. `n_fallback` (decisions) counts decisions that did
+not fail but whose `solver` is `:clarabel_almost`, `:scs` or `:failed` (a failed sub-solve such as the hedge
+step), and `n_almost_optimal` (decisions) those whose `solver` is `:clarabel_almost`. Counting every
+non-Clarabel-optimal outcome of an unfailed decision as a fallback is a **(plan decision)**.
 """
+# Effective number of names (names) of target weights w (dimensionless): 1/Σw̃ᵢ² with w̃ the entries above
+# `_BT_HELD_W` rescaled to sum to 1; NaN when those weights sum to less than 0.01 (skipped decision).
+function _eff_names(w::AbstractVector{<:Real})::Float64
+    long = [x for x in w if x > _BT_HELD_W]
+    tot = sum(long; init=0.0)
+    tot < 0.01 && return NaN
+    return 1 / sum(abs2, long ./ tot)
+end
+
 function study_stats(res::MyStudyResult)::NamedTuple
     tr = res.trades; live = tr.qty .!= 0
     traded = sum(abs.(tr.qty[live] .* tr.price[live]); init=0.0)
@@ -96,6 +114,8 @@ function study_stats(res::MyStudyResult)::NamedTuple
     cnt(r) = count(==(r), dec.reason)
     mn(x) = isempty(x) ? NaN : mean(x)
     capped = any(isfinite, dec.beta_max)
+    eff = [_eff_names(collect(values(res.targets[d]))) for d in dec.date]
+    ok = .!(dec.status .∈ Ref(_STUDY_FAILED))
     return (turnover=years > 0 ? traded / mean(res.equity) / years : NaN,
         total_cost=sum(tr.cost; init=0.0), borrow_fees=sum(res.borrow_fees),
         n_decisions=nrow(dec), n_band_exit=cnt(:band_exit), n_drawdown=cnt(:drawdown),
@@ -105,7 +125,10 @@ function study_stats(res::MyStudyResult)::NamedTuple
         mean_portfolio_beta=mn(dy.portfolio_beta),
         cap_bind_share=capped ? mean(dec.cap_binds) : NaN,
         mean_hedge_weight=mn(dy.hedge_weight), mean_pool_size=mn(dy.pool_size),
-        basket_size=median(length.(rp.basket)))
+        basket_size=median(length.(rp.basket)),
+        mean_eff_names=mn(filter(!isnan, eff)), n_eff_skipped=count(isnan, eff),
+        n_failed=count(!, ok), n_fallback=count(ok .& (dec.solver .∈ Ref((:clarabel_almost, :scs, :failed)))),
+        n_almost_optimal=count(ok .& (dec.solver .== :clarabel_almost)))
 end
 
 """
@@ -265,7 +288,8 @@ end
 const _STUDY_SCORE_FIELDS = (:sharpe, :max_drawdown, :alpha, :alpha_t, :beta, :realized_growth, :terminal, :vol)
 const _STUDY_STAT_FIELDS = (:turnover, :total_cost, :borrow_fees, :n_decisions, :n_band_exit, :n_drawdown,
     :n_horizon, :n_cash_revisit, :n_basket_change, :n_repicks, :n_basket_changes, :mean_names, :mean_invested,
-    :mean_portfolio_beta, :cap_bind_share, :mean_hedge_weight, :mean_pool_size, :basket_size)
+    :mean_portfolio_beta, :cap_bind_share, :mean_hedge_weight, :mean_pool_size, :basket_size,
+    :mean_eff_names, :n_eff_skipped, :n_failed, :n_fallback, :n_almost_optimal)
 const _STUDY_SUMMARY_COLUMNS = vcat([:hash, :label, :status, :allocator, :screen, :seed],
     collect(fieldnames(MyStudySettings)), [:wall_seconds], collect(_STUDY_SCORE_FIELDS), collect(_STUDY_STAT_FIELDS))
 
