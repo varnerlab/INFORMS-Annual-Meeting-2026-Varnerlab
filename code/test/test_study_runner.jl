@@ -28,6 +28,7 @@ include("helpers.jl")
     g3 = run_study_grid(md, ctx.calib, [r1, r2]; outdir=out, fresh=true)          # --fresh ignores the cache
     @test isempty(g3.skipped) && sort(g3.ran) == sort(study_hash.([r1, r2]; fingerprint=fp))
     df = rebuild_study_summary(out, "t")
+    @test all(c -> c in names(df), ["mean_eff_names", "n_failed", "n_fallback", "n_almost_optimal", "g_bull", "spy_g_bear"])
     @test nrow(df) == 3
     @test isfile(joinpath(out, "t_summary.csv"))
     @test all(c -> c in names(df), ["allocator", "screen", "seed", "hedge", "sharpe", "max_drawdown", "alpha", "n_repicks", "cap_bind_share"])
@@ -92,4 +93,20 @@ end
     @test st.n_failed == 1                                             # the :solver_failed decision
     @test st.n_fallback == 2      # decision 1 (ALMOST_OPTIMAL) and decision 3 (failed hedge sub-solve, Review Focus 4)
     @test st.n_almost_optimal == 1
+end
+
+@testset "market-state growth: day t labeled by ξ on day t−1" begin
+    d = collect(Date(2025, 1, 2) .+ Day.(0:4))
+    res = hand_result(dates=d, equity=[100.0, 101.0, 100.0, 102.0, 102.0], xi=[-0.5, 0.3, 0.0, -0.2, 0.9],
+        decisions=DataFrame(date=Date[], reason=Symbol[], status=Symbol[], n_names=Int[], invested_frac=Float64[],
+            μ_T=Float64[], σ_T=Float64[], beta_target=Float64[], beta_max=Float64[], cap_binds=Bool[],
+            hedge_weight=Float64[], solver=Symbol[]))
+    spy = [10.0, 10.0, 11.0, 11.0, 10.0]
+    g(a, b) = log(b / a) * 252
+    r = regime_stats(res, spy)                    # days 2, 5 bullish; day 3 bearish; day 4 dropped (ξ = 0)
+    @test r.n_bull == 2 && r.n_bear == 1
+    @test r.g_bull ≈ (g(100, 101) + g(102, 102)) / 2 && r.g_bear ≈ g(101, 100)
+    @test r.spy_g_bull ≈ (g(10, 10) + g(11, 10)) / 2 && r.spy_g_bear ≈ g(10, 11)
+    res.daily.xi .= -1.0
+    @test isnan(regime_stats(res, spy).g_bear) && regime_stats(res, spy).n_bear == 0
 end

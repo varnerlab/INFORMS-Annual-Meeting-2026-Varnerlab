@@ -132,6 +132,29 @@ function study_stats(res::MyStudyResult)::NamedTuple
 end
 
 """
+    regime_stats(res::MyStudyResult, spy_close::AbstractVector{<:Real})::NamedTuple
+
+Mean growth by market state (spec §7). `spy_close` (USD) has one entry per entry of `res.dates`. Each
+run day k ≥ 2 has growth g_k = ln(V_k/V_{k−1})·252 (yr⁻¹) for the portfolio (V = `res.equity`, USD) and
+for SPY (V = `spy_close`). Day k is bullish when ξ on day k−1 (`res.daily.xi[k−1]`, dimensionless) is
+negative, bearish when it is positive, and dropped when it is 0; labeling day k by the previous day's ξ,
+which was known before day k opened, is a **(plan decision)**. Returns `g_bull`, `g_bear`, `spy_g_bull`,
+`spy_g_bear` (yr⁻¹; means over each label's days, `NaN` when there are none) and `n_bull`, `n_bear`
+(days).
+"""
+function regime_stats(res::MyStudyResult, spy_close::AbstractVector{<:Real})::NamedTuple
+    n = length(res.dates)
+    length(spy_close) == n || throw(ArgumentError("spy_close needs one entry per run date"))
+    gp = [log(res.equity[k] / res.equity[k-1]) * 252 for k in 2:n]
+    gs = [log(spy_close[k] / spy_close[k-1]) * 252 for k in 2:n]
+    xi = res.daily.xi[1:n-1]
+    bull = xi .< 0; bear = xi .> 0
+    mn(x) = isempty(x) ? NaN : mean(x)
+    return (g_bull=mn(gp[bull]), g_bear=mn(gp[bear]), n_bull=count(bull), n_bear=count(bear),
+        spy_g_bull=mn(gs[bull]), spy_g_bear=mn(gs[bear]))
+end
+
+"""
     run_and_save_study(ctx::MyStudyContext, run::MyStudyRun; outdir="results",
         fingerprint=data_fingerprint(ctx.md, ctx.calib))::String
 
@@ -151,7 +174,7 @@ function run_and_save_study(ctx::MyStudyContext, run::MyStudyRun; outdir::Abstra
     md = ctx.md
     i0 = index_of(md, res.dates[1]); i1 = index_of(md, res.dates[end])
     sc = growth_scorecard(res.equity, md.spy_close[i0:i1], md.g_f[i0:i1])
-    st = study_stats(res)
+    st = merge(study_stats(res), regime_stats(res, md.spy_close[i0:i1]))
     wall = (time_ns() - t0) / 1e9
     final = joinpath(runs, h * ".jld2"); tmp = final * ".tmp"
     jldsave(tmp; study_key=study_key(run), data_fingerprint=String(fingerprint), result=res, scorecard=sc, stats=st,
@@ -289,7 +312,8 @@ const _STUDY_SCORE_FIELDS = (:sharpe, :max_drawdown, :alpha, :alpha_t, :beta, :r
 const _STUDY_STAT_FIELDS = (:turnover, :total_cost, :borrow_fees, :n_decisions, :n_band_exit, :n_drawdown,
     :n_horizon, :n_cash_revisit, :n_basket_change, :n_repicks, :n_basket_changes, :mean_names, :mean_invested,
     :mean_portfolio_beta, :cap_bind_share, :mean_hedge_weight, :mean_pool_size, :basket_size,
-    :mean_eff_names, :n_eff_skipped, :n_failed, :n_fallback, :n_almost_optimal)
+    :mean_eff_names, :n_eff_skipped, :n_failed, :n_fallback, :n_almost_optimal,
+    :g_bull, :g_bear, :n_bull, :n_bear, :spy_g_bull, :spy_g_bear)
 const _STUDY_SUMMARY_COLUMNS = vcat([:hash, :label, :status, :allocator, :screen, :seed],
     collect(fieldnames(MyStudySettings)), [:wall_seconds], collect(_STUDY_SCORE_FIELDS), collect(_STUDY_STAT_FIELDS))
 
