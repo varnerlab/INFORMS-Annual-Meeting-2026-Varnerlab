@@ -6,7 +6,7 @@ growth rates g = ln(S_end/S_start)/(k·Δt) in 1/yr with Δt = 1/252.
 
 ## Run order
 
-`00 → 10 → 11 → 11 --fixed → 15 → 11 --universe → 12 → 13`
+`00 → 10 → 11 → 11 --fixed → 15 → 11 --universe → 11 --eta → 11 --limits → 12 → 13`
 
 1. `julia scripts/00_fetch_data.jl`: copy the price/sector files into `data/` and download FRED DTB3.
 2. `julia scripts/10_calibrate.jl`: calibrate on 2014-01-03 → 2024-12-31. Writes `results/calibration.jld2` and
@@ -29,13 +29,22 @@ growth rates g = ln(S_end/S_start)/(k·Δt) in 1/yr with Δt = 1/252.
 6. `julia -t auto scripts/11_run_study.jl --universe`: the ticker-picker addendum's 3,804 runs (universe-wide
    screens and random controls at K ∈ {5, 8, 13, 21, 34}, plus the user's 13- and 15-name lists), summary in
    `results/universe_summary.csv`.
-7. `julia scripts/12_tables.jl [dir] [--smoke]`: comparison tables to `<dir>/tables/*.csv` (default `results/`),
+7. `julia -t auto scripts/11_run_study.jl --eta`: the CES elasticity sweep, 2,806 runs (both CES versions over the
+   η grids, with the β cap on and off), summary in `results/eta_summary.csv`. The cap-on η = 0.5 and
+   Cobb-Douglas points are taken from Tier 1, not rerun.
+8. `julia scripts/11_run_study.jl --limits`: the limits dial, 17 one-decision runs (step (a) η grid for both CES
+   versions, plus Cobb-Douglas as η = 1), summary in `results/limits_summary.csv` and the one-day solve in
+   `results/limits_day.csv`. Each weight is gated against its closed form: the command errors if any row is off
+   by more than 1e-3, is not finite, or has a status other than `:optimal`.
+9. `julia scripts/12_tables.jl [dir] [--smoke]`: comparison tables to `<dir>/tables/*.csv` (default `results/`),
    also printed as Markdown. Smoke check: `julia scripts/12_tables.jl results/smoke --smoke`. With
    `universe_summary.csv` present it also writes `size_sweep.csv`, `matched_percentile.csv`,
-   `head_to_head_K13.csv` and `quota_cost.csv`.
-8. `julia --project=scripts scripts/13_figures.jl`: slide figures (1600×900 PNG) to `results/figures/`, from
+   `head_to_head_K13.csv` and `quota_cost.csv`. With `eta_summary.csv` and `limits_summary.csv` present it also
+   writes `eta_sweep.csv`, `eta_regimes.csv`, `eta_solver.csv` and `limits_dial.csv`.
+10. `julia --project=scripts scripts/13_figures.jl`: slide figures (1600×900 PNG) to `results/figures/`, from
    `results/*_summary.csv`, `results/runs/`, `config/study.toml` and `results/calibration_summary.toml`
-   (figs 6–7, the size sweep, need `universe_summary.csv`).
+   (figs 6–7, the size sweep, need `universe_summary.csv`; the η figures `fig_limits_day.png`, `fig_limits_dial.png`,
+   `fig_eta_<metric>.png` and `fig_eta_frontier.png` need the η and limits summaries).
    It uses its own environment (`scripts/Project.toml`, Plots.jl with VLINFORMS2026 developed from `code/`);
    once per checkout, run `julia --project=scripts -e 'using Pkg; Pkg.instantiate()'`.
 
@@ -86,12 +95,50 @@ Rulings made during the build, each of which changes behavior:
   basis, so a 91-day bill grows at g_f = −ln(1 − d·91/360)·365/91 per year; the old log(1 + d) understated g_f by
   about 0.0015 yr⁻¹. Day t takes the last observation dated before t, because the Fed publishes a day's rate the
   next day. A date with no earlier observation is an error, not filled from a later one.
+- `CESw` is added beside the share-count CES (user, 2026-10-21; spec `2026-10-21-ces-eta-sweep-design.md`).
+- The η sweep and the clean limits: the headline stays `ces_eta = 0.5` for both versions, and the sweep is
+  sensitivity around it. The limits dial solves one decision per η against the closed forms.
+- The turnover rule is a spread-cost budget (user, 2026-10-22), c̄·Σ|Δnᵢ| ≤ `turnover_frac`·W. At 5 bps, for a
+  long-only book, it can bind only when a basket's mean share price is more than 100 times its cheapest name's.
+  The names `turnover_frac` and `K_turnover` are unchanged.
+- Every committed number moved in the 2026-10-22 rerun: fractional shares, the DTB3 conversion, `CESw` added, and the
+  CES cone rescaled (numerical; same argmax).
 - λ is calibrated with the study's own residual covariance (user, 2026-10-21). At each month-end of the training
   window, the forecast is (1−λ)·Ω̂_ε + λ·diag(Ω̂_ε), with Ω̂_ε the residual covariance over the trailing
   `omega_window` days, the estimator `run_study` uses; before, the residual scales came from a 252-day OLS fit and
   the anchors fell every 21 trading days. α and β come from a trailing 252-day OLS fit, because the online
   estimates have no warm-up inside 2014–2024. λ is still 0 (forecast loss 0.353 at λ = 0, rising steadily to 0.619
   at λ = 1).
+
+CES elasticity sweep (spec `docs/superpowers/specs/2026-10-21-ces-eta-sweep-design.md`), choices the build makes:
+
+- Share-count CES uses the scaled variable z = n·Σ_{γ>0}Sᵢ/W, so z = 1 at equal share counts (it was W/mean(S)).
+  Weight-based CES (`CESw`, `MyCESWeightRule`) uses z = K_p·wᵢ, so z = 1 at equal weights. Both are numerical only,
+  with the same argmax. Before the rescale, CES at η = 0.05 (and 0.1 on 13 names) failed outright.
+- Each decision records `solver` (`:clarabel`, `:clarabel_almost`, `:scs`, `:failed`, `:none`) through a scoped log.
+  `n_failed` counts statuses `:infeasible` or `:solver_failed`. `n_fallback` counts decisions that did not fail and
+  were answered at Clarabel's ALMOST_OPTIMAL, by SCS, or with a failed hedge sub-solve. `n_almost_optimal` is the
+  ALMOST_OPTIMAL subset.
+- `mean_eff_names` and `n_eff_skipped` are defined in the docstring of `study_stats`.
+- `regime_stats` labels each day t by ξ_{t−1}: bullish if < 0, bearish if > 0, dropped if 0. It reports mean daily
+  growth per regime for the run and for SPY.
+- The limits day: `limits_row` picks the run start unless fewer than 5 of the 13 names have γ > 0, and then the first
+  row with the most. `limits_day` solves a fresh $100k book (held = 0) on that day with the study's problem builder.
+  `limits_failures` is the gate (1e-3 on the weight, finite, `:optimal`).
+- Clarabel 0.11.1 threw a `DomainError` in its power-cone barrier at extreme η on real data (a trial point its own
+  feasibility test rejects, a slack of about −5.6e-17 under the 1e-12 gap tolerances). No Clarabel setting removed
+  it, so `_solve_with_fallback` treats a solver exception as that solver not accepting and falls through to SCS.
+  Errors in our own model-building code still propagate. SCS runs at its default settings. In the 17 limits runs it
+  answered 82 decisions, all at the extreme η; its median weight error was 3.3e-6 against a BigFloat reference, and
+  3 decisions were above 1e-3 (max 4.2e-3). Cobb-Douglas and η = 0.5/2 results are bit-identical to before.
+- Clarabel stops at ALMOST_OPTIMAL on 20–40% of decisions in every run, Cobb-Douglas included; this predates the
+  sweep. `eta_solver` flags any η point where failed or fallback decisions exceed 1% of decisions, and also reports
+  `n_beyond_almost` and `beyond_almost_share` (SCS or a failed sub-solve). Flagged points are reported, never dropped.
+- Run labels look like `CESw|bandit|hedge=true|seed=5660|eta=2|cap=off`; limits labels end `|eta=<η>|limits`.
+  The cap-on η = 0.5 and Cobb-Douglas points come from Tier 1. Cobb-Douglas runs keep `ces_eta = 0.5` (ignored by
+  Cobb-Douglas); only their label says η = 1.
+- The tables give medians by allocator × η × cap × hedge × screen. The η figures put cap on/off in rows and screens
+  in columns with hedge on; the frontier figure uses the random screen with hedge on.
 
 Ticker-picker addendum (spec `docs/superpowers/specs/2026-10-20-ticker-picker-addendum-design.md`), "my call"
 items the code implements:
