@@ -88,6 +88,16 @@ end
     @test t.eta == [2.0, 20.0] && t.n_runs == [1, 2] && t.failed_share ≈ [0.01, 0.02]
     @test t.fallback_share ≈ [0.0, 0.03] && t.flag == [false, true]          # 1% is not above 1%
     @test t.n_beyond_almost == [0, 1] && t.beyond_almost_share ≈ [0.0, 0.01]
+    # ALMOST_OPTIMAL is pervasive, so a group with a high ALMOST_OPTIMAL share is not flagged on it
+    # (40% of 100 decisions, fallback_share 0.4, beyond_almost 0.01, failed 0.01) ...
+    a = DataFrame(status=fill("ok", 2), allocator=fill("CD", 2), ces_eta=fill(1.0, 2), w_max=[1.0, 0.1],
+        n_decisions=[100, 100], n_failed=[1, 1], n_fallback=[41, 41], n_almost_optimal=[40, 40])
+    ta = eta_solver_table(a)
+    @test all(ta.fallback_share .> 0.4) && all(ta.beyond_almost_share .<= 0.01) && ta.flag == [false, false]
+    # ... but one whose SCS-answered (beyond ALMOST_OPTIMAL) share is above the threshold is
+    b = DataFrame(status=["ok"], allocator=["CD"], ces_eta=[1.0], w_max=[1.0],
+        n_decisions=[100], n_failed=[0], n_fallback=[45], n_almost_optimal=[40])
+    @test eta_solver_table(b).flag == [true] && eta_solver_table(b).beyond_almost_share ≈ [0.05]
     o = sort_table(DataFrame(allocator=fill("CES", 3), cap=["off", "on", "on"], eta=[0.1, 2.0, 0.1]))
     @test o.cap == ["on", "on", "off"] && o.eta == [0.1, 2.0, 0.1]
 end

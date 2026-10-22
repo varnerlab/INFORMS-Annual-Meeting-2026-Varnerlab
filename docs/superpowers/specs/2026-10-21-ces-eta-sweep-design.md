@@ -124,11 +124,11 @@ for the deterministic ones; 122 runs per allocator and setting).
 Two cap settings (user, §3):
 - **Cap on:** the study's limits, unchanged (`w_max` = 0.10). At large η this fills the best names to 10% each,
   in order of γᵢ/Sᵢ (`CES`) or γᵢ (`CESw`). The η = 0.5 runs of both versions and the η = 1 run (CD) are the
-  Tier 1 runs themselves (§8), so this setting adds `CES` and `CESw` at {0.1, 0.25, 2, 4, 10}: 1,220 runs.
+  Tier 1 runs themselves (§8), so this setting adds `CES` and `CESw` at {0.1, 0.25, 2, 4, 10}: 1,098 runs.
 - **Cap off:** `w_max` = 1 (so a pick's cap and a pool name's cap are 1 too); every other limit, the hedge and the
   hedge-off twin unchanged. Concentration then runs until the volatility cap (or the β cap) stops it. This
   setting needs its own η = 1 point, Cobb-Douglas with the cap off: `CD`, plus `CES` and `CESw` at all six η,
-  is 13 × 122 = 1,586 runs.
+  is 12 × 122 = 1,464 runs.
 
 These 2,562 runs are a new experiment `eta` with summary `results/eta_summary.csv`. Run labels add the η and the
 cap setting, e.g. `CESw|bandit|hedge=true|seed=5660|eta=2|cap=off` **(my call on the format)**.

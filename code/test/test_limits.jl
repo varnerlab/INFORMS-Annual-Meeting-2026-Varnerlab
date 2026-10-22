@@ -20,6 +20,8 @@ end
     @test nrow(day) == 13 * length(runs) && all(day.date .== md.dates[first(ctx.rows)])
     @test maximum(abs.(day.weight .- day.closed_form)) ≤ 1e-4                     # the real-data gate is 1e-3
     @test all(day.eta[day.allocator .== "CD"] .== 1.0)
+    @test "solver" in names(day) && all(in((:clarabel, :clarabel_almost, :scs, :failed)), day.solver)
+    @test all(==(:optimal), day.status) && all(!=(:failed), day.solver)           # an optimal decision was not a failed solve
     r = runs[end]; res = run_study(ctx, r); w = day[day.label .== r.label, :]
     @test all(isapprox(w.weight[k], res.targets[res.dates[1]][w.ticker[k]]; atol=1e-12) for k in 1:nrow(w))
     @test_throws ArgumentError limits_day(ctx, [study_run(ctx, "SG", :fixed)], 1)

@@ -17,17 +17,18 @@ end
 
 The budget-only allocation of every run on run row `s` (market-data row `ctx.rows[s]`), one DataFrame row
 per run and ticker with columns `label, allocator, eta, date, ticker, gamma, price, weight, closed_form,
-status`. Each run allocates a fresh book on day s **(plan decision)**: nothing held, equity
+status, solver`. Each run allocates a fresh book on day s **(plan decision)**: nothing held, equity
 `settings.W0` (USD), on the sorted columns of `settings.fixed_tickers`. `gamma` is dimensionless, `price`
 is USD/share, `weight` is the solver's wᵢ = nᵢSᵢ/W and `closed_form` is `budget_only_weights`
 (both dimensionless fractions of equity); `eta` is the CES elasticity (dimensionless), 1.0 for CD
-whatever `settings.ces_eta` says. Throws `ArgumentError` for an allocator other than CD, CES and CESw,
+whatever `settings.ces_eta` says; `solver` is the worst solver outcome of the run's solve
+(`:clarabel`, `:clarabel_almost`, `:scs` or `:failed`, see `_worst_solver`). Throws `ArgumentError` for an allocator other than CD, CES and CESw,
 a screen other than `:fixed`, or settings whose `context_key` differs from the context's.
 """
 function limits_day(ctx::MyStudyContext, runs::Vector{MyStudyRun}, s::Int)::DataFrame
     md = ctx.md
     out = DataFrame(label=String[], allocator=String[], eta=Float64[], date=Date[], ticker=String[],
-        gamma=Float64[], price=Float64[], weight=Float64[], closed_form=Float64[], status=Symbol[])
+        gamma=Float64[], price=Float64[], weight=Float64[], closed_form=Float64[], status=Symbol[], solver=Symbol[])
     for run in runs
         st = run.settings
         run.allocator in ("CD", "CES", "CESw") ||
@@ -39,12 +40,14 @@ function limits_day(ctx::MyStudyContext, runs::Vector{MyStudyRun}, s::Int)::Data
         rule = make_rule(run.allocator, st)
         p = _study_problem(ctx, run, ctx.rows[s], cols, fill(false, length(cols)), zeros(length(md.tickers)),
             st.W0; basket=cols)
-        res = allocate(rule, p)
+        log = Symbol[]
+        res = Base.ScopedValues.with(() -> allocate(rule, p), _SOLVER_LOG => log)
+        solver = _worst_solver(log)
         cf = budget_only_weights(rule, p.γ, p.prices; W=p.W, ε=p.constraints.ε)
         η = run.allocator == "CD" ? 1.0 : st.ces_eta
         for (i, j) in enumerate(cols)
             push!(out, (run.label, run.allocator, η, md.dates[ctx.rows[s]], md.tickers[j], p.γ[i], p.prices[i],
-                res.w[i], cf[i], res.status))
+                res.w[i], cf[i], res.status, solver))
         end
     end
     return out

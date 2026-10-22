@@ -430,10 +430,12 @@ _worst_solver(outcomes::AbstractVector{Symbol})::Symbol =
 
 # Exceptions that are faults in code rather than a failed solve **(implementation decision)**, so
 # `_try_solver` rethrows them: a user interrupt, a model the solver cannot take (MOI.UnsupportedError:
-# our formulation), and code that cannot run (MethodError, UndefVarError, e.g. reading values on a
-# non-variable). They recur on every problem, so treating them as solver failures would silently turn
+# our formulation), code that cannot run (MethodError, UndefVarError, e.g. reading values on a
+# non-variable), and resource exhaustion (OutOfMemoryError, StackOverflowError), which a second solver
+# would not cure. They recur on every problem, so treating them as solver failures would silently turn
 # every decision into SCS or a failure.
-_code_fault(e) = e isa InterruptException || e isa MOI.UnsupportedError || e isa MethodError || e isa UndefVarError
+_code_fault(e) = e isa InterruptException || e isa MOI.UnsupportedError || e isa MethodError || e isa UndefVarError ||
+    e isa OutOfMemoryError || e isa StackOverflowError
 
 # One solver's attempt: `build_model(opt)` (our code, outside the `try`, so its errors propagate), then
 # optimize and, when the status is accepted, read the values. Returns (status, x_value or nothing). An
@@ -730,6 +732,8 @@ Dollar weights (dimensionless, Σ = 1) under the budget alone, in closed form. N
 ε shares (weight ε·Sᵢ/W); the budget B = W − Σ_{γ≤0} ε·Sᵢ (USD) left over is split among the names with
 γᵢ > 0: Cobb-Douglas in proportion to γᵢ, weight-based CES in proportion to γᵢ^η, CES in proportion to Sᵢ·(γᵢ/Sᵢ)^η (nᵢ ∝ (γᵢ/Sᵢ)^η, η = 1 is
 Cobb-Douglas). With no γ > 0 it returns the pin weights only, as `allocate` does (`:no_preferred`).
+The closed form assumes no free hedge names: every γ ≤ 0 name is pinned at ε. On a problem with hedge
+names it is not the optimum of `allocate`.
 `γ` has no units, `S` is USD/share and `W` is USD.
 """
 function budget_only_weights end

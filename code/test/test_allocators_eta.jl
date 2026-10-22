@@ -141,4 +141,24 @@ end
     @test_throws ErrorException V._solve_with_fallback(opt -> error("bug in build_model"))
     @test_throws MethodError V._solve_with_fallback(opt -> (first(lp(opt, nothing)), :x))
     @test_throws InterruptException V._solve_with_fallback(opt -> lp(opt, InterruptException()))
+    # resource exhaustion is a fault, not a solver not accepting
+    @test_throws OutOfMemoryError V._solve_with_fallback(opt -> lp(opt, OutOfMemoryError()))
+    @test_throws StackOverflowError V._solve_with_fallback(opt -> lp(opt, StackOverflowError()))
+end
+
+@testset "a failed _min_hedge sub-solve surfaces as :failed while the decision is :optimal" begin
+    V = VLINFORMS2026
+    # Stage 2 cannot be made infeasible through `allocate` (it has the stage-1 feasible set with the
+    # preferred shares fixed at the stage-1 answer), so drive it directly: n1 holds 200 shares of a
+    # 10 USD name against W = 1000 USD, the budget cannot hold, and the second stage is infeasible.
+    p = P(γ=[0.5, -0.2], prices=[10.0, 20.0], hedge=[false, true], σ_g_max=Inf)
+    log = Symbol[]
+    out = Base.ScopedValues.with(V._SOLVER_LOG => log) do
+        r = allocate(MyCobbDouglasRule(), p)                           # the utility solve: optimal
+        h = V._min_hedge(p, [200.0, 1e-3], [1], [2], [1e-3])           # the hedge sub-solve: infeasible
+        (r, h)
+    end
+    r, (n, st) = out
+    @test r.status == :optimal && st == :infeasible && n == [200.0, 1e-3]
+    @test length(log) >= 2 && log[end] == :failed && V._worst_solver(log) == :failed
 end

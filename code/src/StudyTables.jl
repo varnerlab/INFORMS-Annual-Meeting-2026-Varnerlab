@@ -188,7 +188,9 @@ Per `allocator, cap, eta` of `eta_frame(df)`: `n_runs` (count); the sums `n_deci
 `n_fallback`, `n_almost_optimal` (decision counts); `failed_share` and `fallback_share` (sum ÷
 `n_decisions`, fractions); `n_beyond_almost` (sum of `n_fallback − n_almost_optimal`: decisions answered
 by SCS or with a failed sub-solve) and `beyond_almost_share` (÷ `n_decisions`); and `flag`, true when
-either share is above `threshold` (fraction). Sorted by `sort_table`.
+`failed_share` or `beyond_almost_share` is above `threshold` (fraction). `fallback_share` does not enter
+the flag: Clarabel's ALMOST_OPTIMAL is pervasive (20–50% of decisions in every group, CD included), so
+flagging on it would flag every row. Sorted by `sort_table`.
 """
 function eta_solver_table(df::DataFrame; threshold::Real=0.01)::DataFrame
     E = eta_frame(df)
@@ -200,7 +202,7 @@ function eta_solver_table(df::DataFrame; threshold::Real=0.01)::DataFrame
         push!(rows, (; allocator=sub.allocator[1], cap=sub.cap[1], eta=sub.eta[1], n_runs=nrow(sub),
             n_decisions=nd, n_failed=nf, n_fallback=nb, n_almost_optimal=na, failed_share=fs,
             fallback_share=bs, n_beyond_almost=nb - na, beyond_almost_share=gs,
-            flag=(fs > threshold || bs > threshold)))
+            flag=(fs > threshold || gs > threshold)))
     end
     return sort_table(DataFrame(rows))
 end

@@ -132,14 +132,15 @@ end
 """
     limits_dial(limits::DataFrame)::DataFrame
 
-The step (a) one-day dial: one row per run of `eta_frame(limits)` with `allocator`, `eta` (dimensionless),
-the scorecard growth rates and counts, and `REGIME_METRICS`. Errors unless it has 17 rows.
+The step (a) dial over the full run: one row per full-window backtest of `eta_frame(limits)` (17 runs) with
+`allocator`, `eta` (dimensionless), the scorecard growth rates and counts (`n_failed`, `n_fallback`,
+`n_almost_optimal` are decision counts), and `REGIME_METRICS`. Errors unless it has 17 rows.
 """
 function limits_dial(limits::DataFrame)::DataFrame
     L = eta_frame(limits)
     nrow(L) == 17 || error("limits_dial: expected 17 rows, got ", nrow(L))
     return select(L, :allocator, :eta, :realized_growth, :vol, :max_drawdown, :mean_eff_names, :mean_invested,
-        :turnover, :n_failed, :n_fallback, REGIME_METRICS...)
+        :turnover, :n_failed, :n_fallback, :n_almost_optimal, REGIME_METRICS...)
 end
 
 function main(args=ARGS)

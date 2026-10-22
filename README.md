@@ -26,7 +26,7 @@ growth rates g = ln(S_end/S_start)/(k·Δt) in 1/yr with Δt = 1/252.
    `label`, over every growth-scorecard metric and run statistic. Exits 1 unless every committed run is present
    and every value is exactly equal. Run it after a code change that should not move the results (after the
    `--fresh` reruns) and before committing new summaries.
-6. `julia -t auto scripts/11_run_study.jl --universe`: the ticker-picker addendum's 3,804 runs (universe-wide
+6. `julia -t auto scripts/11_run_study.jl --universe`: the ticker-picker addendum's 4,438 runs (universe-wide
    screens and random controls at K ∈ {5, 8, 13, 21, 34}, plus the user's 13- and 15-name lists), summary in
    `results/universe_summary.csv`.
 7. `julia -t auto scripts/11_run_study.jl --eta`: the CES elasticity sweep, 2,562 runs (both CES versions over the
@@ -36,7 +36,8 @@ growth rates g = ln(S_end/S_start)/(k·Δt) in 1/yr with Δt = 1/252.
 8. `julia scripts/11_run_study.jl --limits`: the limits dial, 17 budget-only runs over the full window (2025-01-02 → 2026-09-04,
    the fixed 13-name list, hedge off, no per-stock, volatility or sector cap; step (a) η grid for both CES versions,
    plus Cobb-Douglas as η = 1), summary in `results/limits_summary.csv` and a one-day solve of each run
-   (a fresh book on one day) in `results/limits_day.csv`. Each weight is gated against its closed form: the command errors if any row is off
+   (a fresh book on one day) in `results/limits_day.csv` (with a `solver` column). The 17 limits runs are full-window backtests; only the
+   one-day weights in `limits_day.csv` are gated against the closed form: the command errors if any row is off
    by more than 1e-3, is not finite, or has a status other than `:optimal`.
 9. `julia scripts/12_tables.jl [dir] [--smoke]`: comparison tables to `<dir>/tables/*.csv` (default `results/`),
    also printed as Markdown. Smoke check: `julia scripts/12_tables.jl results/smoke --smoke`. With
@@ -99,7 +100,7 @@ Rulings made during the build, each of which changes behavior:
   next day. A date with no earlier observation is an error, not filled from a later one.
 - `CESw` is added beside the share-count CES (user, 2026-10-21; spec `2026-10-21-ces-eta-sweep-design.md`).
 - The η sweep and the clean limits: the headline stays `ces_eta = 0.5` for both versions, and the sweep is
-  sensitivity around it. The limits dial solves one decision per η against the closed forms.
+  sensitivity around it. The limits dial is 17 full-window backtests; only the one-day weights in `limits_day.csv` are gated against the closed forms (within 1e-3).
 - The turnover rule is a spread-cost budget (user, 2026-10-22), c̄·Σ|Δnᵢ| ≤ `turnover_frac`·W. At 5 bps, for a
   long-only book, it can bind only when a basket's mean share price is more than 100 times its cheapest name's.
   The names `turnover_frac` and `K_turnover` are unchanged.
@@ -130,12 +131,16 @@ CES elasticity sweep (spec `docs/superpowers/specs/2026-10-21-ces-eta-sweep-desi
 - Clarabel 0.11.1 threw a `DomainError` in its power-cone barrier at extreme η on real data (a trial point its own
   feasibility test rejects, a slack of about −5.6e-17 under the 1e-12 gap tolerances). No Clarabel setting removed
   it, so `_solve_with_fallback` treats a solver exception as that solver not accepting and falls through to SCS.
-  Errors in our own model-building code still propagate. SCS runs at its default settings. In the 17 limits runs it
+  Errors in our own model-building code still propagate. SCS runs at its default settings. In the 17 budget-only limits runs it
   answered 82 decisions, all at the extreme η; its median weight error was 3.3e-6 against a BigFloat reference, and
-  3 decisions were above 1e-3 (max 4.2e-3). Cobb-Douglas and η = 0.5/2 results are bit-identical to before.
-- Clarabel stops at ALMOST_OPTIMAL on 20–40% of decisions in every run, Cobb-Douglas included; this predates the
-  sweep. `eta_solver` flags any η point where failed or fallback decisions exceed 1% of decisions, and also reports
-  `n_beyond_almost` and `beyond_almost_share` (SCS or a failed sub-solve). Flagged points are reported, never dropped.
+  3 decisions were above 1e-3 (max 4.2e-3). Cobb-Douglas and η = 0.5/2 results are bit-identical to before the solver-exception fallthrough.
+- Clarabel stops at ALMOST_OPTIMAL on a large share of decisions in every run, Cobb-Douglas included; this predates
+  the sweep. In `results/tables/eta_solver.csv` the share is about 32% for Cobb-Douglas, 33–51% for CES and 34–51%
+  for CESw, and 48–50% at the headline η = 0.5; in the limits runs (`results/limits_summary.csv`) it is about 27%.
+  `eta_solver` flags any η point where failed decisions or decisions answered beyond ALMOST_OPTIMAL (SCS or a failed
+  sub-solve) exceed 1% of decisions; ALMOST_OPTIMAL alone is not flagged, since it is pervasive. It reports
+  `n_beyond_almost` and `beyond_almost_share` per point: from 0.6% to 16% of decisions, above 4% at 14 points
+  (CES and CESw at η ≤ 0.25 and at η ≥ 4). Flagged points are reported, never dropped.
 - Run labels look like `CESw|bandit|hedge=true|seed=5660|eta=2|cap=off`; limits labels end `|eta=<η>|limits`.
   The cap-on η = 0.5 and Cobb-Douglas points come from Tier 1. Cobb-Douglas runs keep `ces_eta = 0.5` (ignored by
   Cobb-Douglas); only their label says η = 1.
