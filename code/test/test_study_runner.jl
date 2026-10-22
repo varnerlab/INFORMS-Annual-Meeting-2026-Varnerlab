@@ -118,10 +118,14 @@ end
         universe_screens=[:global_gamma, :liquid_gamma, :corr_gamma, :random_global, :random_liquid],
         fixed_lists=["l8b_13" => s.fixed_tickers, "l8b_15" => vcat(s.fixed_tickers, ["WMT", "PG"])],
         eta=[0.1, 0.25, 0.5, 2.0, 4.0, 10.0], eta_limits=[0.05, 0.1, 0.25, 0.5, 2.0, 4.0, 10.0, 20.0],
-        limits_list="l8b_13")
+        eta_ces_drop=[0.1], limits_list="l8b_13")
     e = eta_runs(s, g)
     on = filter(r -> r.settings.w_max == s.w_max, e); off = filter(r -> r.settings.w_max == 1.0, e)
-    @test length(e) == 2806 && length(on) == 1220 && length(off) == 1586
+    @test length(e) == 2562 && length(on) == 1098 && length(off) == 1464
+    @test !any(r -> r.allocator == "CES" && r.settings.ces_eta == 0.1, e)
+    @test count(r -> r.allocator == "CESw" && r.settings.ces_eta == 0.1, e) == 244
+    g_old = Base.structdiff(g, NamedTuple{(:eta_ces_drop,)})
+    @test length(eta_runs(s, g_old)) == 2806
     @test all(r -> r.allocator in ("CES", "CESw") && r.settings.ces_eta != 0.5, on)
     @test count(r -> r.allocator == "CD", off) == 122
     labels = Set(r.label for r in e)

@@ -244,10 +244,12 @@ _eta_text(η::Real) = isinteger(η) ? string(Int(η)) : string(Float64(η))
 """
     eta_runs(s::MyStudySettings, grid)::Vector{MyStudyRun}
 
-The η sweep inside the study **(plan decision)**: 2,806 runs with the default grid. Cap on: `"CES"` and `"CESw"` at
+The η sweep inside the study **(plan decision)**: 2,562 runs with the default grid. Cap on: `"CES"` and `"CESw"` at
 every `grid.eta` except `s.ces_eta`, on `with_settings(s; ces_eta=η)`. Cap off (`w_max = 1`): `"CD"` once, plus `"CES"` and
 `"CESw"` at every `grid.eta`. Each is `tier1_runs` with `allocators=[a]`, labeled
 `<tier1 label>|eta=<η>|cap=<on|off>`; CD's label carries η = 1 but its settings keep `ces_eta = s.ces_eta`, which CD ignores.
+Share-count `"CES"` (never `"CESw"`) is left out at every η in `grid.eta_ces_drop`, cap on and off **(user, 2026-10-22)**: it
+is ill-conditioned when a limit binds. A grid without that field drops nothing.
 """
 function eta_runs(s::MyStudySettings, grid)::Vector{MyStudyRun}
     out = MyStudyRun[]
@@ -255,11 +257,14 @@ function eta_runs(s::MyStudySettings, grid)::Vector{MyStudyRun}
         push!(out, build(MyStudyRun, (settings=r.settings, allocator=r.allocator, screen=r.screen, seed=r.seed,
             label=r.label * "|eta=$(_eta_text(η))|cap=$(cap)")))
     end
+    drop = get(grid, :eta_ces_drop, Float64[])
     for a in ("CES", "CESw"), η in grid.eta
+        (a == "CES" && η in drop) && continue
         η == s.ces_eta || add!(with_settings(s; ces_eta=η), a, η, "on")
     end
     add!(with_settings(s; w_max=1.0), "CD", 1, "off")
     for a in ("CES", "CESw"), η in grid.eta
+        (a == "CES" && η in drop) && continue
         add!(with_settings(s; ces_eta=η, w_max=1.0), a, η, "off")
     end
     return out

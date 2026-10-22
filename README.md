@@ -29,8 +29,9 @@ growth rates g = ln(S_end/S_start)/(k·Δt) in 1/yr with Δt = 1/252.
 6. `julia -t auto scripts/11_run_study.jl --universe`: the ticker-picker addendum's 3,804 runs (universe-wide
    screens and random controls at K ∈ {5, 8, 13, 21, 34}, plus the user's 13- and 15-name lists), summary in
    `results/universe_summary.csv`.
-7. `julia -t auto scripts/11_run_study.jl --eta`: the CES elasticity sweep, 2,806 runs (both CES versions over the
-   η grids, with the β cap on and off), summary in `results/eta_summary.csv`. The cap-on η = 0.5 and
+7. `julia -t auto scripts/11_run_study.jl --eta`: the CES elasticity sweep, 2,562 runs (both CES versions over the
+   η grids, with the per-name cap on and off; share-count CES at η = 0.1 is left out, `eta_ces_drop`, because it is
+   ill-conditioned when a limit binds, while CESw at η = 0.1 and every η of the limits runs are kept), summary in `results/eta_summary.csv`. The cap-on η = 0.5 and
    Cobb-Douglas points are taken from Tier 1, not rerun.
 8. `julia scripts/11_run_study.jl --limits`: the limits dial, 17 budget-only runs over the full window (2025-01-02 → 2026-09-04,
    the fixed 13-name list, hedge off, no per-stock, volatility or sector cap; step (a) η grid for both CES versions,

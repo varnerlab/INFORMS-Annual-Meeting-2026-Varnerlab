@@ -109,9 +109,9 @@ end
 
 Read `config/study.toml`. Every table except `[grid]` is flattened into settings keys (a key that
 repeats across tables or is not a settings field throws `ArgumentError`); `"calibrated"` for
-`lambda` or `vol_cap_annual` becomes `NaN`. `grid` is `(n_seeds, base_seed, allocators, screens, hedge, K, universe_screens, fixed_lists, eta, eta_limits, limits_list)`, with
+`lambda` or `vol_cap_annual` becomes `NaN`. `grid` is `(n_seeds, base_seed, allocators, screens, hedge, K, universe_screens, fixed_lists, eta, eta_limits, eta_ces_drop, limits_list)`, with
 `fixed_lists` the `[grid.fixed_lists]` table as `name => tickers` pairs sorted by name, `eta` and `eta_limits` the CES
-elasticities (dimensionless, each finite and > 0) of the η sweep and the clean-limits runs, and `limits_list` the name of the
+elasticities (dimensionless, each finite and > 0) of the η sweep and the clean-limits runs, `eta_ces_drop` the elasticities (a subset of `eta`) at which share-count `"CES"` is left out of the η sweep, and `limits_list` the name of the
 fixed list of the clean-limits runs. Throws `ArgumentError` for a missing key, a bad η or an unknown `limits_list`.
 """
 function load_study(path::AbstractString)
@@ -130,16 +130,20 @@ function load_study(path::AbstractString)
     settings = build(MyStudySettings, NamedTuple(flat))
     g = get(raw, "grid", Dict{String,Any}())
     for k in ("n_seeds", "base_seed", "allocators", "screens", "hedge", "K", "universe_screens", "fixed_lists",
-        "eta", "eta_limits", "limits_list")
+        "eta", "eta_limits", "eta_ces_drop", "limits_list")
         haskey(g, k) || throw(ArgumentError("load_study: [grid] is missing $(k)"))
     end
     grid = (n_seeds = Int(g["n_seeds"]), base_seed = Int(g["base_seed"]),
         allocators = String.(g["allocators"]), screens = Symbol.(g["screens"]), hedge = Bool.(g["hedge"]),
         K = Int.(g["K"]), universe_screens = Symbol.(g["universe_screens"]),
         fixed_lists = sort!([String(n) => String.(v) for (n, v) in g["fixed_lists"]]; by=first),
-        eta = Float64.(g["eta"]), eta_limits = Float64.(g["eta_limits"]), limits_list = String(g["limits_list"]))
+        eta = Float64.(g["eta"]), eta_limits = Float64.(g["eta_limits"]),
+        eta_ces_drop = Float64.(g["eta_ces_drop"]), limits_list = String(g["limits_list"]))
     for η in vcat(grid.eta, grid.eta_limits)
         (isfinite(η) && η > 0) || throw(ArgumentError("load_study: every eta must be finite and > 0, got $(η)"))
+    end
+    for η in grid.eta_ces_drop
+        η in grid.eta || throw(ArgumentError("load_study: every eta_ces_drop must be in eta, got $(η)"))
     end
     grid.limits_list in first.(grid.fixed_lists) ||
         throw(ArgumentError("load_study: limits_list $(grid.limits_list) names no [grid.fixed_lists] entry"))

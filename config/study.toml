@@ -83,6 +83,7 @@ K = [5, 8, 13, 21, 34]     # basket sizes of the universe-wide screens (count)
 universe_screens = ["global_gamma", "liquid_gamma", "corr_gamma", "random_global", "random_liquid"]  # screen labels
 eta = [0.1, 0.25, 0.5, 2.0, 4.0, 10.0]                     # CES elasticities of the eta sweep, step (b) (dimensionless); Cobb-Douglas is eta = 1
 eta_limits = [0.05, 0.1, 0.25, 0.5, 2.0, 4.0, 10.0, 20.0]  # CES elasticities of the clean-limits runs, step (a) (dimensionless)
+eta_ces_drop = [0.1]                                       # share-count CES elasticities left out of the eta sweep, step (b) (dimensionless): ill-conditioned when a limit binds (user, 2026-10-22)
 limits_list = "l8b_13"                                      # fixed list of the clean-limits runs (a [grid.fixed_lists] name)
 
 [grid.fixed_lists]        # lists chosen in advance without 2025 data

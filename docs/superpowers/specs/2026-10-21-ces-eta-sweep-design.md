@@ -130,8 +130,10 @@ Two cap settings (user, §3):
   setting needs its own η = 1 point, Cobb-Douglas with the cap off: `CD`, plus `CES` and `CESw` at all six η,
   is 13 × 122 = 1,586 runs.
 
-These 2,806 runs are a new experiment `eta` with summary `results/eta_summary.csv`. Run labels add the η and the
+These 2,562 runs are a new experiment `eta` with summary `results/eta_summary.csv`. Run labels add the η and the
 cap setting, e.g. `CESw|bandit|hedge=true|seed=5660|eta=2|cap=off` **(my call on the format)**.
+
+**(user, 2026-10-22)** Share-count CES at η = 0.1 is dropped from step (b) (`eta_ces_drop`): with a binding limit, 7.8% of decisions failed with the cap on, and weights were off by up to about 3% against an exact optimum. CESw at η = 0.1 and every η of step (a) are kept.
 
 New run statistics **(my call)**, added to `study_stats` so every grid reports them:
 - `mean_eff_names`, a concentration measure that, unlike `n_names`, does not count tiny holdings. Per decision:
