@@ -75,3 +75,19 @@ end
     @test sort_table(l).n == [3, 2, 1]
     @test sort_table(DataFrame(name=["b", "a"])).name == ["b", "a"]            # no sort columns: unchanged
 end
+
+@testset "η sweep tables" begin
+    df = DataFrame(status=fill("ok", 6), allocator=["CD", "CES", "CESw", "CES", "SG", "CD"],
+        ces_eta=[0.5, 0.5, 2.0, 0.1, 0.5, 0.5], w_max=[0.1, 0.1, 1.0, 0.1, 0.1, 1.0])
+    e = eta_frame(df)
+    @test e.allocator == ["CD", "CES", "CESw", "CES", "CD"] && e.eta == [1.0, 0.5, 2.0, 0.1, 1.0]
+    @test e.cap == ["on", "on", "off", "on", "off"]
+    s = DataFrame(status=fill("ok", 3), allocator=fill("CESw", 3), ces_eta=[20.0, 20.0, 2.0], w_max=fill(1.0, 3),
+        n_decisions=[50, 50, 100], n_failed=[1, 1, 1], n_fallback=[0, 3, 0], n_almost_optimal=[0, 2, 0])
+    t = eta_solver_table(s)
+    @test t.eta == [2.0, 20.0] && t.n_runs == [1, 2] && t.failed_share ≈ [0.01, 0.02]
+    @test t.fallback_share ≈ [0.0, 0.03] && t.flag == [false, true]          # 1% is not above 1%
+    @test t.n_beyond_almost == [0, 1] && t.beyond_almost_share ≈ [0.0, 0.01]
+    o = sort_table(DataFrame(allocator=fill("CES", 3), cap=["off", "on", "on"], eta=[0.1, 2.0, 0.1]))
+    @test o.cap == ["on", "on", "off"] && o.eta == [0.1, 2.0, 0.1]
+end

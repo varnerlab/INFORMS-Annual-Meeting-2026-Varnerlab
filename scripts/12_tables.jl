@@ -101,6 +101,47 @@ function addendum_tables(tier1::DataFrame, uni::DataFrame)::Vector{Pair{String,D
         "quota_cost" => quota_cost(tier1, uni)]
 end
 
+"""
+    eta_tables(tier1, eta)::Vector{Pair{String,DataFrame}}
+
+The η sweep tables from the Tier 1 and η sweep summaries: `eta_sweep` (medians of `ETA_METRICS`) and
+`eta_regimes` (medians of `REGIME_METRICS`) by allocator, η, cap, hedge and screen, and `eta_solver`
+(`eta_solver_table`). Errors unless every group holds 30 runs for bandit and random and 1 for gamma.
+Flagged solver rows go to `stderr` as a warning.
+"""
+function eta_tables(tier1::DataFrame, eta::DataFrame)::Vector{Pair{String,DataFrame}}
+    E = eta_frame(vcat(tier1, eta; cols=:union))
+    by = [:allocator, :eta, :cap, :hedge, :screen]
+    sweep = group_summary(E; by=by, metrics=ETA_METRICS)
+    want = Dict("bandit" => 30, "random" => 30, "gamma" => 1)
+    for r in eachrow(sweep)
+        w = get(want, string(r.screen), nothing)
+        (w === nothing || r.n == w) || error("eta_sweep: ", r.allocator, " eta=", r.eta, " cap=", r.cap,
+            " hedge=", r.hedge, " ", r.screen, " has n=", r.n, ", expected ", w)
+    end
+    regimes = group_summary(E; by=by, metrics=REGIME_METRICS)
+    solver = eta_solver_table(E)
+    for r in eachrow(solver)
+        r.flag && println(stderr, "FLAG ", r.allocator, " eta=", r.eta, " cap=", r.cap, ": failed ",
+            round(r.failed_share; digits=4), ", fallback ", round(r.fallback_share; digits=4),
+            ", beyond_almost ", round(r.beyond_almost_share; digits=4))
+    end
+    return ["eta_sweep" => sweep, "eta_regimes" => regimes, "eta_solver" => solver]
+end
+
+"""
+    limits_dial(limits::DataFrame)::DataFrame
+
+The step (a) one-day dial: one row per run of `eta_frame(limits)` with `allocator`, `eta` (dimensionless),
+the scorecard growth rates and counts, and `REGIME_METRICS`. Errors unless it has 17 rows.
+"""
+function limits_dial(limits::DataFrame)::DataFrame
+    L = eta_frame(limits)
+    nrow(L) == 17 || error("limits_dial: expected 17 rows, got ", nrow(L))
+    return select(L, :allocator, :eta, :realized_growth, :vol, :max_drawdown, :mean_eff_names, :mean_invested,
+        :turnover, :n_failed, :n_fallback, REGIME_METRICS...)
+end
+
 function main(args=ARGS)
     smoke = "--smoke" in args
     pos = filter(a -> !startswith(a, "--"), args)
@@ -124,6 +165,13 @@ function main(args=ARGS)
     upath, tpath = joinpath(dir, "universe_summary.csv"), joinpath(dir, "tier1_summary.csv")
     if !smoke && isfile(upath) && isfile(tpath)
         append!(tables, addendum_tables(load_ok(tpath), load_ok(upath)))
+    end
+    epath, lpath = joinpath(dir, "eta_summary.csv"), joinpath(dir, "limits_summary.csv")
+    if !smoke && isfile(epath) && isfile(tpath)
+        append!(tables, eta_tables(load_ok(tpath), load_ok(epath)))
+    end
+    if !smoke && isfile(lpath)
+        push!(tables, "limits_dial" => limits_dial(load_ok(lpath)))
     end
     for (name, t0) in tables
         t = sort_table(t0)                     # independent of the summaries' row order (the run hashes)

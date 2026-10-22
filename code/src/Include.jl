@@ -74,4 +74,5 @@ export study_key, regime_stats, study_key_string, study_hash, data_fingerprint, 
     rebuild_study_summary
 export limits_row, limits_day, limits_failures
 export group_summary, SUMMARY_METRICS, paired_win_rate, gamma_percentile, hedge_effect, long_vs_short_hedge,
-    passive_references, markdown_table, compare_summaries, sort_table, TABLE_ALLOCATOR_ORDER, TABLE_SCREEN_ORDER
+    passive_references, markdown_table, compare_summaries, sort_table, TABLE_ALLOCATOR_ORDER, TABLE_SCREEN_ORDER,
+    eta_frame, ETA_METRICS, REGIME_METRICS, eta_solver_table

@@ -157,6 +157,54 @@ function passive_references(md::MyMarketData, start::Date, stop::Date; W0::Real=
     return DataFrame(rows)
 end
 
+"""Metrics of the η sweep table: growth scorecard (`realized_growth` in yr⁻¹, `sharpe` dimensionless,
+`max_drawdown` fraction, `vol` in yr⁻¹), `mean_eff_names` (count), `mean_invested` (fraction) and `turnover`
+(fraction of wealth per rebalance)."""
+const ETA_METRICS = [:realized_growth, :sharpe, :max_drawdown, :vol, :mean_eff_names, :mean_invested, :turnover]
+"""Metrics of the market-state table: `g_bull`, `g_bear` (mean growth rate on bullish and bearish days, yr⁻¹),
+`n_bull`, `n_bear` (day counts) and the SPY growth rates `spy_g_bull`, `spy_g_bear` (yr⁻¹) on the same days."""
+const REGIME_METRICS = [:g_bull, :g_bear, :n_bull, :n_bear, :spy_g_bull, :spy_g_bear]
+
+"""
+    eta_frame(df::DataFrame)::DataFrame
+
+The `"ok"` rows (when `status` exists) of allocators CD, CES and CESw, with `eta::Float64` (1.0 for CD,
+otherwise `ces_eta`, dimensionless) and `cap::String` (`"on"` when `w_max < 1`, otherwise `"off"`).
+"""
+function eta_frame(df::DataFrame)::DataFrame
+    d = "status" in names(df) ? df[string.(df.status) .== "ok", :] : df
+    d = d[in.(string.(d.allocator), Ref(("CD", "CES", "CESw"))), :]
+    d = copy(d)
+    d.allocator = String.(string.(d.allocator))
+    d.eta = Float64[a == "CD" ? 1.0 : Float64(e) for (a, e) in zip(d.allocator, d.ces_eta)]
+    d.cap = String[w < 1 ? "on" : "off" for w in d.w_max]
+    return d
+end
+
+"""
+    eta_solver_table(df::DataFrame; threshold::Real=0.01)::DataFrame
+
+Per `allocator, cap, eta` of `eta_frame(df)`: `n_runs` (count); the sums `n_decisions`, `n_failed`,
+`n_fallback`, `n_almost_optimal` (decision counts); `failed_share` and `fallback_share` (sum ÷
+`n_decisions`, fractions); `n_beyond_almost` (sum of `n_fallback − n_almost_optimal`: decisions answered
+by SCS or with a failed sub-solve) and `beyond_almost_share` (÷ `n_decisions`); and `flag`, true when
+either share is above `threshold` (fraction). Sorted by `sort_table`.
+"""
+function eta_solver_table(df::DataFrame; threshold::Real=0.01)::DataFrame
+    E = eta_frame(df)
+    rows = []
+    for sub in groupby(E, [:allocator, :cap, :eta])
+        nd = sum(sub.n_decisions)
+        nf, nb, na = sum(sub.n_failed), sum(sub.n_fallback), sum(sub.n_almost_optimal)
+        fs, bs, gs = nf / nd, nb / nd, (nb - na) / nd
+        push!(rows, (; allocator=sub.allocator[1], cap=sub.cap[1], eta=sub.eta[1], n_runs=nrow(sub),
+            n_decisions=nd, n_failed=nf, n_fallback=nb, n_almost_optimal=na, failed_share=fs,
+            fallback_share=bs, n_beyond_almost=nb - na, beyond_almost_share=gs,
+            flag=(fs > threshold || bs > threshold)))
+    end
+    return sort_table(DataFrame(rows))
+end
+
 """Allocator order of the written tables (`sort_table`)."""
 const TABLE_ALLOCATOR_ORDER = ["CD", "CES", "CESw", "SG", "MinVar", "Tangent", "LS"]
 """Screen order of the written tables (`sort_table`); other screens follow, by name."""
@@ -169,13 +217,15 @@ _table_rank(v, order) = (something(findfirst(==(string(v)), order), length(order
     sort_table(t::DataFrame)::DataFrame
 
 A sorted copy of `t`, so a written table does not depend on the row order of the summaries (which follow the
-run hashes). Keys, for the columns `t` has: `allocator` (`TABLE_ALLOCATOR_ORDER`), `pair`, `metric`,
+run hashes). Keys, for the columns `t` has: `allocator` (`TABLE_ALLOCATOR_ORDER`), `cap` (on first), `eta` (ascending), `pair`, `metric`,
 `screen` (`TABLE_SCREEN_ORDER`, others after by name), `basket_size` (ascending), `hedge` (on first),
 `repick_on_band_exit` (on first). A table with none of them is returned unchanged.
 """
 function sort_table(t::DataFrame)::DataFrame
     cols = names(t); ord = Any[]
     "allocator" in cols && push!(ord, order(:allocator; by=a -> _table_rank(a, TABLE_ALLOCATOR_ORDER)))
+    "cap" in cols && push!(ord, order(:cap; rev=true))
+    "eta" in cols && push!(ord, order(:eta))
     "pair" in cols && push!(ord, order(:pair))
     "metric" in cols && push!(ord, order(:metric; by=string))
     "screen" in cols && push!(ord, order(:screen; by=x -> _table_rank(x, TABLE_SCREEN_ORDER)))
