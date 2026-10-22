@@ -32,9 +32,10 @@ growth rates g = ln(S_end/S_start)/(k·Δt) in 1/yr with Δt = 1/252.
 7. `julia -t auto scripts/11_run_study.jl --eta`: the CES elasticity sweep, 2,806 runs (both CES versions over the
    η grids, with the β cap on and off), summary in `results/eta_summary.csv`. The cap-on η = 0.5 and
    Cobb-Douglas points are taken from Tier 1, not rerun.
-8. `julia scripts/11_run_study.jl --limits`: the limits dial, 17 one-decision runs (step (a) η grid for both CES
-   versions, plus Cobb-Douglas as η = 1), summary in `results/limits_summary.csv` and the one-day solve in
-   `results/limits_day.csv`. Each weight is gated against its closed form: the command errors if any row is off
+8. `julia scripts/11_run_study.jl --limits`: the limits dial, 17 budget-only runs over the full window (2025-01-02 → 2026-09-04,
+   the fixed 13-name list, hedge off, no per-stock, volatility or sector cap; step (a) η grid for both CES versions,
+   plus Cobb-Douglas as η = 1), summary in `results/limits_summary.csv` and a one-day solve of each run
+   (a fresh book on one day) in `results/limits_day.csv`. Each weight is gated against its closed form: the command errors if any row is off
    by more than 1e-3, is not finite, or has a status other than `:optimal`.
 9. `julia scripts/12_tables.jl [dir] [--smoke]`: comparison tables to `<dir>/tables/*.csv` (default `results/`),
    also printed as Markdown. Smoke check: `julia scripts/12_tables.jl results/smoke --smoke`. With
