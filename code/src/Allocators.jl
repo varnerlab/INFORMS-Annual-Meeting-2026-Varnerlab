@@ -519,35 +519,52 @@ end
 
 CES with ρ = 1 − 1/η, nᵢ in shares, γ ≤ 0 names pinned at ε shares (free hedge names: nᵢ ≥ ε, no
 utility term). Under a budget alone nᵢ ∝ (γᵢ/Sᵢ)^η for every η (CHEME-5660 `allocate_ces`).
-- η > 1 (0 < ρ < 1): maximize Σ_{γ>0} γᵢ·tᵢ with (nᵢ, 1, tᵢ) ∈ PowerCone(ρ), i.e. tᵢ ≤ nᵢ^ρ.
-- 0 < η < 1 (ρ < 0): minimize Σ_{γ>0} γᵢ·tᵢ with (tᵢ, nᵢ, c^(1−η)) ∈ PowerCone(η), i.e.
-  tᵢ^η·nᵢ^(1−η) ≥ c^(1−η), tᵢ ≥ (nᵢ/c)^ρ, where c = W/mean(S) (shares) is a typical share count.
-  This maximizes (Σ γᵢ nᵢ^ρ)^(1/ρ), since 1/ρ < 0; c scales every term by c^(−ρ), which leaves
-  the argmax unchanged and keeps the objective O(1) at any W (unscaled, a 33-name budget-only case
-  at W = 1e6 USD is off by 22% in shares).
+Both cones work on the scaled share count zᵢ = aᵢ·nᵢ (`_ces_objective`), with aᵢ = Σ_{γ>0} Sⱼ / W
+(1/shares), so zᵢ = 1 at the book with equal share counts over the preferred names.
+- η > 1 (0 < ρ < 1): maximize Σ_{γ>0} γᵢ·tᵢ with (zᵢ, 1, tᵢ) ∈ PowerCone(ρ), i.e. tᵢ ≤ zᵢ^ρ.
+- 0 < η < 1 (ρ < 0): minimize Σ_{γ>0} γᵢ·tᵢ with (tᵢ, zᵢ, 1) ∈ PowerCone(η), i.e. tᵢ ≥ zᵢ^ρ.
+  This maximizes (Σ γᵢ zᵢ^ρ)^(1/ρ), since 1/ρ < 0.
+- **(plan decision)** The scale c = W/Σ_{γ>0} Sᵢ (shares) replaces W/mean(S), and the η > 1 branch
+  is scaled too. A common factor c scales every term by c^(−ρ), which leaves the argmax unchanged
+  and keeps zᵢ = O(1) at any W and K (with W/mean(S), zᵢ ≈ 1/K at the optimum and the cone held
+  (1/K)^(−19) at η = 0.05).
 - η = 1: `allocate(MyCobbDouglasRule(), p)`.
 """
 function allocate(rule::MyCESRule, p::MyAllocationProblem)::MyAllocationResult
     rule.η == 1 && return allocate(MyCobbDouglasRule(), p)
     _check_problem(p)
-    η = rule.η; ρ = 1 - 1 / η
-    c = p.W / (sum(p.prices) / length(p.prices))                         # typical share count
     pins = fill(p.constraints.ε, length(p.γ))
     any(>(0), p.γ) || return _result(p, pins, :no_preferred)
-    Kp = count(>(0), p.γ)
-    return _solve_utility(p, pins, zeros(Kp), function (m, x, γp)
+    pref = findall(p.γ .> 0)
+    a = fill(sum(p.prices[pref]) / p.W, length(pref))                    # 1/c, 1/shares
+    return _solve_utility(p, pins, zeros(length(pref)), _ces_objective(Float64(rule.η), a))
+end
+
+"""
+    _ces_objective(η::Float64, a::Vector{Float64})::Function
+
+The `objective!(m, x, γp)` closure of `_solve_utility` for CES with elasticity η ≠ 1 over the
+preferred holdings x, on the scaled variable zₖ = aₖ·xₖ (aₖ in 1/units of x). With ρ = 1 − 1/η it adds
+- η > 1: `[z, 1, t] in PowerCone(ρ)` (t ≤ z^ρ) and returns Σ γₖ tₖ;
+- η < 1: `[t, z, 1] in PowerCone(η)` (t ≥ z^ρ) and returns −Σ γₖ tₖ.
+The argmax is that of (Σ γₖ xₖ^ρ)^(1/ρ) for any a > 0.
+"""
+function _ces_objective(η::Float64, a::Vector{Float64})::Function
+    ρ = 1 - 1 / η
+    return function (m, x, γp)
+        Kp = length(x)
         t = @variable(m, [1:Kp])
         if η > 1
             for k in 1:Kp
-                @constraint(m, [x[k], 1.0, t[k]] in MOI.PowerCone(ρ))     # |t| ≤ n^ρ
+                @constraint(m, [a[k] * x[k], 1.0, t[k]] in MOI.PowerCone(ρ))   # t ≤ z^ρ
             end
             return sum(γp[k] * t[k] for k in 1:Kp)
         end
         for k in 1:Kp
-            @constraint(m, [t[k], x[k], c^(1 - η)] in MOI.PowerCone(η))   # t ≥ (n/c)^ρ, ρ < 0
+            @constraint(m, [t[k], a[k] * x[k], 1.0] in MOI.PowerCone(η))       # t ≥ z^ρ, ρ < 0
         end
         return -sum(γp[k] * t[k] for k in 1:Kp)
-    end)
+    end
 end
 
 """
@@ -592,4 +609,44 @@ function _stone_geary_baselines(p::MyAllocationProblem, b::Vector{Float64})::MyA
     n, status = _min_hedge(p, b, Int[], hedge, b[hedge])
     status == :optimal || return _result(p, copy(c.n_prev), status)
     return _result(p, n, :no_preferred)
+end
+
+# Pin weights and the preferred names' share of the budget under the budget alone. Names with γ ≤ 0
+# hold ε shares (weight ε·Sᵢ/W); B = W − Σ_{γ≤0} ε·Sᵢ (USD) is left for the names with γ > 0.
+# Returns (w, pref, B/W): the pin weights (dimensionless; zero on pref), the γ > 0 indices, and B/W.
+function _budget_split(γ::AbstractVector, S::AbstractVector, W::Real, ε::Real)
+    pref = findall(>(0), γ)
+    w = zeros(length(γ))
+    for i in eachindex(γ)
+        i in pref || (w[i] = ε * S[i] / W)
+    end
+    return w, pref, 1 - sum(w)
+end
+
+"""
+    budget_only_weights(rule, γ::AbstractVector, S::AbstractVector; W::Real, ε::Real=1e-3)::Vector{Float64}
+
+Dollar weights (dimensionless, Σ = 1) under the budget alone, in closed form. Names with γᵢ ≤ 0 hold
+ε shares (weight ε·Sᵢ/W); the budget B = W − Σ_{γ≤0} ε·Sᵢ (USD) left over is split among the names with
+γᵢ > 0: Cobb-Douglas in proportion to γᵢ, CES in proportion to Sᵢ·(γᵢ/Sᵢ)^η (nᵢ ∝ (γᵢ/Sᵢ)^η, η = 1 is
+Cobb-Douglas). With no γ > 0 it returns the pin weights only, as `allocate` does (`:no_preferred`).
+`γ` has no units, `S` is USD/share and `W` is USD.
+"""
+function budget_only_weights end
+
+function budget_only_weights(::MyCobbDouglasRule, γ::AbstractVector, S::AbstractVector;
+        W::Real, ε::Real=1e-3)::Vector{Float64}
+    w, pref, B = _budget_split(γ, S, W, ε)
+    isempty(pref) && return w
+    w[pref] .= B .* γ[pref] ./ sum(γ[pref])
+    return w
+end
+
+function budget_only_weights(rule::MyCESRule, γ::AbstractVector, S::AbstractVector;
+        W::Real, ε::Real=1e-3)::Vector{Float64}
+    w, pref, B = _budget_split(γ, S, W, ε)
+    isempty(pref) && return w
+    v = S[pref] .* (γ[pref] ./ S[pref]) .^ rule.η
+    w[pref] .= B .* v ./ sum(v)
+    return w
 end

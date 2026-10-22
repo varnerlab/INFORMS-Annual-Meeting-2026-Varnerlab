@@ -47,7 +47,7 @@ export MyMarketData, build, load_market_data, growth_rates, index_of, DATA_FILES
 export AbstractCovarianceModel, MySIMCovariance, MyShrunkResidualCovariance, growth_covariance,
     residual_matrix, shrinkage_loss, choose_shrinkage
 export AbstractPortfolioRule, MyCobbDouglasRule, MyCESRule, MyStoneGearyRule, MyConstraintSet,
-    MyAllocationProblem, MyAllocationResult, allocate, add_shared_constraints!
+    MyAllocationProblem, MyAllocationResult, allocate, add_shared_constraints!, budget_only_weights
 export MyMinVarRule, MyTangentRule, MyLongShortCDRule, max_investable, expected_growth
 export MyProjection, project_gbm
 export trade_cost, borrow_fee, MyMPCSpec, MyTriggerState, check_trigger
