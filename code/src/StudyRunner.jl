@@ -73,6 +73,15 @@ function data_fingerprint(md::MyMarketData, calib::MyCalibration)::String
     return bytes2hex(SHA.digest!(ctx))
 end
 
+# Effective number of names (names) of target weights w (dimensionless): 1/Σw̃ᵢ² with w̃ the entries above
+# `_BT_HELD_W` rescaled to sum to 1; NaN when those weights sum to less than 0.01 (skipped decision).
+function _eff_names(w::AbstractVector{<:Real})::Float64
+    long = [x for x in w if x > _BT_HELD_W]
+    tot = sum(long; init=0.0)
+    tot < 0.01 && return NaN
+    return 1 / sum(abs2, long ./ tot)
+end
+
 """
     study_stats(res::MyStudyResult)::NamedTuple
 
@@ -97,15 +106,6 @@ not fail but whose `solver` is `:clarabel_almost`, `:scs` or `:failed` (a failed
 step), and `n_almost_optimal` (decisions) those whose `solver` is `:clarabel_almost`. Counting every
 non-Clarabel-optimal outcome of an unfailed decision as a fallback is a **(plan decision)**.
 """
-# Effective number of names (names) of target weights w (dimensionless): 1/Σw̃ᵢ² with w̃ the entries above
-# `_BT_HELD_W` rescaled to sum to 1; NaN when those weights sum to less than 0.01 (skipped decision).
-function _eff_names(w::AbstractVector{<:Real})::Float64
-    long = [x for x in w if x > _BT_HELD_W]
-    tot = sum(long; init=0.0)
-    tot < 0.01 && return NaN
-    return 1 / sum(abs2, long ./ tot)
-end
-
 function study_stats(res::MyStudyResult)::NamedTuple
     tr = res.trades; live = tr.qty .!= 0
     traded = sum(abs.(tr.qty[live] .* tr.price[live]); init=0.0)
