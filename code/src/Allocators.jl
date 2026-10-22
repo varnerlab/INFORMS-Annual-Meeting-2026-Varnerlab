@@ -428,20 +428,48 @@ const _SOLVER_ORDER = (:none, :clarabel, :clarabel_almost, :scs, :failed)
 _worst_solver(outcomes::AbstractVector{Symbol})::Symbol =
     isempty(outcomes) ? :none : _SOLVER_ORDER[maximum(o -> findfirst(==(o), _SOLVER_ORDER), outcomes)]
 
+# Exceptions that are faults in code rather than a failed solve **(implementation decision)**, so
+# `_try_solver` rethrows them: a user interrupt, a model the solver cannot take (MOI.UnsupportedError:
+# our formulation), and code that cannot run (MethodError, UndefVarError, e.g. reading values on a
+# non-variable). They recur on every problem, so treating them as solver failures would silently turn
+# every decision into SCS or a failure.
+_code_fault(e) = e isa InterruptException || e isa MOI.UnsupportedError || e isa MethodError || e isa UndefVarError
+
+# One solver's attempt: `build_model(opt)` (our code, outside the `try`, so its errors propagate), then
+# optimize and, when the status is accepted, read the values. Returns (status, x_value or nothing). An
+# exception from the solve or the read that is not a `_code_fault` is that solver not accepting and
+# returns (MOI.OTHER_ERROR, nothing). Clarabel 0.11.1 throws a DomainError in its power-cone barrier
+# when an end-game trial slack lands within rounding of the cone boundary (CES at η = 0.05…0.25 and
+# 4…20 on real data); the exception would otherwise abort the whole backtest run.
+function _try_solver(build_model::Function, opt)
+    m, x = build_model(opt)
+    try
+        optimize!(m)
+        st = termination_status(m)
+        return st in _ACCEPTED ? (st, value.(x)) : (st, nothing)
+    catch e
+        _code_fault(e) && rethrow()
+        @debug "solver threw; treated as not accepting" opt exception = (e, catch_backtrace())
+        return (MOI.OTHER_ERROR, nothing)
+    end
+end
+
 # Solve with Clarabel (tight tolerances), then SCS if Clarabel does not reach (almost) optimal.
 # `build_model(optimizer)` returns `(model, x)`. Returns `(x_value or nothing, status)` with status
 # :optimal, :infeasible (either solver certified infeasibility) or :solver_failed. When a `_SOLVER_LOG`
-# scope is active, the outcome of the solve is also pushed to it.
+# scope is active, the outcome of the solve is also pushed to it. An exception thrown while a solver
+# optimizes or its values are read counts as that solver not accepting, with status MOI.OTHER_ERROR
+# (`_try_solver`), and the next solver is tried: Clarabel throwing and SCS accepting logs :scs, both
+# throwing logs :failed and returns :solver_failed. Exceptions from `build_model` itself and the
+# `_code_fault` kinds propagate.
 function _solve_with_fallback(build_model::Function)
     statuses = MOI.TerminationStatusCode[]
     for opt in (optimizer_with_attributes(Clarabel.Optimizer, _CLARABEL_ATTRIBUTES...), SCS.Optimizer)
-        m, x = build_model(opt)
-        optimize!(m)
-        st = termination_status(m)
+        st, xv = _try_solver(build_model, opt)
         push!(statuses, st)
         if st in _ACCEPTED
             log = _SOLVER_LOG[]; log === nothing || push!(log, _solver_outcome(statuses))
-            return (value.(x), :optimal)
+            return (xv, :optimal)
         end
     end
     log = _SOLVER_LOG[]; log === nothing || push!(log, _solver_outcome(statuses))

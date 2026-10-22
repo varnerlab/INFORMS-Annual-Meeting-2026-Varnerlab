@@ -103,3 +103,42 @@ end
     allocate(MyCobbDouglasRule(), P(σ_g_max=Inf))                     # outside a scope: not recorded
     @test length(log) == 1
 end
+
+# The l8b_13 problem on the 2025-01-02 limits day (γ, closes in USD/share, W0 = 1e5 USD, no volatility
+# cap; its spread-cost budget cannot bind, so P's c̄ = 0 gives the same problem). At η = 0.1 Clarabel
+# 0.11.1 throws a DomainError in its power-cone barrier (a trial slack within rounding of the cone
+# boundary), so SCS answers: 1.0e-5 from the closed form, hence atol 1e-4.
+@testset "CES η = 0.1 on the 2025-01-02 limits day: a solver exception falls back" begin
+    γ = [0.2043533430214032, 0.4250470535087004, 0.20331944550153472, 0.08782863554430279,
+        -0.07130077568335114, -0.04353191578672021, 0.20078551094433061, 0.09360595727463172,
+        0.0505425915575854, 0.2715814880071472, 0.39030767079955914, 0.6921431653443336, 0.11148182423982483]
+    S = [243.85, 120.63, 44.29, 69.94, 9.65, 51.37, 574.97, 20.22, 144.02, 418.58, 87.33, 138.31, 70.19]
+    rule = build(MyCESRule, (η=0.1,)); log = Symbol[]
+    r = Base.ScopedValues.with(() -> allocate(rule, P(γ=γ, prices=S, W=1e5, σ_g_max=Inf)),
+        VLINFORMS2026._SOLVER_LOG => log)
+    @test r.status == :optimal
+    @test r.w ≈ budget_only_weights(rule, γ, S; W=1e5) atol=1e-4
+    @test length(log) == 1 && log[1] in (:clarabel, :clarabel_almost, :scs)
+end
+
+@testset "_solve_with_fallback: a solver exception is that solver not accepting" begin
+    V = VLINFORMS2026
+    # max x subject to x ≤ 1; `err` (if any) is thrown from inside optimize! by a JuMP optimize hook
+    function lp(opt, err)
+        m = Model(opt); set_silent(m)
+        x = @variable(m, [1:1], upper_bound = 1.0)
+        @objective(m, Max, x[1])
+        err === nothing || set_optimize_hook(m, (model; kw...) -> throw(err))
+        return m, x
+    end
+    logged(f) = (log = Symbol[]; out = Base.ScopedValues.with(f, V._SOLVER_LOG => log); (out..., log))
+    k = Ref(0)                                                         # the first solver (Clarabel) throws
+    x, status, log = logged(() -> V._solve_with_fallback(opt -> lp(opt, (k[] += 1) == 1 ? DomainError(-1.0) : nothing)))
+    @test status == :optimal && isapprox(x, [1.0]; atol=1e-4) && log == [:scs]
+    x, status, log = logged(() -> V._solve_with_fallback(opt -> lp(opt, DomainError(-1.0))))   # both throw
+    @test x === nothing && status == :solver_failed && log == [:failed]
+    # our own faults propagate: in build_model, a value read on a non-variable, an interrupt
+    @test_throws ErrorException V._solve_with_fallback(opt -> error("bug in build_model"))
+    @test_throws MethodError V._solve_with_fallback(opt -> (first(lp(opt, nothing)), :x))
+    @test_throws InterruptException V._solve_with_fallback(opt -> lp(opt, InterruptException()))
+end
