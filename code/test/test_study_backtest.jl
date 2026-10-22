@@ -211,3 +211,11 @@ end
     @test context_key(r.settings) == context_key(ctx.settings)
     @test_throws ArgumentError run_study(ctx, r)
 end
+
+@testset "CESw in the study" begin
+    @test make_rule("CESw", with_settings(MyStudySettings(); ces_eta=2.0)) isa MyCESWeightRule
+    @test make_rule("CESw", with_settings(MyStudySettings(); ces_eta=2.0)).η == 2.0
+    md, ctx = study_ctx(); res = run_study(ctx, study_run(ctx, "CESw", :gamma))
+    @test res.decisions.reason[1] == :initial && minimum(res.cash) ≥ -1e-6
+    @test res.equity ≈ res.cash .+ held_value(res, md) rtol=1e-9
+end

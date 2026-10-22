@@ -8,7 +8,8 @@ same(a, b) = all(isequal(getfield(a, f), getfield(b, f)) for f in fieldnames(MyS
     @test isnan(s.lambda) && isnan(s.vol_cap_annual) && s.hedge && s.repick_on_band_exit
     cfg = load_study(joinpath(REPO, "config", "study.toml"))
     @test same(cfg.settings, s)                                        # the file holds the spec defaults
-    @test cfg.grid.n_seeds == 30 && cfg.grid.base_seed == 5660 && length(cfg.grid.allocators) == 6
+    @test cfg.grid.n_seeds == 30 && cfg.grid.base_seed == 5660
+    @test cfg.grid.allocators == ["CD", "CES", "CESw", "SG", "MinVar", "Tangent", "LS"]
     @test cfg.grid.screens == [:bandit, :gamma, :random] && cfg.grid.hedge == [true, false]
     bad = joinpath(mktempdir(), "bad.toml"); write(bad, "[market]\nxi_shrot = 21\n")
     @test_throws ArgumentError load_study(bad)

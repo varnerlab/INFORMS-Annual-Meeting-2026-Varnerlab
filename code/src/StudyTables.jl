@@ -158,7 +158,7 @@ function passive_references(md::MyMarketData, start::Date, stop::Date; W0::Real=
 end
 
 """Allocator order of the written tables (`sort_table`)."""
-const TABLE_ALLOCATOR_ORDER = ["CD", "CES", "SG", "MinVar", "Tangent", "LS"]
+const TABLE_ALLOCATOR_ORDER = ["CD", "CES", "CESw", "SG", "MinVar", "Tangent", "LS"]
 """Screen order of the written tables (`sort_table`); other screens follow, by name."""
 const TABLE_SCREEN_ORDER = ["gamma", "bandit", "random", "global_gamma", "liquid_gamma", "corr_gamma",
     "random_global", "random_liquid", "fixed"]

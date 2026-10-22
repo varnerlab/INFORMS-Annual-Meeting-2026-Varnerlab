@@ -69,6 +69,7 @@ end
     s = sort_table(t)
     # allocator order, then screen order (unknown screens last), hedge on first, re-pick on band exit first
     @test s.x == [7, 4, 3, 2, 6, 5, 1]
+    @test sort_table(DataFrame(allocator=["LS", "CESw", "CES", "CD"])).allocator == ["CD", "CES", "CESw", "LS"]
     @test sort_table(t[end:-1:1, :]) == s                                       # independent of the input order
     l = DataFrame(screen=[:random, :bandit, :bandit], repick_on_band_exit=[true, false, true], n=1:3)
     @test sort_table(l).n == [3, 2, 1]

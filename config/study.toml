@@ -76,7 +76,7 @@ downday_lookback = 252    # down-day beta lookback (trading days)
 [grid]
 n_seeds = 30              # seeds per cell (count)
 base_seed = 5660          # first seed (integer)
-allocators = ["CD", "CES", "SG", "MinVar", "Tangent", "LS"]  # allocator labels
+allocators = ["CD", "CES", "CESw", "SG", "MinVar", "Tangent", "LS"]  # allocator labels
 screens = ["bandit", "gamma", "random"]                       # screen labels
 hedge = [true, false]     # hedge on/off cells (flags)
 K = [5, 8, 13, 21, 34]     # basket sizes of the universe-wide screens (count)

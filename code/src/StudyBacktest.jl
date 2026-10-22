@@ -8,7 +8,7 @@
 # Units: shares (shares), prices (USD/share), equity, cash, costs and fees (USD), growth rates g_f, μ_g,
 # σ_m and σ_g_max (yr⁻¹), Σ_g (yr⁻²), weights, β and ξ (dimensionless).
 
-const _STUDY_ALLOCATORS = ("CD", "CES", "SG", "MinVar", "Tangent", "LS")
+const _STUDY_ALLOCATORS = ("CD", "CES", "CESw", "SG", "MinVar", "Tangent", "LS")
 const _STUDY_SCREENS = (:bandit, :gamma, :random, :global_gamma, :liquid_gamma, :corr_gamma,
     :random_global, :random_liquid, :fixed)
 
@@ -26,7 +26,7 @@ One study run (`run_study`). Fields:
 | Field | Meaning |
 |---|---|
 | `settings::MyStudySettings` | every window, limit and cost (units as in `MyStudySettings`) |
-| `allocator::String` | `"CD"`, `"CES"`, `"SG"`, `"MinVar"`, `"Tangent"` or `"LS"` (130/30 CD) |
+| `allocator::String` | `"CD"`, `"CES"`, `"CESw"`, `"SG"`, `"MinVar"`, `"Tangent"` or `"LS"` (130/30 CD) |
 | `screen::Symbol` | one of `_STUDY_SCREENS` |
 | `seed::Int` | screen and projection RNG seed (≥ 0) |
 | `label::String` | run label (default `""`) |
@@ -48,7 +48,7 @@ end
     build(::Type{MyStudyRun}, data::NamedTuple)::MyStudyRun
 
 Build a run from `settings`, `allocator`, `screen`, `seed` and optional `label` (default `""`).
-Throws `ArgumentError` on a missing or unknown field, an allocator other than `"CD"`, `"CES"`,
+Throws `ArgumentError` on a missing or unknown field, an allocator other than `"CD"`, `"CES"`, `"CESw"`,
 `"SG"`, `"MinVar"`, `"Tangent"`, `"LS"`, a screen not in `_STUDY_SCREENS`, or
 `seed < 0`.
 """
@@ -129,13 +129,14 @@ end
 """
     make_rule(allocator::String, s::MyStudySettings)::AbstractPortfolioRule
 
-The portfolio rule of `allocator`: `"CD"` Cobb-Douglas, `"CES"` with η = `ces_eta`, `"SG"` Stone–Geary
+The portfolio rule of `allocator`: `"CD"` Cobb-Douglas, `"CES"` (share-count) and `"CESw"` (weight-based) with η = `ces_eta`, `"SG"` Stone–Geary
 with baseline fraction `sg_baseline`, `"MinVar"`, `"Tangent"`, `"LS"` 130/30 CD with caps `ls_long`,
 `ls_short`, `ls_net` (all dimensionless). Throws `ArgumentError` on another name.
 """
 function make_rule(allocator::String, s::MyStudySettings)::AbstractPortfolioRule
     allocator == "CD" && return MyCobbDouglasRule()
     allocator == "CES" && return build(MyCESRule, (η=s.ces_eta,))
+    allocator == "CESw" && return build(MyCESWeightRule, (η=s.ces_eta,))
     allocator == "SG" && return build(MyStoneGearyRule, (baseline_frac=s.sg_baseline,))
     allocator == "MinVar" && return MyMinVarRule()
     allocator == "Tangent" && return MyTangentRule()
