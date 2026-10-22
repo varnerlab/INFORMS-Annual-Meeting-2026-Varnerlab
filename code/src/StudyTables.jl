@@ -159,7 +159,7 @@ end
 
 """Metrics of the η sweep table: growth scorecard (`realized_growth` in yr⁻¹, `sharpe` dimensionless,
 `max_drawdown` fraction, `vol` in yr⁻¹), `mean_eff_names` (count), `mean_invested` (fraction) and `turnover`
-(fraction of wealth per rebalance)."""
+(yr⁻¹, traded value ÷ mean equity per year)."""
 const ETA_METRICS = [:realized_growth, :sharpe, :max_drawdown, :vol, :mean_eff_names, :mean_invested, :turnover]
 """Metrics of the market-state table: `g_bull`, `g_bear` (mean growth rate on bullish and bearish days, yr⁻¹),
 `n_bull`, `n_bear` (day counts) and the SPY growth rates `spy_g_bull`, `spy_g_bear` (yr⁻¹) on the same days."""

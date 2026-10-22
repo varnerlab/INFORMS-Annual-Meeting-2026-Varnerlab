@@ -529,7 +529,7 @@ function day_figure(d::DataFrame, caption::String)
     cd = d[string.(d.allocator) .== "CD", :]
     ymax = 1.03 * maximum(d.weight)
     panels = map(enumerate(VERSIONS)) do (j, v)
-        p = plot(; eta_axis(DIAL_ETAS)..., ylims=(0, ymax), title=ALLOC_NAME[v], titlefontsize=18, legend=false,
+        p = plot(; eta_axis(DIAL_ETAS)..., xlims=(0.04, 48.0), ylims=(0, ymax), title=ALLOC_NAME[v], titlefontsize=18, legend=false,
             ylabel=j == 1 ? "weight (fraction of wealth)" : "", xlabel="η (log scale)",
             left_margin=j == 1 ? 12Plots.mm : 3Plots.mm, bottom_margin=6Plots.mm)
         vline!(p, [1.0]; color=INK2, linewidth=1.5, linestyle=:dot, label="")
@@ -537,6 +537,16 @@ function day_figure(d::DataFrame, caption::String)
         for (i, t) in enumerate(tickers)
             a = sort(vcat(dv[string.(dv.ticker) .== t, [:eta, :weight]], cd[string.(cd.ticker) .== t, [:eta, :weight]]), :eta)
             plot!(p, a.eta, a.weight; color=cols[i], linewidth=2, marker=:circle, markersize=5, label="")
+        end
+        # Direct labels at η = 20, stacked upward with a minimum gap so none overlap.
+        end_w = [only(dv[(string.(dv.ticker) .== t) .& (dv.eta .== maximum(DIAL_ETAS)), :weight]) for t in tickers]
+        order = sortperm(end_w); gap = 0.045 * ymax; ly = zeros(length(tickers)); prev = -Inf
+        for i in order
+            prev = ly[i] = max(end_w[i], prev + gap)
+        end
+        for i in eachindex(tickers)
+            plot!(p, [maximum(DIAL_ETAS), 26.0], [end_w[i], ly[i]]; color=cols[i], linewidth=1.5, label="")
+            annotate!(p, 27.5, ly[i], text(tickers[i], 12, INK, :left, :vcenter))
         end
         p
     end
@@ -570,8 +580,9 @@ function dial_figure(dial::DataFrame, caption::String)
         (:mean_eff_names, 1.0, "effective names (count)", "Effective number of names", nothing),
         (:mean_invested, 1.0, "invested fraction", "Invested fraction", (0.0, 1.1)))
     panels = map(enumerate(specs)) do (i, (m, sc, yl, ttl, yli))
-        p = plot(; eta_axis(DIAL_ETAS)..., title=ttl, titlefontsize=17, legend=false, ylabel=yl,
-            xlabel=i >= 3 ? "η (log scale)" : "", left_margin=14Plots.mm, bottom_margin=5Plots.mm, guidefontsize=13, tickfontsize=12,
+        p = plot(; eta_axis(DIAL_ETAS)..., title=ttl, titlefontsize=m == :max_drawdown ? 15 : 17, legend=false, ylabel=yl,
+            xlabel=i >= 3 ? "η (log scale)" : "", left_margin=14Plots.mm, right_margin=5Plots.mm, bottom_margin=5Plots.mm,
+            guidefontsize=13, tickfontsize=12, xtickfontsize=10,
             (yli === nothing ? (;) : (; ylims=yli))...)
         vline!(p, [HEADLINE_ETA]; color=INK2, linewidth=1.5, linestyle=:dot, label="")
         for v in VERSIONS
@@ -600,6 +611,9 @@ in η order, with columns `eta`, `med`, `lo`, `hi` (the median and the 25th and 
 `col`, in the metric's own units).
 """
 function eta_cell(E::DataFrame, a::String, cap::String, scr::String, col::Symbol)
+    for suffix in ("_median", "_q25", "_q75")
+        string(col, suffix) in names(E) || error("eta_sweep.csv has no column ", col, suffix, " (needed for the η figures)")
+    end
     r = E[(E.allocator .== a) .& (E.cap .== cap) .& (E.screen .== scr) .& (E.hedge .== true), :]
     r = sort(r, :eta)
     return DataFrame(eta=Float64.(r.eta), med=Float64.(r[!, Symbol(col, :_median)]),
@@ -635,6 +649,7 @@ function eta_figure(E::DataFrame, metric::Symbol; scale::Real=1.0, ylabel::Strin
         end
         c = cells[("CD", cap, scr)]
         isempty(c) || scatter!(p, c.eta, scale .* c.med; color=INK, marker=:diamond, markersize=10,
+            markerstrokecolor=INK, markerstrokewidth=2,
             (scr == "gamma" ? (;) : (; yerror=(scale .* (c.med .- c.lo), scale .* (c.hi .- c.med))))...)
         (scr, cap) => p
     end
@@ -655,20 +670,28 @@ with η; the Cobb-Douglas point is the diamond.
 function frontier_figure(E::DataFrame, caption::String)
     cells = Dict((a, cap) => (g=eta_cell(E, a, cap, "random", :realized_growth), d=eta_cell(E, a, cap, "random", :max_drawdown))
         for a in (VERSIONS..., "CD"), cap in ("on", "off"))
-    xs = vcat([100 .* c.d.med for c in values(cells)]...); ys = vcat([c.g.med for c in values(cells)]...)
-    xl = extrema(xs); yl = extrema(ys); px = 0.08 * (xl[2] - xl[1]); py = 0.08 * (yl[2] - yl[1])
+    ys = vcat([c.g.med for c in values(cells)]...)
+    yl = extrema(ys); py = 0.1 * (yl[2] - yl[1])
     panels = map(enumerate(("on", "off"))) do (j, cap)
+        xc = vcat([100 .* cells[(a, cap)].d.med for a in (VERSIONS..., "CD")]...)
+        xl = extrema(xc); px = 0.1 * (xl[2] - xl[1])
         p = plot(; xlims=(xl[1] - px, xl[2] + px), ylims=(yl[1] - py, yl[2] + py), legend=false, grid=:xy,
             title="per-name cap $(cap)", titlefontsize=18, xlabel="median max drawdown (% of peak wealth)",
             ylabel=j == 1 ? "median realized growth rate (1/yr)" : "", left_margin=j == 1 ? 12Plots.mm : 3Plots.mm,
             bottom_margin=6Plots.mm)
-        for (v, pos) in (("CES", :bottom), ("CESw", :top))
+        dx, dy = 0.03 * (xl[2] - xl[1] + 2px), 0.05 * (yl[2] - yl[1] + 2py)
+        for (v, sx, sy) in (("CES", 1, -1), ("CESw", -1, 1))
             c = cells[(v, cap)]
             isempty(c.g) && continue
             x, y = 100 .* c.d.med, c.g.med
             plot!(p, x, y; color=VERSION_COLOR[v], linewidth=2.5, marker=VERSION_MARKER[v], markersize=8)
             for k in eachindex(x)
-                annotate!(p, x[k], y[k], text(num(c.g.eta[k]), 11, INK2, :center, pos))
+                annotate!(p, x[k] + sx * dx, y[k] + sy * dy, text(num(c.g.eta[k]), 12, INK2, :center, :center))
+            end
+            h = findfirst(==(HEADLINE_ETA), c.g.eta)
+            if h !== nothing   # ring: an ink circle under the point redrawn in its own color
+                scatter!(p, [x[h]], [y[h]]; color=INK, marker=:circle, markersize=17)
+                scatter!(p, [x[h]], [y[h]]; color=VERSION_COLOR[v], marker=VERSION_MARKER[v], markersize=8)
             end
         end
         c = cells[("CD", cap)]
@@ -788,26 +811,27 @@ function main()
     end
     if ldial !== nothing
         save_fig!(dial_figure(ldial, "Run $(period), budget only, L8b 13-name list, chosen in advance, hedge off. Growth rates and volatility in 1/yr.\n" *
-            "CES and CESw lines share the Cobb-Douglas point (diamond) at η = 1; the dotted line marks the headline η = 0.5."),
+            "CES (share counts) and CES (weights) lines share the Cobb-Douglas point (diamond) at η = 1; the dotted line marks the headline η = 0.5."),
             "fig_limits_dial.png")
     end
     if esweep !== nothing
         ecap = "Run $(period), hedge on. Lines: median across seeds; bandit and random: IQR band; γ: one run.\n" *
             "CD = Cobb-Douglas, the diamond at η = 1 (its bar is the IQR); the dotted line is the headline η = 0.5.\n" *
             "Re-picks follow each run's own band exits, so the two versions can hold different baskets.\n" * LEFT_OUT_NOTE
-        etas = (realized_growth=(1.0, "growth rate (1/yr)", "Realized growth rate"),
+        METRIC_LABEL = (realized_growth=(1.0, "growth rate (1/yr)", "Realized growth rate"),
             sharpe=(1.0, "Sharpe ratio", "Sharpe ratio (from daily growth rates)"),
             max_drawdown=(100.0, "max drawdown (% of peak)", "Max drawdown (lower is better)"),
             vol=(1.0, "volatility (1/yr)", "Volatility"),
             mean_eff_names=(1.0, "effective names (count)", "Effective number of names"),
             mean_invested=(1.0, "invested fraction", "Invested fraction"),
-            turnover=(1.0, "turnover", "Turnover"))
+            turnover=(1.0, "turnover (1/yr)", "Turnover"))
         for m in ETA_METRICS
-            sc, yl, ttl = etas[m]
+            haskey(METRIC_LABEL, m) || error("no figure label for η-sweep metric ", m, "; add it to METRIC_LABEL")
+            sc, yl, ttl = METRIC_LABEL[m]
             save_fig!(eta_figure(esweep, m; scale=sc, ylabel=yl, title="$(ttl) against η, CES (share counts) and CES (weights), hedge on",
                 caption=ecap), "fig_eta_$(m).png")
         end
-        save_fig!(frontier_figure(esweep, "Run $(period), hedge on, random screen: median across seeds; up and to the left is better.\nPoints are joined in η order and labeled with η.\n" *
+        save_fig!(frontier_figure(esweep, "Run $(period), hedge on, random screen: median across seeds; up and to the left is better.\nPoints are joined in η order and labeled with η; ringed points are the headline η = 0.5.\n" *
             "Re-picks follow each run's own band exits, so the two versions can hold different baskets.\n" * LEFT_OUT_NOTE),
             "fig_eta_frontier.png")
     end
