@@ -90,7 +90,7 @@ On each trading day t of the run, after the close:
    - For β ≥ β_floor this is exactly CHEME-5660 L8b's γ.
    - Online β goes ≤ 0 for a group of defensive names during the run (utilities, staples, exchanges); on a median day about 9 names, at the peak over 100.
 4. **Mark equity** at day t's close.
-5. **Triggers**, in the trial's priority order: cash revisit, drawdown > D_max, τ ≥ T, band exit (equity outside μ_τ ± z·σ_τ). The drawdown peak is the running maximum of equity and is never reset, as in the trial.
+5. **Triggers**, in the trial's priority order: cash revisit, drawdown > D_max, τ ≥ T, band exit (equity outside μ_τ ± z·σ_τ). The drawdown peak is the running maximum of equity. In the trial it is never reset; since 2026-10-25 (user decision) each drawdown decision sets it back to current equity (`drawdown_reset = true`), even one whose solve fails and keeps the book, so the trigger fires once per fresh D_max loss.
 6. **Re-pick** (§8) if 21 trading days have passed since the last re-pick, or if the band-exit trigger fired. The hedge pool is refreshed at the same time. If the basket (screen picks plus pool) changes, a rebalance is forced with reason `basket_change`. **(my call:** the re-pick counter runs from the last re-pick, not the last rebalance; drawdown and cash-revisit rebalances keep the current basket.)
 7. **Solve** the run's allocator (§6) if any trigger fired, then re-project the band (§7).
 8. **Fill** at day t+1's open in whole shares, with the trial's cost model: half-spread 5 bps plus impact κ·(q/ADV). τ counts trading days.
@@ -237,6 +237,7 @@ The config-driven, resumable, threaded runner keys each run by a hash of its con
 | Covariance | Ω̂_ε window | 126 days |
 | | shrinkage λ | calibrated, then frozen |
 | Triggers | T / z / D_max / cash revisit | 21 / 1.96 / 0.08 / 21 |
+| | drawdown peak reset at each drawdown decision | on (since 2026-10-25) |
 | Projection | GBM paths | 1,000 |
 | Screens | N per sector | 3 |
 | | re-pick interval | 21 days |
@@ -286,7 +287,7 @@ Kept, from the existing `feat/eod-study` code where it matches this design **(my
 - **Survivorship bias:** the universe holds only tickers with complete histories.
 - **Sector assignments** are current GICS membership, not point-in-time.
 - **The GBM band** has no jumps, regimes or fat tails, so it can be too narrow in a crash.
-- **Drawdown trigger:** because the peak is never reset, once equity is more than D_max below its peak the trigger fires every day until equity recovers, as in the trial.
+- **Drawdown trigger:** with the trial's never-reset peak (`drawdown_reset = false`), once equity is more than D_max below its peak the trigger fires every day until equity recovers. That was 85–90% of all decisions in the Tier 1 grid, so on 2026-10-25 the user adopted the reset (§5, step 5).
 - **Shorting:** no borrow-availability limits or recall risk; flat fee.
 - **Costs** are a parametric estimate, not real fills.
 - **Dividends** are not included, in the portfolios or in SPY.

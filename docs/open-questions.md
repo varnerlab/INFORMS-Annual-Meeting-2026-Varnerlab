@@ -18,3 +18,7 @@ None of the four is answered. The build stays paused until the mismatch is resol
 ## 2026-10-20: resolved by restarting the design
 
 The user restarted the design instead of answering these questions. The approved design is `docs/superpowers/specs/2026-10-20-screened-utility-panel-study-design.md`, which replaces the 10-19 design and keeps the trial's rules (drawdown peak never reset), uses a 252-day SPY growth average in γ, and re-picks the basket with single-ticker screens.
+
+## 2026-10-25: drawdown peak reset adopted
+
+This supersedes the line above that the design keeps the trial's never-reset drawdown peak. With that peak, the drawdown trigger fired on every day the book sat more than 8% under its peak: 88.5% of all Tier 1 decisions. A Tier 1 trial run of the reset cut decisions per run from 158 to 27 (median), left max drawdown unchanged, and cut costs by about 14%. The user adopted it: each drawdown decision sets the peak back to current equity (`drawdown_reset = true` in `config/study.toml`). Every grid is rerun under the new rule.

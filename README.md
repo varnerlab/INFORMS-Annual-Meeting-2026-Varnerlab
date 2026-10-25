@@ -88,6 +88,10 @@ Rulings made during the build, each of which changes behavior:
 - On an `:infeasible` or `:solver_failed` decision, `run_study` places no orders and keeps every holding, and the band and stats describe the kept book.
 - After a decision that leaves the book all cash, no band is set, so only cash revisit, horizon or drawdown can trigger the next decision (as in the trial).
 - An empty 130/30 problem records `:no_preferred` and goes to cash instead of erroring.
+- Each drawdown decision sets the drawdown peak back to current equity (user, 2026-10-25; `drawdown_reset`), even
+  when its solve fails and the book is kept. The trial never resets the peak, so once equity was 8% under it the
+  trigger fired every day: 88.5% of Tier 1 decisions. `drawdown_reset = false` restores the trial's rule; the
+  legacy `run_backtest` keeps it.
 - A study context that fails to build writes error files for its runs, and the sweep continues.
 - Study fills are in fractional shares (user, 2026-10-21), not the spec's whole shares. Whole-share rounding made a
   fill depend on the split basis: putting earlier rows on the newest file's basis changed how many shares a 2025

@@ -312,7 +312,8 @@ close. `run.settings` must share the context's `context_key`. On each trading da
    notional at `close[t]` (USD). Skipped on the first day.
 3. **Mark** V = cash + Σ nᵢ·close[t, i] (USD).
 4. **Trigger:** `check_trigger` with τ = trading days since the last decision, V, wealth_peak = running
-   max of equity (never reset), `initial` on the first day, and the MPC spec from `T`, `z`, `n_paths`,
+   max of equity (set back to V by each `:drawdown` decision when `drawdown_reset`, else never reset), `initial`
+   on the first day, and the MPC spec from `T`, `z`, `n_paths`,
    `D_max`, `cash_revisit`.
 5. **Re-pick** on the first day (`:initial`), when `repick_interval` trading days have passed since the
    last re-pick (`:timer`), or at a `:band_exit` when `repick_on_band_exit` (`:band_exit`): the screen's
@@ -326,7 +327,8 @@ close. `run.settings` must share the context's `context_key`. On each trading da
    An empty 130/30 problem records `:no_preferred` and targets every holding to 0. Then
    `project_gbm` of the resulting book (the targets, or the kept holdings) with cash V − n·S and
    `rng = MersenneTwister(seed·1_000_003 + Dates.value(date))` (R28), and the decision row. τ resets
-   to 0 and `last_alloc_was_cash = (status == :no_preferred)`. The projection becomes the trigger's
+   to 0 and `last_alloc_was_cash = (status == :no_preferred)`. With `drawdown_reset`, a `:drawdown` decision sets
+   the drawdown peak back to V, even when its solve fails and the book is kept (user, 2026-10-25). The projection becomes the trigger's
    band, except for a book with no executable shares (every target, or every kept holding, is worth at
    most 0.1% of V): such a book has no band, so the band-exit trigger cannot fire and
    `cash_revisit` (or the horizon or drawdown trigger) governs the return from cash; its
@@ -387,7 +389,7 @@ function run_study(ctx::MyStudyContext, run::MyStudyRun)::MyStudyResult
         # 3. mark at the close
         V = cash + _bt_holdings_value(held, md, t)
         equity[s] = V; cash_hist[s] = cash
-        # 4. triggers (the drawdown peak is never reset)
+        # 4. triggers (only a :drawdown decision with `drawdown_reset` sets the peak back)
         t > i0 && (trig.τ += 1)
         trig.V_t = V; trig.wealth_peak = max(trig.wealth_peak, V)
         reason = check_trigger(trig, mpc)
@@ -433,6 +435,7 @@ function run_study(ctx::MyStudyContext, run::MyStudyRun)::MyStudyResult
             end
             # an all-cash book (no executable shares) gets no band: cash_revisit governs the return from cash
             trig.τ = 0; trig.projection = all(iszero, lots) ? nothing : proj
+            reason == :drawdown && st.drawdown_reset && (trig.wealth_peak = V)
             trig.initial = false
             trig.last_alloc_was_cash = (b.status == :no_preferred)
         end

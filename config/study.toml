@@ -26,6 +26,7 @@ lambda = "calibrated"     # shrinkage of the residual covariance toward its diag
 T = 21                    # MPC horizon (trading days)
 z = 1.96                  # band half-width (standard deviations)
 D_max = 0.08              # drawdown limit (fraction of wealth)
+drawdown_reset = true     # set the drawdown peak back to current wealth at each drawdown decision (flag)
 cash_revisit = 21         # days between cash revisits (trading days)
 n_paths = 1000            # projection paths (count)
 

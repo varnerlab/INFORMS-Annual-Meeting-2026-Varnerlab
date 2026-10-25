@@ -46,6 +46,31 @@ end
     @test all(d in res.decisions.date for d in res.repicks.date[res.repicks.changed])
     @test all(res.repicks.trigger[2:end] .== :timer)
 end
+@testset "study loop: the drawdown peak resets at each drawdown decision" begin
+    # Reference walk of the equity path: the peak is the running maximum, set back to that day's equity
+    # by each :drawdown decision (by default) or never (drawdown_reset = false, the trial's rule). The
+    # trigger must fire on exactly the days more than D_max under that peak, except the first day and
+    # cash revisits, which outrank it. A year and a half at two limits, so a reset at the wrong decisions
+    # or to the wrong value is caught, not just a missing one.
+    for D in (0.01, 0.02)
+        n = Dict{Bool,Int}()
+        for reset in (true, false)
+            # the reset arm sets nothing, so it runs on the default
+            md, ctx = study_ctx(; D_max=D, stop=Date(2019, 12, 31), (reset ? (;) : (drawdown_reset=false,))...)
+            res = run_study(ctx, study_run(ctx, "CD", :gamma))
+            why = Dict(zip(res.decisions.date, res.decisions.reason))
+            peak = ctx.settings.W0; wrong = Date[]
+            for (s, d) in enumerate(res.dates)
+                V = res.equity[s]; peak = max(peak, V); r = get(why, d, :in_spec)
+                r in (:initial, :cash_revisit) || ((peak - V) / peak > D) == (r == :drawdown) || push!(wrong, d)
+                reset && r == :drawdown && (peak = V)
+            end
+            @test isempty(wrong)
+            n[reset] = count(==(:drawdown), res.decisions.reason)
+        end
+        @test 2 <= n[true] < n[false]                                # a reset peak fires less often
+    end
+end
 @testset "study loop: band exits re-pick only when enabled" begin
     md, ctx = study_ctx(z=0.0)
     on = run_study(ctx, study_run(ctx, "CD", :random))

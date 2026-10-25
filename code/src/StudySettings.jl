@@ -11,7 +11,9 @@ in trading days; `D_max`, `w_max`, `s_max`, `turnover_frac`, `ls_*` are fraction
 (chosen in advance, without 2025 data). `vol_cap_annual` is an annualized volatility in yr⁻¹ᐟ² (the growth-rate cap is
 `vol_cap_annual/√Δt` in yr⁻¹); `lambda` is the shrinkage of the residual covariance toward its diagonal
 (dimensionless, in [0, 1], `NaN` = calibrated); `s_max` is the sector weight cap; `beta_min` is the floor of β_max;
-`xi_short`, `xi_long` are the EMA spans of SPY closes behind ξ;
+`xi_short`, `xi_long` are the EMA spans of SPY closes behind ξ; `drawdown_reset` (flag) sets the drawdown peak
+back to the current wealth at each `:drawdown` decision, so the trigger fires once per fresh `D_max` loss rather
+than on every day below the peak (user, 2026-10-25; `false` keeps the trial's never-reset peak);
 `borrow_rate` is per year; `half_spread_bps` is in basis points; `W0` is in dollars. `NaN` for
 `vol_cap_annual` means the SPY volatility over the calibration window. The zero-argument constructor
 fills the defaults. `turnover_frac` sets each decision's spread-cost budget, c̄·Σ|Δnᵢ| ≤ `turnover_frac`·W with c̄ the half-spread cost per share at the basket's mean price. It is kept from the trial; at 5 bps, for a long-only book, it can bind only when a basket's mean share price is more than 100 times its cheapest name's.
@@ -23,7 +25,7 @@ mutable struct MyStudySettings
     xi_short::Int; xi_long::Int; xi_quantile::Float64; gtilde_window::Int; beta_floor::Float64
     ewls_half_life::Float64; ewls_prior_weight::Float64
     omega_window::Int; lambda::Float64
-    T::Int; z::Float64; D_max::Float64; cash_revisit::Int; n_paths::Int
+    T::Int; z::Float64; D_max::Float64; drawdown_reset::Bool; cash_revisit::Int; n_paths::Int
     N_per_sector::Int; repick_interval::Int; repick_on_band_exit::Bool
     bandit_lookback::Int; bandit_horizon::Int; bandit_eps_floor::Float64
     bandit_iters_per_arm::Int; bandit_min_iters::Int; bandit_max_iters::Int
@@ -40,7 +42,7 @@ mutable struct MyStudySettings
             21, 63, 0.99, 252, 0.1,
             63.0, 63.0,
             126, NaN,
-            21, 1.96, 0.08, 21, 1000,
+            21, 1.96, 0.08, true, 21, 1000,
             3, 21, true,
             252, 21, 0.05, 50, 500, 5000,
             0.10, NaN, 1.0, 0.10,
