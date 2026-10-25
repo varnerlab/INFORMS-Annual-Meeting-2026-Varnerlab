@@ -136,14 +136,14 @@ CES elasticity sweep (spec `docs/superpowers/specs/2026-10-21-ces-eta-sweep-desi
   feasibility test rejects, a slack of about −5.6e-17 under the 1e-12 gap tolerances). No Clarabel setting removed
   it, so `_solve_with_fallback` treats a solver exception as that solver not accepting and falls through to SCS.
   Errors in our own model-building code still propagate. SCS runs at its default settings. In the 17 budget-only limits runs it
-  answered 82 decisions, all at the extreme η; its median weight error was 3.3e-6 against a BigFloat reference, and
-  3 decisions were above 1e-3 (max 4.2e-3). Cobb-Douglas and η = 0.5/2 results are bit-identical to before the solver-exception fallthrough.
+  answers 13 decisions, all at η ≤ 0.25 or η ≥ 4. Before the drawdown reset (2026-10-25) it answered 82; their
+  median weight error was 3.3e-6 against a BigFloat reference, and 3 were above 1e-3 (max 4.2e-3). Cobb-Douglas and η = 0.5/2 results are bit-identical to before the solver-exception fallthrough.
 - Clarabel stops at ALMOST_OPTIMAL on a large share of decisions in every run, Cobb-Douglas included; this predates
-  the sweep. In `results/tables/eta_solver.csv` the share is about 32% for Cobb-Douglas, 33–51% for CES and 34–51%
-  for CESw, and 48–50% at the headline η = 0.5; in the limits runs (`results/limits_summary.csv`) it is about 27%.
+  the sweep. In `results/tables/eta_solver.csv` the share is 28–32% for Cobb-Douglas, 29–48% for CES and 29–42%
+  for CESw, and 37–44% at the headline η = 0.5; in the limits runs (`results/limits_summary.csv`) it is about 26%.
   `eta_solver` flags any η point where failed decisions or decisions answered beyond ALMOST_OPTIMAL (SCS or a failed
   sub-solve) exceed 1% of decisions; ALMOST_OPTIMAL alone is not flagged, since it is pervasive. It reports
-  `n_beyond_almost` and `beyond_almost_share` per point: from 0.6% to 16% of decisions, above 4% at 14 points
+  `n_beyond_almost` and `beyond_almost_share` per point: from 0.4% to 16% of decisions, above 4% at 14 points
   (CES and CESw at η ≤ 0.25 and at η ≥ 4). Flagged points are reported, never dropped.
 - Run labels look like `CESw|bandit|hedge=true|seed=5660|eta=2|cap=off`; limits labels end `|eta=<η>|limits`.
   The cap-on η = 0.5 and Cobb-Douglas points come from Tier 1. Cobb-Douglas runs keep `ces_eta = 0.5` (ignored by
