@@ -31,6 +31,8 @@ end
     append!(seeds, [path_seed(p, :drift) for p in ids])
     @test allunique(seeds)
     @test_throws ArgumentError path_seed(1, :bogus)
+    centers = vcat([center_seed(:name, j) for j in 1:400], [center_seed(:sector, s) for s in 1:11])
+    @test allunique(centers) && isdisjoint(seeds, centers)                # long-run-mean draws never reuse a path seed
     d = [Date(2014,1,2) + Day(i) for i in 0:20]
     @test growth_window(d, d[3], d[10]) == 3:9
     @test_throws ArgumentError growth_window(d, Date(2013,1,1), d[10])
@@ -57,20 +59,21 @@ end
     gm = 2.5 .* randn(rng, n)
     f = randn(rng, n)
     ε = 4.0 .* randn(rng, n)
-    c = compose_name(fill(0.0, n), fill(1.2, n), 0.8, gm, f, ε, 6.25, 1.0, 16.0, 0.3)
+    c = compose_name(fill(0.0, n), fill(1.2, n), 0.8, gm, f, ε, 6.25, 1.0, 16.0, 0.3; ε_center=0.0)
     @test isapprox(var(c.g), 16.0; rtol=0.02) && isapprox(cov(c.g, gm) / var(gm), 1.2; atol=0.02) && c.n_clipped == 0
     for b in (3.0, -3.0)                                    # ρ = (9·6.25 + 0.64)/16 > 0.9: clipped, sign kept
-        c = compose_name(fill(0.0, n), fill(b, n), 0.8, gm, f, ε, 6.25, 1.0, 16.0, 0.3)
+        c = compose_name(fill(0.0, n), fill(b, n), 0.8, gm, f, ε, 6.25, 1.0, 16.0, 0.3; ε_center=0.0)
         ρ = (9 * 6.25 + 0.64) / 16
         @test all(c.β_eff .≈ b * sqrt(0.9 / ρ)) && c.n_clipped == n && isapprox(var(c.g), 16.0; rtol=0.03)
     end
     βt = repeat([0.5, 1.4], inner=1000, outer=n ÷ 2000)    # drifting β, no day clips (ρ = 0.806 at 1.4)
-    c = compose_name(fill(0.0, n), βt, 0.8, gm, f, ε, 6.25, 1.0, 16.0, 0.3)
+    c = compose_name(fill(0.0, n), βt, 0.8, gm, f, ε, 6.25, 1.0, 16.0, 0.3; ε_center=0.0)
     @test isapprox(var(c.g), 16.0; rtol=0.03) && mean(c.β_eff) ≈ mean(βt) && c.n_clipped == 0
-    c = compose_name(fill(0.0, n), fill(1.0, n), 0.0, gm, f, ε, 6.25, 1.0, 16.0, 0.9)   # R² branch
+    c = compose_name(fill(0.0, n), fill(1.0, n), 0.0, gm, f, ε, 6.25, 1.0, 16.0, 0.9; ε_center=0.0)   # R² branch
     @test isapprox(var(c.g), 6.25 / 0.9; rtol=0.03)
-    c = compose_name(fill(0.3, n), fill(1.0, n), 0.8, gm, f, ε .+ 5.0, 6.25, 1.0, 16.0, 0.3)
-    @test isapprox(mean(c.g), 0.3 + mean(gm) + 0.8 * mean(f); atol=1e-10)              # ε demeaned, α passes through
+    c = compose_name(fill(0.3, n), fill(1.0, n), 0.8, gm, f, ε .+ 5.0, 6.25, 1.0, 16.0, 0.3; ε_center=5.0)
+    s² = 1 - (1.0^2 * 6.25 + 0.8^2 * 1.0) / 16.0                                       # no clip, no R² branch
+    @test isapprox(mean(c.g), 0.3 + mean(gm) + 0.8 * mean(f) + sqrt(s²) * (mean(ε .+ 5.0) - 5.0); atol=1e-10)   # ε centered on ε_center, α passes through
 end
 
 @testset "synthetic market path" begin
@@ -93,4 +96,16 @@ end
     @test s0.clip_share == 0.0 && s0.β_eff == repeat(gen.β_center', n)
     G = synthetic_growth(gen, a.draws).G; G[5, 3] = -Inf
     @test_throws ArgumentError market_data_from_growth(gen, a.draws.g_m, G)
+end
+@testset "name noise is not tied across windows" begin
+    # Regression: demeaning a name's draw over its whole path forces Σ ε̃ = 0, so the noise mean in the first
+    # 1000 growth rows and in the rest offset each other (cor ≈ −1 across paths).
+    gen = with_generator(toy_generator(); α_center=zeros(48), k_β=zeros(48), k_α=0.0); i = 5; s = gen.sector_index[i]
+    m1 = zeros(100); m2 = zeros(100)
+    for (q, p) in enumerate(1_000_001:1_000_100)
+        d = synthetic_draws(gen, p)
+        noise = synthetic_growth(gen, d).G[:, i] .- gen.β_center[i] .* d.g_m .- gen.δ[i] .* d.F[:, s]   # toy β ≈ 1 never clips
+        m1[q] = mean(noise[1:1000]); m2[q] = mean(noise[1001:end])
+    end
+    @test abs(cor(m1, m2)) < 0.25
 end

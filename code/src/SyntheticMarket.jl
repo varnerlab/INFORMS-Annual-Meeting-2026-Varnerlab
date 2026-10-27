@@ -24,6 +24,36 @@ function path_seed(p::Int, stream::Symbol, j::Int = 0)::Int
 end
 
 """
+    center_seed(kind::Symbol, j::Int)::Int
+
+Fixed seed (the same for every path) of the long-run-mean draw of name model `j` (`kind = :name`: 4·10¹² + j) or
+sector model `j` (`kind = :sector`: 4·10¹² + 10⁴ + j), with 1 ≤ j < 10⁴. Every `path_seed` stream lies below
+4·10¹² (the largest is `:drift`, at most 3·10¹² + 10⁷), so these seeds never coincide with a path draw's seed.
+Throws `ArgumentError` for an unknown kind or `j` outside [1, 10⁴).
+"""
+function center_seed(kind::Symbol, j::Int)::Int
+    if !(1 <= j < 10^4)
+        throw(ArgumentError("index j = $(j) must lie in [1, 10^4)"))
+    end
+    if kind == :name
+        return 4 * 10^12 + j
+    elseif kind == :sector
+        return 4 * 10^12 + 10^4 + j
+    end
+    throw(ArgumentError("unknown kind :$(kind); use :name or :sector"))
+end
+
+"""
+    model_long_run_mean(model; seed::Int, n_steps::Int=1_000_000)::Float64
+
+Long-run mean (yr⁻¹) of the JumpHMM `model`'s draws: the mean of `observations` in one `n_steps`-day draw seeded
+with `seed` (use `center_seed`).
+"""
+function model_long_run_mean(model; seed::Int, n_steps::Int=1_000_000)::Float64
+    return mean(JumpHMM.simulate(model, n_steps; n_paths=1, seed=seed).paths[1].observations)
+end
+
+"""
     growth_window(dates::Vector{Date}, start::Date, stop::Date)::UnitRange{Int}
 
 Rows of the growth-rate matrix that cover the trading days in [`start`, `stop`]. Row k is the growth from
@@ -170,12 +200,17 @@ Real-data R² (dimensionless) at or above which a name keeps its real R² instea
 const SYNTH_R2_PRESERVE = 0.80
 
 """
-    compose_name(α, β, δ, g_m, f, ε, σ²_m, σ²_s, σ²_gen, r²; floor=SYNTH_FLOOR, r2_threshold=SYNTH_R2_PRESERVE)::NamedTuple{(:g, :β_eff, :n_clipped)}
+    compose_name(α, β, δ, g_m, f, ε, σ²_m, σ²_s, σ²_gen, r²; ε_center, floor=SYNTH_FLOOR, r2_threshold=SYNTH_R2_PRESERVE)::NamedTuple{(:g, :β_eff, :n_clipped)}
 
 Compose one synthetic name's growth rate g[t] = α[t] + b·g_m[t] + d·f[t] + √s²·ε̃[t] (yr⁻¹) for every day t. α (yr⁻¹)
 and β (dimensionless) are per-day paths, δ is the sector loading (dimensionless), g_m, f and ε are the market
 growth, sector factor and raw JumpHMM draw (yr⁻¹), and σ²_m, σ²_s, σ²_gen are the fixed variances of g_m, f and ε
-(yr⁻²). r² is the real R² (dimensionless). ε̃ is ε with its mean removed.
+(yr⁻²). r² is the real R² (dimensionless).
+
+ε̃ = ε − `ε_center`, where `ε_center` (yr⁻¹, required) is the long-run mean of the model that drew ε
+(`model_long_run_mean`). The center is fixed, not the path's own mean: removing the path mean forces Σ ε̃ = 0 over
+the whole path, which ties the trading-window noise to the training-window noise (a name lucky in one window is
+unlucky in the other).
 
 Each day, v = β[t]²σ²_m + δ²σ²_s and ρ = v/σ²_gen. If r² ≥ r2_threshold, s² = v(1 − r²)/r²/σ²_gen and β, δ are kept.
 Otherwise, if ρ ≤ 1 − floor, s² = 1 − ρ and β, δ are kept. Otherwise β and δ are both scaled by
@@ -184,7 +219,8 @@ c = √((1 − floor)/ρ), which keeps the sign of β, s² = floor, and the day 
 Returns the growth path `g` (yr⁻¹), the per-day β after clipping `β_eff` (dimensionless) and the number of clipped days `n_clipped`.
 """
 function compose_name(α::AbstractVector, β::AbstractVector, δ::Real, g_m::AbstractVector, f::AbstractVector, ε::AbstractVector,
-                      σ²_m::Real, σ²_s::Real, σ²_gen::Real, r²::Real; floor::Real=SYNTH_FLOOR, r2_threshold::Real=SYNTH_R2_PRESERVE)::NamedTuple{(:g, :β_eff, :n_clipped)}
+                      σ²_m::Real, σ²_s::Real, σ²_gen::Real, r²::Real; ε_center::Real, floor::Real=SYNTH_FLOOR,
+                      r2_threshold::Real=SYNTH_R2_PRESERVE)::NamedTuple{(:g, :β_eff, :n_clipped)}
     T = length(g_m)
     if !(length(α) == T && length(β) == T && length(f) == T && length(ε) == T)
         throw(ArgumentError("α, β, g_m, f and ε must share one length; got $(length(α)), $(length(β)), $(T), $(length(f)), $(length(ε))"))
@@ -192,7 +228,6 @@ function compose_name(α::AbstractVector, β::AbstractVector, δ::Real, g_m::Abs
     0 < floor < 1 || throw(ArgumentError("floor must lie in (0, 1); got $(floor)"))
     σ²_gen > 0 || throw(ArgumentError("σ²_gen must be positive; got $(σ²_gen)"))
     r² > 0 || throw(ArgumentError("r² must be positive; got $(r²)"))
-    ε̄ = mean(ε)
     g = zeros(Float64, T)
     β_eff = zeros(Float64, T)
     n_clipped = 0
@@ -213,7 +248,7 @@ function compose_name(α::AbstractVector, β::AbstractVector, δ::Real, g_m::Abs
             n_clipped += 1
         end
         β_eff[t] = b
-        g[t] = α[t] + b * g_m[t] + d * f[t] + sqrt(s²) * (ε[t] - ε̄)
+        g[t] = α[t] + b * g_m[t] + d * f[t] + sqrt(s²) * (ε[t] - ε_center)
     end
     return (g=g, β_eff=β_eff, n_clipped=n_clipped)
 end
@@ -226,7 +261,8 @@ Everything needed to draw synthetic paths of the stock universe. Built with `bui
 Fields: `dates` (SPY trading days), `tickers`, `sector` (one per ticker), `sectors` (sorted unique sector labels),
 `sector_index` (position of each ticker's sector in `sectors`); `market`, `names`, `factors` (JumpHMM models for
 the market, each ticker and each sector); `α_center` (yr⁻¹), `β_center`, `δ` (sector loading), `r²` (real R²), all
-one per ticker; `σ²_m`, `σ²_s` (one per sector), `σ²_gen` (one per ticker) (yr⁻²); `h_β`, `h_α` (EMA half-lives,
+one per ticker; `σ²_m`, `σ²_s` (one per sector), `σ²_gen` (one per ticker) (yr⁻²); `ε_center` (yr⁻¹, one per
+ticker: the long-run mean of each name model, `model_long_run_mean` with `center_seed(:name, j)`); `h_β`, `h_α` (EMA half-lives,
 trading days), `k_β` (one per ticker), `k_α` (drift scales, same units as β and α yr⁻¹), `φ`; `close0` (USD/share,
 one per ticker), `spy0` (USD/share), `volume` (shares/day, one per ticker), `g_f` (yr⁻¹, one per date).
 """
@@ -246,6 +282,7 @@ mutable struct MySyntheticGenerator
     σ²_m::Float64
     σ²_s::Vector{Float64}
     σ²_gen::Vector{Float64}
+    ε_center::Vector{Float64}
     h_β::Float64
     k_β::Vector{Float64}
     h_α::Float64
@@ -335,7 +372,8 @@ function synthetic_growth(gen::MySyntheticGenerator, d::NamedTuple)::NamedTuple{
         s = gen.sector_index[i]
         α = gen.α_center[i] .+ drift_path(d.Zα[:, i], gen.h_α, gen.k_α)
         β = gen.β_center[i] .+ drift_path(d.Zβ[:, i], gen.h_β, gen.k_β[i])
-        out = compose_name(α, β, gen.δ[i], d.g_m, d.F[:, s], d.E[:, i], gen.σ²_m, gen.σ²_s[s], gen.σ²_gen[i], gen.r²[i])
+        out = compose_name(α, β, gen.δ[i], d.g_m, d.F[:, s], d.E[:, i], gen.σ²_m, gen.σ²_s[s], gen.σ²_gen[i], gen.r²[i];
+            ε_center=gen.ε_center[i])
         G[:, i] = out.g
         β_eff[:, i] = out.β_eff
         clipped[i] = out.n_clipped

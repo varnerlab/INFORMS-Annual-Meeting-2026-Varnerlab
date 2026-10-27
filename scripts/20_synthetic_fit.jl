@@ -82,13 +82,16 @@ function main()
     println(N, " tickers, ", length(md.dates), " dates, ", length(unique(md.sector)), " sectors, ",
         Threads.nthreads(), " threads")
 
-    # Step 2: refit the name models on the training closes; the SD draw reuses the fit seed
+    # Step 2: refit the name models on the training closes; the SD draw reuses the fit seed, and each model's
+    # long-run mean (the center of its noise, yr⁻¹) comes from a 1,000,000-step draw seeded by center_seed
     t_names = time()
     names = Vector{VLINFORMS2026.JumpHMM.JumpHiddenMarkovModel}(undef, N)
     ratio = zeros(Float64, N)
+    ε_center = zeros(Float64, N)
     Threads.@threads for j in 1:N
         names[j] = fit_name_model(md.close[i0:i1, j]; seed=5660 + j)
         ratio[j] = model_sd_ratio(names[j], G[rows, j]; seed=5660 + j)
+        ε_center[j] = model_long_run_mean(names[j]; seed=center_seed(:name, j))
     end
     println("name models: ", round(time() - t_names; digits=1), " s")
     println("model SD ratios:")
@@ -129,11 +132,21 @@ function main()
     σ²_gen = [var(G[rows, j]) for j in 1:N]
     r² = [calib.base_sim[t].r² for t in tickers]
 
-    # Step 4: sector models on the compounded sector factors
+    # Step 4: sector models on the compounded sector factors, and each one's long-run mean (yr⁻¹, diagnostic only)
     factors = Vector{VLINFORMS2026.JumpHMM.JumpHiddenMarkovModel}(undef, S)
+    sector_mean = zeros(Float64, S)
     Threads.@threads for s in 1:S
         factors[s] = fit_name_model(exp.(vcat(0.0, cumsum(sf.F[:, s] .* Δt))); seed=7000 + s)
+        sector_mean[s] = model_long_run_mean(factors[s]; seed=center_seed(:sector, s))
     end
+    # noise center against each name's mean real training growth (yr⁻¹)
+    center_gap = zeros(Float64, N)
+    for j in 1:N
+        center_gap[j] = ε_center[j] - mean(G[rows, j])
+    end
+    println("ε_center − mean real training growth: median ", round(median(center_gap); digits=4), ", range [",
+        round(minimum(center_gap); digits=4), ", ", round(maximum(center_gap); digits=4), "] yr⁻¹")
+    println("sector model long-run means (yr⁻¹): ", join(["$(sf.sectors[s]) $(round(sector_mean[s]; digits=4))" for s in 1:S], ", "))
 
     # Step 5: the stored market surrogate
     market = JLD2.load(SURROGATE, "model")
@@ -146,7 +159,7 @@ function main()
     gen0 = build(MySyntheticGenerator, (dates=md.dates, tickers=tickers, sector=md.sector, sectors=sf.sectors,
         sector_index=sector_index, market=market, names=names, factors=factors,
         α_center=[ols.params[t].α for t in tickers], β_center=[ols.params[t].β for t in tickers],
-        δ=δ, r²=r², σ²_m=σ²_m, σ²_s=σ²_s, σ²_gen=σ²_gen,
+        δ=δ, r²=r², σ²_m=σ²_m, σ²_s=σ²_s, σ²_gen=σ²_gen, ε_center=ε_center,
         h_β=252.0, k_β=zeros(N), h_α=252.0, k_α=0.0, φ=1.0,
         close0=md.close[1, :], spy0=md.spy_close[1], volume=vec(median(md.volume[i0:i1, :]; dims=1)), g_f=md.g_f))
 
@@ -202,7 +215,8 @@ function main()
     sectors = Dict{String,Any}()
     for s in 1:S
         members = findall(==(s), sector_index)
-        sectors[sf.sectors[s]] = Dict{String,Any}("delta_median" => median(δ[members]), "sigma_s" => sqrt(σ²_s[s]))
+        sectors[sf.sectors[s]] = Dict{String,Any}("delta_median" => median(δ[members]), "sigma_s" => sqrt(σ²_s[s]),
+            "model_mean" => sector_mean[s])
     end
     table = [Dict{String,Any}("h" => r.h, "k_median" => r.k_median, "zero_share" => r.zero_share, "acf252" => r.acf252)
         for r in eachrow(fb.table)]
@@ -221,7 +235,8 @@ function main()
         "targets" => Dict{String,Any}("alpha_spread" => targets.spread, "alpha_corr" => targets.corr,
             "beta_acf252" => targets.acf252, "beta_sd_median" => median(targets.sd_β)),
         "sectors" => sectors,
-        "model_sd_ratio" => Dict{String,Any}("median" => median(ratio), "min" => minimum(ratio), "max" => maximum(ratio)))
+        "model_sd_ratio" => Dict{String,Any}("median" => median(ratio), "min" => minimum(ratio), "max" => maximum(ratio)),
+        "eps_center_gap" => Dict{String,Any}("median" => median(center_gap), "min" => minimum(center_gap), "max" => maximum(center_gap)))
     io = open(joinpath(OUT_DIR, "generator_summary.toml"), "w")
     TOML.print(io, summary; sorted=true)
     close(io)

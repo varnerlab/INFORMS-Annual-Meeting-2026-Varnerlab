@@ -196,7 +196,8 @@ end
 # ---- Synthetic-generator fixture (Task 5) ----
 
 # Small generator on synthetic_md(ρ=0.3): JumpHMM models (N = 10, ν = 5, no tune) for SPY, each name and each
-# sector factor; centers and r² from fit_base_sim, δ from loo_loadings, variances from the toy's own data.
+# sector factor; centers and r² from fit_base_sim, δ from loo_loadings, variances from the toy's own data, and each
+# name's noise center ε_center from a 1,000,000-step draw of its model.
 function toy_generator()
     J = VLINFORMS2026.JumpHMM
     md = synthetic_md(ρ=0.3)
@@ -215,6 +216,7 @@ function toy_generator()
         δ=δ, r²=[fit.params[t].r² for t in md.tickers],
         σ²_m=var(growth_rates(md.spy_close)), σ²_s=[var(sf.F[:, s]) for s in 1:length(sf.sectors)],
         σ²_gen=[var(growth_rates(md.close[:, i])) for i in 1:length(md.tickers)],
+        ε_center=[model_long_run_mean(names[j]; seed=center_seed(:name, j)) for j in 1:length(md.tickers)],
         h_β=126.0, k_β=fill(2.0, 48), h_α=252.0, k_α=0.5, φ=1.0,
         close0=md.close[1, :], spy0=md.spy_close[1], volume=vec(median(md.volume; dims=1)), g_f=md.g_f))
 end
