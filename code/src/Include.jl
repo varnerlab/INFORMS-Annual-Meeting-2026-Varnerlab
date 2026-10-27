@@ -12,6 +12,7 @@ using JuMP
 using Clarabel
 using SCS
 using SHA
+import JumpHMM
 
 include("Types.jl")
 include("Factory.jl")

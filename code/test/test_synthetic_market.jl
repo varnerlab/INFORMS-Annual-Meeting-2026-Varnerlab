@@ -1,5 +1,18 @@
-using Test, Dates, VLINFORMS2026, Random, Statistics
+using Test, Dates, VLINFORMS2026, JLD2, Random, Statistics
 include("helpers.jl")
+const SURROGATE = expanduser("~/Desktop/julia_work/eCornell-AI-finance-lectures/code/src/data/pretrained-jumphmm-market-surrogate.jld2")
+@testset "stored market surrogate loads" begin
+    if isfile(SURROGATE)
+        m = load(SURROGATE, "model")
+        @test m isa VLINFORMS2026.JumpHMM.JumpHiddenMarkovModel
+        @test m.rf == 0.0 && m.dt ≈ 1/252 && m.partition.N == 50     # observations are plain growth rates
+        r = VLINFORMS2026.JumpHMM.simulate(m, 252; n_paths=1, seed=1)
+        @test length(r.paths[1].observations) == 252 && all(isfinite, r.paths[1].observations)
+    else
+        @test_skip "surrogate file missing"
+    end
+end
+
 
 @testset "drift EMA" begin
     z = randn(Xoshiro(1), 4_000_000); a = ema_rate(252)

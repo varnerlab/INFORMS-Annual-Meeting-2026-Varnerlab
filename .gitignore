@@ -3,3 +3,6 @@ data/
 results/runs/
 *.tmp
 results/smoke/
+results/synthetic/rows/
+results/synthetic/smoke/
+results/synthetic/*.jld2
