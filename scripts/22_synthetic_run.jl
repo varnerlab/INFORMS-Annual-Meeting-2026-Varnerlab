@@ -3,9 +3,12 @@
 # would, runs the 532 study runs of `synthetic_runs` and writes three files:
 #   path_<p>.csv   one summary row per run (the columns of the real summaries, plus path_id, the set flags and error);
 #   bench_<p>.csv  SPY buy-and-hold and equal-weight universe buy-and-hold on the path;
-#   meta_<p>.csv   λ, timings (s), clip share, names with online β̂ ≤ 0, error rows and threads.
+#   meta_<p>.csv   λ, timings (s), clip share, names with online β̂ ≤ 0, error rows, threads and the sha1 of
+#                  generator.jld2.
 # A path whose path_<p>.csv exists is skipped, so a stopped run picks up where it left off. A path whose work throws
 # gets error_<p>.txt (the message and backtrace) and no path_<p>.csv; the run moves on, and the next launch retries it.
+# inflight_<p>.txt marks a path whose work has started and is deleted once its path or error file is written. A path
+# still marked at startup was cut off by a crash or a stall kill, so it is retried after every other path.
 # A calibration over 30 s switches the remaining paths to the fixed-λ calibration (λ = 0). That switch holds only
 # within one process: a relaunch starts again with the full calibration.
 #
@@ -32,10 +35,11 @@ end
 
 using Pkg
 Pkg.activate(normpath(joinpath(@__DIR__, "..", "code")); io=devnull)
-using VLINFORMS2026, Dates, Statistics, DataFrames, CSV, JLD2
+using VLINFORMS2026, Dates, Statistics, DataFrames, CSV, JLD2, SHA
 
 const REPO = normpath(joinpath(@__DIR__, ".."))
 const SYN_DIR = joinpath(REPO, "results", "synthetic")
+const GEN_FILE = joinpath(SYN_DIR, "generator.jld2")
 const ROWS_DIR = joinpath(SYN_DIR, "rows")
 const SMOKE_DIR = joinpath(SYN_DIR, "smoke", "rows")
 const CONFIG = joinpath(REPO, "config", "study.toml")
@@ -132,7 +136,7 @@ function select_paths(paths::DataFrame, opts)
 end
 
 """
-    run_path(gen, s, runs, row, n_typical::Int, fixed_λ::Bool)::NamedTuple{(:rows, :bench, :meta)}
+    run_path(gen, s, runs, row, n_typical::Int, fixed_λ::Bool, gen_sha1::String)::NamedTuple{(:rows, :bench, :meta)}
 
 The study on path `row.path_id` (`row` is a row of paths.csv): the market from `synthetic_market`, its calibration
 (`calibrate` on the study's training window, or with `fixed_λ` the SIM fit alone with λ = 0), the study runs `runs`
@@ -140,9 +144,9 @@ from `run_synthetic_path`, and the buy-and-hold references from `passive_referen
 `path_id`, and `rows` also carries the set flags (`typical` is typical rank ≤ `n_typical`). `meta` is one row:
 `path_id`, the set flags, `lambda` (dimensionless), `lambda_fixed`, `gen_seconds`, `calib_seconds` and
 `grid_seconds` (s), `clip_share` (dimensionless), `n_beta_le0` (names whose online β̂ ≤ 0 on some day of the trading
-window), `n_errors` (error rows) and `threads`.
+window), `n_errors` (error rows), `threads` and `generator_sha1` (= `gen_sha1`, the sha1 of generator.jld2).
 """
-function run_path(gen, s, runs, row, n_typical::Int, fixed_λ::Bool)
+function run_path(gen, s, runs, row, n_typical::Int, fixed_λ::Bool, gen_sha1::String)
     p = row.path_id
     burst = row.burst_stress
     bear = row.bear_stress
@@ -175,7 +179,8 @@ function run_path(gen, s, runs, row, n_typical::Int, fixed_λ::Bool)
     n_errors = count(==("error"), rows.status)
     meta = DataFrame(path_id=[p], burst_stress=[burst], bear_stress=[bear], typical=[typical], lambda=[calib.λ],
         lambda_fixed=[fixed_λ], gen_seconds=[gen_seconds], calib_seconds=[calib_seconds], grid_seconds=[grid_seconds],
-        clip_share=[sm.clip_share], n_beta_le0=[n_beta_le0], n_errors=[n_errors], threads=[Threads.nthreads()])
+        clip_share=[sm.clip_share], n_beta_le0=[n_beta_le0], n_errors=[n_errors], threads=[Threads.nthreads()],
+        generator_sha1=[gen_sha1])
     return (rows=rows, bench=bench, meta=meta)
 end
 
@@ -204,7 +209,8 @@ function main(args=ARGS)
     end
 
     # the generator, the path table, the study settings and the run list
-    gen = JLD2.load(joinpath(SYN_DIR, "generator.jld2"), "generator")
+    gen = JLD2.load(GEN_FILE, "generator")
+    gen_sha1 = bytes2hex(sha1(read(GEN_FILE)))
     paths = CSV.read(joinpath(SYN_DIR, "paths.csv"), DataFrame)
     s, grid = load_study(CONFIG)
     if s.train_start != SYNTH_TRAIN[1] || s.train_stop != SYNTH_TRAIN[2]
@@ -223,10 +229,26 @@ function main(args=ARGS)
             push!(todo, i)
         end
     end
+    # a path still marked in flight was cut off by a crash or a stall kill: run it after every other path
+    fresh = Int[]
+    interrupted = Int[]
+    for i in todo
+        if isfile(joinpath(outdir, "inflight_$(paths.path_id[i]).txt"))
+            push!(interrupted, i)
+        else
+            push!(fresh, i)
+        end
+    end
+    todo = vcat(fresh, interrupted)
     println(length(sel.rows), " paths selected (typical ranks 1…", sel.n_typical, "), ", n_skipped,
         " skipped (already written), ", length(todo), " to run; ", length(runs), " runs per path; ",
-        Threads.nthreads(), " threads, ", Threads.ngcthreads(), " GC threads; writing to ", outdir)
+        Threads.nthreads(), " threads, ", Threads.ngcthreads(), " GC threads; generator sha1 ", gen_sha1,
+        "; writing to ", outdir)
+    if !isempty(interrupted)
+        println("retried last: ", join(paths.path_id[interrupted], ", "))
+    end
     flush(stdout)
+    mkpath(outdir)
 
     # one path at a time
     fixed_λ = false
@@ -236,11 +258,13 @@ function main(args=ARGS)
     for (k, i) in enumerate(todo)
         row = paths[i, :]
         t0 = time()
+        inflight = joinpath(outdir, "inflight_$(row.path_id).txt")
+        write(inflight, "path $(row.path_id) started $(now())\n")
         # the path's work; a failure is logged to error_<p>.txt and the run moves on (Ctrl-C still stops it)
         res = nothing
         failure = ""
         try
-            res = run_path(gen, s, runs, row, sel.n_typical, fixed_λ)
+            res = run_path(gen, s, runs, row, sel.n_typical, fixed_λ, gen_sha1)
             write_path_files(outdir, row.path_id, res.rows, res.bench, res.meta)
         catch err
             if err isa InterruptException
@@ -251,15 +275,29 @@ function main(args=ARGS)
         end
         if failure != ""
             n_failed += 1
-            write_path_error(outdir, row.path_id, failure)
+            # a failure to write the error file is printed and does not stop the run
+            error_written = false
+            try
+                write_path_error(outdir, row.path_id, failure)
+                error_written = true
+            catch err
+                if err isa InterruptException
+                    rethrow()
+                end
+                println("path ", row.path_id, ": could not write error_", row.path_id, ".txt: ", sprint(showerror, err))
+            end
+            if error_written
+                rm(inflight; force=true)
+            end
             println("path ", row.path_id, " (", k, " of ", length(todo), "): FAILED; no path file written, the next launch ",
                 "retries it; details in error_", row.path_id, ".txt")
             print(failure)
             flush(stdout)
             continue
         end
-        # the path succeeded: drop a stale error file from an earlier failed attempt
+        # the path succeeded: drop a stale error file from an earlier failed attempt, and the in-flight marker
         rm(joinpath(outdir, "error_$(row.path_id).txt"); force=true)
+        rm(inflight; force=true)
         wall = time() - t0
         push!(walls, wall)
         m = res.meta[1, :]
@@ -273,7 +311,8 @@ function main(args=ARGS)
             λ_note, ", gen ", round(m.gen_seconds; digits=1), " s, calib ",
             round(m.calib_seconds; digits=1), " s, grid ", round(m.grid_seconds; digits=1), " s, total ",
             round(wall; digits=1), " s, ", m.n_errors, " error rows; ETA ",
-            Dates.format(now() + Second(round(Int, remaining)), "yyyy-mm-dd HH:MM"))
+            Dates.format(now() + Second(round(Int, remaining)), "yyyy-mm-dd HH:MM"), "; max RSS ",
+            round(Sys.maxrss() / 1e9; digits=1), " GB")
         # the first few error messages of the path
         n_shown = 0
         for r in eachrow(res.rows)
