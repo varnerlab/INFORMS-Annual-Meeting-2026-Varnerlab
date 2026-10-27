@@ -100,3 +100,117 @@ function path_sets(stats::DataFrame; n_burst::Int=200, n_bear::Int=200, n_typica
     out.run_order = run_order
     return out
 end
+
+"""
+    synthetic_runs(s::MyStudySettings, grid; n_seeds::Int=5)::Vector{MyStudyRun}
+
+The study runs made on every synthetic path: 532 with the default grid and `n_seeds = 5`. `grid` is from
+`load_study`, and seeds are `grid.base_seed .+ (0:n_seeds-1)` for the random screens. The runs are, in this order:
+- `tier1_runs` (154 runs);
+- `universe_runs` at K = 13 with every `grid.universe_screens` entry (182 runs);
+- `universe_runs` at K = 5 and K = 34 with screens `:global_gamma` and `:random_global` only (168 runs);
+- `fixed_list_runs` (28 runs).
+"""
+function synthetic_runs(s::MyStudySettings, grid; n_seeds::Int=5)::Vector{MyStudyRun}
+    g = merge(grid, (n_seeds=n_seeds,))
+    out = MyStudyRun[]
+    append!(out, tier1_runs(s, g))
+    append!(out, universe_runs(s, merge(g, (K=[13],))))
+    append!(out, universe_runs(s, merge(g, (K=[5, 34], universe_screens=[:global_gamma, :random_global]))))
+    append!(out, fixed_list_runs(s, g))
+    return out
+end
+
+"""
+    run_synthetic_path(md::MyMarketData, calib::MyCalibration, runs::Vector{MyStudyRun})::DataFrame
+
+Every run in `runs` on the market `md` with the calibration `calib`, scored as `run_and_save_study` scores it, with
+no file written. One `MyStudyContext` is built per distinct `context_key` and shared by its runs; a context that
+fails to build fails its runs. The runs are threaded with `Threads.@threads :dynamic`, with BLAS on one thread when
+`Threads.nthreads() > 1`.
+
+Returns one row per run, sorted by `hash` (`study_hash(run; fingerprint=data_fingerprint(md, calib))`, as
+`run_study_grid` hashes it). The columns are those of `rebuild_study_summary`, then `error`. A run that finishes has
+`status = "ok"` and `error` missing. A run that throws has `status = "error"`, the exception text in `error`, its
+`hash` and `label`, and every other column missing.
+"""
+function run_synthetic_path(md::MyMarketData, calib::MyCalibration, runs::Vector{MyStudyRun})::DataFrame
+    fp = data_fingerprint(md, calib)
+    # one context per distinct context key; a context that fails to build is stored as its exception
+    ctxs = Dict{Any,Any}()
+    for r in runs
+        k = context_key(r.settings)
+        if !haskey(ctxs, k)
+            try
+                ctxs[k] = build_context(md, calib, r.settings)
+            catch err
+                ctxs[k] = err
+            end
+        end
+    end
+    # the runs, threaded; run k fills slot k
+    if Threads.nthreads() > 1
+        BLAS.set_num_threads(1)
+    end
+    rows = Vector{Dict{Symbol,Any}}(undef, length(runs))
+    Threads.@threads :dynamic for k in eachindex(runs)
+        r = runs[k]
+        h = study_hash(r; fingerprint=fp)
+        try
+            c = ctxs[context_key(r.settings)]
+            if c isa Exception
+                throw(c)
+            end
+            out = _score_study(c, r)
+            row = _study_row(study_key(r), r.label, out.scorecard, out.stats, out.wall)
+            row[:hash] = h
+            row[:status] = "ok"
+            rows[k] = row
+        catch err
+            rows[k] = Dict{Symbol,Any}(:hash => h, :label => r.label, :status => "error",
+                :error => sprint(showerror, err))
+        end
+    end
+    # sorted by hash, in the columns of rebuild_study_summary plus error
+    hashes = String[]
+    for row in rows
+        push!(hashes, row[:hash])
+    end
+    rows = rows[sortperm(hashes)]
+    df = DataFrame()
+    for c in vcat(_STUDY_SUMMARY_COLUMNS, [:error])
+        df[!, c] = Any[get(row, c, missing) for row in rows]
+    end
+    for c in names(df)
+        df[!, c] = identity.(df[!, c])
+    end
+    return df
+end
+
+"""
+    path_done(dir::AbstractString, p::Int)::Bool
+
+True when `dir/path_<p>.csv` exists, that is, when `write_path_files` has finished path `p`.
+"""
+function path_done(dir::AbstractString, p::Int)::Bool
+    return isfile(joinpath(dir, "path_$(p).csv"))
+end
+
+"""
+    write_path_files(dir::AbstractString, p::Int, rows, bench, meta)::Nothing
+
+Write the tables of path `p` to `dir` (created if missing): `bench` to `bench_<p>.csv`, `meta` to `meta_<p>.csv`,
+then `rows` to `path_<p>.csv` last, so `path_done(dir, p)` is true only once all three are written. Each table is
+anything `CSV.write` accepts. Each file is written to `<name>.tmp` first and then moved into place, so a reader never
+sees a partial file.
+"""
+function write_path_files(dir::AbstractString, p::Int, rows, bench, meta)::Nothing
+    mkpath(dir)
+    for (stem, table) in (("bench", bench), ("meta", meta), ("path", rows))
+        final = joinpath(dir, "$(stem)_$(p).csv")
+        tmp = final * ".tmp"
+        CSV.write(tmp, table)
+        mv(tmp, final; force=true)
+    end
+    return nothing
+end

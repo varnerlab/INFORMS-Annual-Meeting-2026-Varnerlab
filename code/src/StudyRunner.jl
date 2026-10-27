@@ -155,6 +155,25 @@ function regime_stats(res::MyStudyResult, spy_close::AbstractVector{<:Real})::Na
 end
 
 """
+    _score_study(ctx::MyStudyContext, run::MyStudyRun)::NamedTuple{(:result, :scorecard, :stats, :wall)}
+
+Run `run_study(ctx, run)` and score it: `scorecard` is `growth_scorecard(equity, spy_close, g_f)` on the result's
+dates (equity in USD, SPY close in USD, g_f in yr⁻¹), `stats` merges `study_stats` and `regime_stats`, and `wall`
+(s) is the time taken by the run and its scoring. Shared by `run_and_save_study` and `run_synthetic_path`. Throws
+whatever the run throws.
+"""
+function _score_study(ctx::MyStudyContext, run::MyStudyRun)::NamedTuple{(:result, :scorecard, :stats, :wall)}
+    t0 = time_ns()
+    res = run_study(ctx, run)
+    md = ctx.md
+    i0 = index_of(md, res.dates[1]); i1 = index_of(md, res.dates[end])
+    sc = growth_scorecard(res.equity, md.spy_close[i0:i1], md.g_f[i0:i1])
+    st = merge(study_stats(res), regime_stats(res, md.spy_close[i0:i1]))
+    wall = (time_ns() - t0) / 1e9
+    return (result=res, scorecard=sc, stats=st, wall=wall)
+end
+
+"""
     run_and_save_study(ctx::MyStudyContext, run::MyStudyRun; outdir="results",
         fingerprint=data_fingerprint(ctx.md, ctx.calib))::String
 
@@ -169,16 +188,10 @@ function run_and_save_study(ctx::MyStudyContext, run::MyStudyRun; outdir::Abstra
         fingerprint::AbstractString=data_fingerprint(ctx.md, ctx.calib))::String
     h = study_hash(run; fingerprint=fingerprint)
     runs = _runs_dir(outdir); mkpath(runs)
-    t0 = time_ns()
-    res = run_study(ctx, run)
-    md = ctx.md
-    i0 = index_of(md, res.dates[1]); i1 = index_of(md, res.dates[end])
-    sc = growth_scorecard(res.equity, md.spy_close[i0:i1], md.g_f[i0:i1])
-    st = merge(study_stats(res), regime_stats(res, md.spy_close[i0:i1]))
-    wall = (time_ns() - t0) / 1e9
+    out = _score_study(ctx, run)
     final = joinpath(runs, h * ".jld2"); tmp = final * ".tmp"
-    jldsave(tmp; study_key=study_key(run), data_fingerprint=String(fingerprint), result=res, scorecard=sc, stats=st,
-        wall_seconds=wall, label=run.label)
+    jldsave(tmp; study_key=study_key(run), data_fingerprint=String(fingerprint), result=out.result,
+        scorecard=out.scorecard, stats=out.stats, wall_seconds=out.wall, label=run.label)
     mv(tmp, final; force=true)
     return h
 end
@@ -375,15 +388,20 @@ const _STUDY_STAT_FIELDS = (:turnover, :total_cost, :borrow_fees, :n_decisions, 
 const _STUDY_SUMMARY_COLUMNS = vcat([:hash, :label, :status, :allocator, :screen, :seed],
     collect(fieldnames(MyStudySettings)), [:wall_seconds], collect(_STUDY_SCORE_FIELDS), collect(_STUDY_STAT_FIELDS))
 
-function _study_summary_row(file::AbstractString)
-    h = first(split(basename(file), "."))
-    d = load(file)
-    k = d["study_key"]; sc = d["scorecard"]; st = d["stats"]
-    row = Dict{Symbol,Any}(:hash => h, :label => get(d, "label", ""), :status => "ok",
-        :allocator => k.allocator, :screen => String(k.screen), :seed => k.seed,
-        :wall_seconds => get(d, "wall_seconds", missing))
+"""
+    _study_row(key::NamedTuple, label, sc, st, wall)::Dict{Symbol,Any}
+
+One summary row with every `_STUDY_SUMMARY_COLUMNS` key except `:hash` and `:status`: `label`; `allocator`,
+`screen` (a `String`), `seed` and every `MyStudySettings` field from `key` (a `study_key`; a vector field is joined
+with `;`); `wall_seconds` = `wall` (s); the growth-scorecard fields of `sc`; and the `study_stats` and
+`regime_stats` fields of `st` (`missing` for a field that `st` lacks). Shared by `_study_summary_row` and
+`run_synthetic_path`.
+"""
+function _study_row(key::NamedTuple, label, sc, st, wall)::Dict{Symbol,Any}
+    row = Dict{Symbol,Any}(:label => label, :allocator => key.allocator, :screen => String(key.screen),
+        :seed => key.seed, :wall_seconds => wall)
     for f in fieldnames(MyStudySettings)
-        v = getfield(k, f)
+        v = getfield(key, f)
         row[f] = v isa AbstractVector ? join(v, ";") : v
     end
     for f in _STUDY_SCORE_FIELDS
@@ -392,6 +410,15 @@ function _study_summary_row(file::AbstractString)
     for f in _STUDY_STAT_FIELDS
         row[f] = get(st, f, missing)
     end
+    return row
+end
+
+function _study_summary_row(file::AbstractString)
+    h = first(split(basename(file), "."))
+    d = load(file)
+    row = _study_row(d["study_key"], get(d, "label", ""), d["scorecard"], d["stats"], get(d, "wall_seconds", missing))
+    row[:hash] = h
+    row[:status] = "ok"
     return row
 end
 
