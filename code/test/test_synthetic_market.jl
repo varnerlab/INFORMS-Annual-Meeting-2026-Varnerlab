@@ -112,6 +112,10 @@ end
     g0 = with_generator(gen; k_β=zeros(48), k_α=0.0)
     s0 = synthetic_growth(g0, a.draws)                                    # toy β ≈ 1 never clips
     @test s0.clip_share == 0.0 && s0.β_eff == repeat(gen.β_center', n)
+    gk = with_generator(gen; k_β=fill(20.0, 48), k_α=0.0)                # large β drift: drift variance 1.1 on β ≈ 1
+    sk = synthetic_growth(gk, a.draws)
+    ratio = [var(sk.G[:, i]) / var(a.draws.E[:, i]) for i in 1:48]
+    @test sk.clip_share == 0.0 && isapprox(median(ratio), 1.0; atol=0.15)  # 1.08 here; 1.38 if β²_mean left out the drift
     G = synthetic_growth(gen, a.draws).G; G[5, 3] = -Inf
     @test_throws ArgumentError market_data_from_growth(gen, a.draws.g_m, G)
 end

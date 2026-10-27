@@ -201,10 +201,11 @@ end
 
 Sector loadings δᵢ (dimensionless) for the generator. Each sector's `loo_loadings` are multiplied by one scale κ,
 chosen so that the shared co-movement the generator builds, δᵢ·δⱼ·var(f_s) averaged over the pairs i ≠ j in the
-sector, equals the mean pairwise covariance of the columns of `E` (yr⁻², days × tickers). f_s is the full
+sector, equals the mean pairwise covariance (yr⁻²) of the columns of `E` (yr⁻¹, days × tickers). f_s is the full
 equal-weight sector mean (`sector_factors`), the series the sector model is fit to. The leave-one-out slopes keep
 each name's relative loading; the scale corrects their level, which is biased low when paired with var(f_s).
-Throws `ArgumentError` for a sector where either mean pairwise covariance is not positive.
+Throws `ArgumentError` for a sector with one name (from `loo_loadings`) or where either mean pairwise covariance is
+not positive.
 """
 function sector_loadings(E::AbstractMatrix, sector::Vector{String})::Vector{Float64}
     δ = loo_loadings(E, sector)
