@@ -13,7 +13,20 @@
 # Without --smoke the files go to results/synthetic/rows/. The `typical` flag written with each path is
 # typical_rank ≤ 600, or ≤ N with --limit N, or ≤ 600 + M with --extra M.
 #
-# Run: julia --project=code -t 30 scripts/22_synthetic_run.jl [--smoke | --limit N | --extra M]
+# Run: OMP_NUM_THREADS=1 KMP_GTID_MODE=2 julia --gcthreads=1 --project=code -t 30 scripts/22_synthetic_run.jl [--smoke | --limit N | --extra M]
+
+# The SCS fallback solver loads libomp. Without these two settings, libomp gives one thread id to several Julia
+# threads and crashes, or the run hangs. Stop before any package loads unless both are set.
+if get(ENV, "OMP_NUM_THREADS", "") != "1" || get(ENV, "KMP_GTID_MODE", "") != "2"
+    error("script 22 needs OMP_NUM_THREADS=1 and KMP_GTID_MODE=2 (got OMP_NUM_THREADS=",
+        get(ENV, "OMP_NUM_THREADS", "(unset)"), ", KMP_GTID_MODE=", get(ENV, "KMP_GTID_MODE", "(unset)"), ").\n",
+        "Without them the libomp that the SCS solver loads gives one thread id to several Julia threads, which crashes ",
+        "the run (an OMP assertion or a segfault), and its oversubscribed OpenMP threads can hang it.\n",
+        "Launch with:\n",
+        "OMP_NUM_THREADS=1 KMP_GTID_MODE=2 nohup julia --gcthreads=1 --project=code -t 30 scripts/22_synthetic_run.jl ",
+        "> results/synthetic/run.log 2>&1 &")
+end
+
 using Pkg
 Pkg.activate(normpath(joinpath(@__DIR__, "..", "code")); io=devnull)
 using VLINFORMS2026, Dates, Statistics, DataFrames, CSV, JLD2
