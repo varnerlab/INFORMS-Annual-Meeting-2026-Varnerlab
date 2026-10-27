@@ -24,7 +24,8 @@ V5,mean residual correlation within Utilities,0.47594230051413233,0.549349238378
 V5,mean residual correlation across sectors,8.15936333259771e-5,0.030935305792821076,report only,
 V6,SD of the online β̂ ÷ the real SD,0.987033284692633,1.0,"in [0.9, 1.1]",true
 V6,lag-252 autocorrelation of the online β̂,0.18634554446245885,0.20621485720617153,report only,
-V6,share of paths with a name whose β̂ ≤ 0 in 2025–26 (reference: real count of names),1.0,120.0,report only,
+V6,"share of paths with a name whose online β̂ ≤ 0 on some day in 2025–26 (reference: the real market's own yes/no, 1 = yes)",1.0,1.0,report only,
+V6,"names whose online β̂ ≤ 0 on some day in 2025–26, median over paths (range 4–18)",10.0,120.0,report only,
 V9,"cross-name SD of OLS α, 2014–2024 (yr⁻¹)",0.08939817889159057,0.07640258507556169,within 0.01 of reference,false
 V9,"correlation of OLS α, 2014–2019 vs 2020–2024",0.12656496700740602,0.1747594697166383,within 0.05 of reference,true
 V7,market-data fields that differ when path 2594 is built twice,0.0,0.0,= 0,true

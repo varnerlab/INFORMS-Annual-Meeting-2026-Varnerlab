@@ -13,6 +13,7 @@ const CONFIG = joinpath(REPO, "config", "study.toml")
 const CALIB = joinpath(REPO, "results", "calibration.jld2")
 const MD_START, MD_STOP = Date(2014, 1, 3), Date(2026, 9, 4)
 const N_CHECK = 50                               # check paths: the first 50 by typical_rank
+const TRADE = (Date(2025, 1, 2), Date(2026, 9, 4))  # trading window of the β̂ ≤ 0 rows (first and last trading day)
 
 function main()
     t0 = time()
@@ -30,7 +31,7 @@ function main()
         nrow(paths), " paths in paths.csv, ", Threads.nthreads(), " threads")
 
     # Step 2: the real reference
-    ref = real_reference(md, calib, gen)
+    ref = real_reference(md, calib, gen; trade=TRADE)
 
     # Step 3: the check paths; each one is built, recalibrated as the study would and measured (threaded over paths)
     order = sortperm(paths.typical_rank)
@@ -40,7 +41,7 @@ function main()
     Threads.@threads for k in 1:N_CHECK
         sm = synthetic_market(gen, ids[k])
         c = calibrate(sm.md; train_start=s.train_start, train_stop=s.train_stop, window=s.omega_window)
-        diags[k] = path_diagnostics(gen, sm, c, ref)
+        diags[k] = path_diagnostics(gen, sm, c, ref; trade=TRADE)
     end
     println(N_CHECK, " check paths: ", round(time() - t_paths; digits=1), " s")
 
@@ -86,7 +87,8 @@ function main()
     println(io)
     println(io, "- Check paths: the first ", N_CHECK, " paths by `typical_rank` in `paths.csv` (ids ", join(ids, ", "), ").")
     println(io, "- Each check path is recalibrated on ", SYNTH_TRAIN[1], " → ", SYNTH_TRAIN[2],
-        " with the study's `calibrate`, then compared with the real market over the same window.")
+        " with the study's `calibrate`, then compared with the real market over that window. The two rows on names",
+        " whose online β̂ ≤ 0 use the trading window ", TRADE[1], " → ", TRADE[2], " instead.")
     println(io, "- V1 uses all ", nrow(paths), " paths in `paths.csv`.")
     println(io, "- A number with one value per path is the median over the ", N_CHECK, " paths. A number with one value",
         " per name is each name's median over the paths, then the median over the ", length(gen.tickers), " names.")

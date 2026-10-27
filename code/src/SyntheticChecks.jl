@@ -291,7 +291,8 @@ Gates:
 - V6: median over names of (median-over-paths `ewls_sd` ÷ `sd_β`) within [0.9, 1.1];
 - V9: |median α_spread − real spread| ≤ 0.01 (yr⁻¹) and |median α_corr − real corr| ≤ 0.05.
 Reported only: V3 median `var_ratio_real`; V4 median(acf_syn − acf_real) at each lag; V5 median `cross_corr`;
-V6 median `acf252`, and the share of paths with `n_beta_le0` ≥ 1 next to the real count of such names.
+V6 median `acf252`; the share of paths with `n_beta_le0` ≥ 1, next to the real market's own yes/no (1.0 if its
+`n_beta_le0` ≥ 1, else 0.0); and the median over paths of `n_beta_le0`, with its range, next to the real count.
 Throws `ArgumentError` for an empty `diags`.
 """
 function check_table(diags::Vector, ref::NamedTuple, v1::NamedTuple)::DataFrame
@@ -315,6 +316,7 @@ function check_table(diags::Vector, ref::NamedTuple, v1::NamedTuple)::DataFrame
     sd_ratio = zeros(Float64, P, N)
     acf_vs_draw = zeros(Float64, P, N, L)
     acf_vs_real = zeros(Float64, P, N, L)
+    n_le0 = zeros(Int, P)
     n_with_le0 = 0
     for p in 1:P
         d = diags[p]
@@ -336,6 +338,7 @@ function check_table(diags::Vector, ref::NamedTuple, v1::NamedTuple)::DataFrame
                 acf_vs_real[p, i, l] = d.acf_syn[i, l] - d.acf_real[i, l]
             end
         end
+        n_le0[p] = d.n_beta_le0
         if d.n_beta_le0 >= 1
             n_with_le0 += 1
         end
@@ -382,8 +385,16 @@ function check_table(diags::Vector, ref::NamedTuple, v1::NamedTuple)::DataFrame
     x = median(name_medians(sd_ratio))
     push!(t, ("V6", "SD of the online β̂ ÷ the real SD", x, 1.0, "in [0.9, 1.1]", 0.9 <= x <= 1.1))
     push!(t, ("V6", "lag-252 autocorrelation of the online β̂", median(acf252), ref.acf252, "report only", missing))
-    push!(t, ("V6", "share of paths with a name whose β̂ ≤ 0 in 2025–26 (reference: real count of names)",
-        n_with_le0 / P, Float64(ref.n_beta_le0), "report only", missing))
+    # the real market's own yes/no: does it have a name whose β̂ ≤ 0 on some day?
+    if ref.n_beta_le0 >= 1
+        real_has_le0 = 1.0
+    else
+        real_has_le0 = 0.0
+    end
+    push!(t, ("V6", "share of paths with a name whose online β̂ ≤ 0 on some day in 2025–26 " *
+        "(reference: the real market's own yes/no, 1 = yes)", n_with_le0 / P, real_has_le0, "report only", missing))
+    push!(t, ("V6", "names whose online β̂ ≤ 0 on some day in 2025–26, median over paths " *
+        "(range $(minimum(n_le0))–$(maximum(n_le0)))", median(n_le0), Float64(ref.n_beta_le0), "report only", missing))
     # V9: α spread and persistence
     x = median(α_spread)
     push!(t, ("V9", "cross-name SD of OLS α, 2014–2024 (yr⁻¹)", x, ref.spread, "within 0.01 of reference",

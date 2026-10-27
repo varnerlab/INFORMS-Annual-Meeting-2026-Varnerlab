@@ -31,7 +31,7 @@ end
     ok = [fake_diag() for _ in 1:3]
     t = check_table(ok, ref, v1)
     @test names(t) == ["check", "statistic", "synthetic", "reference", "threshold", "pass"]
-    @test nrow(t) == 19 && count(ismissing, t.pass) == 7 && all(skipmissing(t.pass))      # 12 gates, all on target
+    @test nrow(t) == 20 && count(ismissing, t.pass) == 8 && all(skipmissing(t.pass))      # 12 gates, all on target
     @test sort(unique(t.check[ismissing.(t.pass)])) == ["V3", "V4", "V5", "V6"]           # report-only rows
     # V1: |median train growth − real| ≤ 0.02
     @test gates(check_table(ok, ref, (median_growth=0.119, n_paths=10)), "V1") == [true]
@@ -62,10 +62,18 @@ end
     @test gates(check_table([fake_diag(ewls_sd=fill(0.3 * 1.08, 4)) for _ in 1:3], ref, v1), "V6") == [true]
     @test gates(check_table([fake_diag(ewls_sd=fill(0.3 * 1.12, 4)) for _ in 1:3], ref, v1), "V6") == [false]
     @test gates(check_table([fake_diag(ewls_sd=fill(0.3 * 0.88, 4)) for _ in 1:3], ref, v1), "V6") == [false]
-    # V6 report: the share of paths with a name whose β̂ ≤ 0, next to the real count of such names
+    # V6 reports, after the gate and acf252 rows: the share of paths with a name whose β̂ ≤ 0 next to the real
+    # market's own yes/no, then the median count of such names over paths next to the real count
     tn = check_table([fake_diag(n_beta_le0=n) for n in (0, 1, 3)], ref, v1)
-    k = findlast(==("V6"), tn.check)
-    @test tn.synthetic[k] ≈ 2 / 3 && tn.reference[k] == 2 && ismissing(tn.pass[k])
+    v6 = findall(==("V6"), tn.check)
+    share = v6[3]
+    names_le0 = v6[4]
+    @test length(v6) == 4 && ismissing(tn.pass[share]) && ismissing(tn.pass[names_le0])
+    @test tn.synthetic[share] ≈ 2 / 3 && tn.reference[share] == 1.0                    # real has 2 such names: yes
+    @test tn.synthetic[names_le0] == 1.0 && tn.reference[names_le0] == ref.n_beta_le0   # median of 0, 1, 3
+    @test occursin("range 0–3", tn.statistic[names_le0])
+    t0 = check_table([fake_diag(n_beta_le0=n) for n in (0, 1, 3)], merge(ref, (n_beta_le0=0,)), v1)
+    @test t0.reference[share] == 0.0 && t0.reference[names_le0] == 0.0                 # real has none: no
     # V9: spread within 0.01, corr within 0.05
     @test gates(check_table([fake_diag(α_spread=0.087) for _ in 1:3], ref, v1), "V9") == [false, true]
     @test gates(check_table([fake_diag(α_spread=0.085) for _ in 1:3], ref, v1), "V9") == [true, true]
