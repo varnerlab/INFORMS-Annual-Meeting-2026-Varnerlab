@@ -35,3 +35,18 @@ end
     @test growth_window(d, d[3], d[10]) == 3:9
     @test_throws ArgumentError growth_window(d, Date(2013,1,1), d[10])
 end
+
+@testset "sector factors and loadings" begin
+    md = synthetic_md(ρ=0.5)
+    fit = fit_base_sim(md, md.dates[1], md.dates[end])
+    E = sim_residuals(md, fit.params, md.dates[1], md.dates[end])
+    @test size(E) == (length(md.dates) - 1, 48)
+    @test maximum(abs.(vec(mean(E; dims=1)))) < 1e-8            # OLS residuals have zero mean
+    sf = sector_factors(E, md.sector)
+    @test sf.sectors == ["S1", "S2", "S3", "S4"]
+    @test sf.F[:, 1] ≈ vec(mean(E[:, 1:12]; dims=2))
+    @test isapprox(median(loo_loadings(E, md.sector)), 0.5 / (0.5 + 0.5 / 11); atol=0.03)   # the leave-one-out mean's own noise attenuates the slope
+    rng = Xoshiro(3); U = randn(rng, 5000, 12)                          # no common factor
+    @test abs(mean(loo_loadings(U, fill("A", 12)))) < 0.05              # full-mean slope would be ≈ 1
+    @test_throws ArgumentError loo_loadings(U[:, 1:2], ["A", "B"])
+end

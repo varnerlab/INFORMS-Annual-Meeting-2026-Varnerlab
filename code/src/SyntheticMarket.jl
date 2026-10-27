@@ -69,3 +69,88 @@ function drift_path(z::AbstractVector{<:Real}, h::Real, k::Real)::Vector{Float64
     end
     return x
 end
+
+"""
+    sim_residuals(md::MyMarketData, params::Dict{String,MySIMParameterEstimate}, start::Date, stop::Date)::Matrix{Float64}
+
+SIM residuals eᵢ = gᵢ − αᵢ − βᵢ·g_m (yr⁻¹) for every ticker, on the growth rows `growth_window(md.dates, start, stop)`.
+Columns follow `md.tickers`. `params` holds αᵢ (yr⁻¹) and βᵢ for each ticker, and g_m is the SPY growth rate (yr⁻¹).
+"""
+function sim_residuals(md::MyMarketData, params::Dict{String,MySIMParameterEstimate}, start::Date, stop::Date)::Matrix{Float64}
+    rows = growth_window(md.dates, start, stop)
+    g_m = growth_rates(md.spy_close)[rows]
+    G = growth_rates(md.close)[rows, :]
+    E = zeros(Float64, length(rows), length(md.tickers))
+    for (j, t) in enumerate(md.tickers)
+        p = params[t]
+        for k in 1:length(rows)
+            E[k, j] = G[k, j] - p.α - p.β * g_m[k]
+        end
+    end
+    return E
+end
+
+"""
+    sector_factors(E::AbstractMatrix, sector::Vector{String})::NamedTuple{(:sectors, :F)}
+
+Equal-weight sector factors from the residual matrix `E` (yr⁻¹, days × tickers). `sectors` is the sorted unique
+sector labels, and column s of `F` (yr⁻¹, days × sectors) is the mean of the columns of `E` whose entry in
+`sector` is `sectors[s]`.
+"""
+function sector_factors(E::AbstractMatrix, sector::Vector{String})
+    size(E, 2) == length(sector) || throw(ArgumentError("E has $(size(E, 2)) columns but sector has $(length(sector)) labels"))
+    sectors = sort(unique(sector))
+    F = zeros(Float64, size(E, 1), length(sectors))
+    for (s, name) in enumerate(sectors)
+        members = findall(==(name), sector)
+        for k in 1:size(E, 1)
+            total = 0.0
+            for i in members
+                total += E[k, i]
+            end
+            F[k, s] = total / length(members)
+        end
+    end
+    return (sectors = sectors, F = F)
+end
+
+"""
+    loo_loadings(E::AbstractMatrix, sector::Vector{String})::Vector{Float64}
+
+Leave-one-out sector loadings δᵢ (dimensionless). δᵢ is the OLS slope, with an intercept, of `E[:, i]` (yr⁻¹) on
+the mean of the other columns in the same sector (yr⁻¹). Leaving column i out of the mean keeps its own noise out
+of the regressor. Throws `ArgumentError` for a sector with one name.
+"""
+function loo_loadings(E::AbstractMatrix, sector::Vector{String})::Vector{Float64}
+    size(E, 2) == length(sector) || throw(ArgumentError("E has $(size(E, 2)) columns but sector has $(length(sector)) labels"))
+    T = size(E, 1)
+    δ = zeros(Float64, size(E, 2))
+    for name in sort(unique(sector))
+        members = findall(==(name), sector)
+        length(members) >= 2 || throw(ArgumentError("sector $(name) has one name; a leave-one-out mean needs at least two"))
+        for i in members
+            # mean of the other names in the sector
+            x = zeros(Float64, T)
+            for k in 1:T
+                total = 0.0
+                for j in members
+                    if j != i
+                        total += E[k, j]
+                    end
+                end
+                x[k] = total / (length(members) - 1)
+            end
+            # OLS slope with intercept
+            x̄ = mean(x)
+            ȳ = mean(view(E, :, i))
+            sxy = 0.0
+            sxx = 0.0
+            for k in 1:T
+                sxy += (x[k] - x̄) * (E[k, i] - ȳ)
+                sxx += (x[k] - x̄)^2
+            end
+            δ[i] = sxy / sxx
+        end
+    end
+    return δ
+end
