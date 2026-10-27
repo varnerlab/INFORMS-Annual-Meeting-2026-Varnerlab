@@ -78,4 +78,4 @@ export limits_row, limits_day, limits_failures
 export group_summary, SUMMARY_METRICS, paired_win_rate, gamma_percentile, hedge_effect, long_vs_short_hedge,
     passive_references, markdown_table, compare_summaries, sort_table, TABLE_ALLOCATOR_ORDER, TABLE_SCREEN_ORDER,
     eta_frame, ETA_METRICS, REGIME_METRICS, eta_solver_table
-export path_seed, growth_window, ema_rate, drift_path, sim_residuals, sector_factors, loo_loadings
+export path_seed, growth_window, ema_rate, drift_path, sim_residuals, sector_factors, loo_loadings, SYNTH_FLOOR, SYNTH_R2_PRESERVE, compose_name

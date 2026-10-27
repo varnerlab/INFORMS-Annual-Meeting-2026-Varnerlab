@@ -154,3 +154,66 @@ function loo_loadings(E::AbstractMatrix, sector::Vector{String})::Vector{Float64
     end
     return δ
 end
+
+"""
+    SYNTH_FLOOR
+
+Smallest share of a synthetic name's variance that stays idiosyncratic (dimensionless).
+"""
+const SYNTH_FLOOR = 0.10
+
+"""
+    SYNTH_R2_PRESERVE
+
+Real-data R² (dimensionless) at or above which a name keeps its real R² instead of matching total variance.
+"""
+const SYNTH_R2_PRESERVE = 0.80
+
+"""
+    compose_name(α, β, δ, g_m, f, ε, σ²_m, σ²_s, σ²_gen, r²; floor=SYNTH_FLOOR, r2_threshold=SYNTH_R2_PRESERVE)::NamedTuple{(:g, :β_eff, :n_clipped)}
+
+Compose one synthetic name's growth rate g[t] = α[t] + b·g_m[t] + d·f[t] + √s²·ε̃[t] (yr⁻¹) for every day t. α (yr⁻¹)
+and β (dimensionless) are per-day paths, δ is the sector loading (dimensionless), g_m, f and ε are the market
+growth, sector factor and raw JumpHMM draw (yr⁻¹), and σ²_m, σ²_s, σ²_gen are the fixed variances of g_m, f and ε
+(yr⁻²). r² is the real R² (dimensionless). ε̃ is ε with its mean removed.
+
+Each day, v = β[t]²σ²_m + δ²σ²_s and ρ = v/σ²_gen. If r² ≥ r2_threshold, s² = v(1 − r²)/r²/σ²_gen and β, δ are kept.
+Otherwise, if ρ ≤ 1 − floor, s² = 1 − ρ and β, δ are kept. Otherwise β and δ are both scaled by
+c = √((1 − floor)/ρ), which keeps the sign of β, s² = floor, and the day counts as clipped.
+
+Returns the growth path `g` (yr⁻¹), the per-day β after clipping `β_eff` (dimensionless) and the number of clipped days `n_clipped`.
+"""
+function compose_name(α::AbstractVector, β::AbstractVector, δ::Real, g_m::AbstractVector, f::AbstractVector, ε::AbstractVector,
+                      σ²_m::Real, σ²_s::Real, σ²_gen::Real, r²::Real; floor::Real=SYNTH_FLOOR, r2_threshold::Real=SYNTH_R2_PRESERVE)::NamedTuple{(:g, :β_eff, :n_clipped)}
+    T = length(g_m)
+    if !(length(α) == T && length(β) == T && length(f) == T && length(ε) == T)
+        throw(ArgumentError("α, β, g_m, f and ε must share one length; got $(length(α)), $(length(β)), $(T), $(length(f)), $(length(ε))"))
+    end
+    0 < floor < 1 || throw(ArgumentError("floor must lie in (0, 1); got $(floor)"))
+    σ²_gen > 0 || throw(ArgumentError("σ²_gen must be positive; got $(σ²_gen)"))
+    r² > 0 || throw(ArgumentError("r² must be positive; got $(r²)"))
+    ε̄ = mean(ε)
+    g = zeros(Float64, T)
+    β_eff = zeros(Float64, T)
+    n_clipped = 0
+    for t in 1:T
+        v = β[t]^2 * σ²_m + δ^2 * σ²_s
+        ρ = v / σ²_gen
+        b = β[t]
+        d = δ
+        if r² >= r2_threshold
+            s² = v * (1 - r²) / r² / σ²_gen
+        elseif ρ <= 1 - floor
+            s² = 1 - ρ
+        else
+            c = sqrt((1 - floor) / ρ)
+            b = c * β[t]
+            d = c * δ
+            s² = floor
+            n_clipped += 1
+        end
+        β_eff[t] = b
+        g[t] = α[t] + b * g_m[t] + d * f[t] + sqrt(s²) * (ε[t] - ε̄)
+    end
+    return (g=g, β_eff=β_eff, n_clipped=n_clipped)
+end

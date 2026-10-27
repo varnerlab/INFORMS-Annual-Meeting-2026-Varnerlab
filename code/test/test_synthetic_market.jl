@@ -50,3 +50,25 @@ end
     @test abs(mean(loo_loadings(U, fill("A", 12)))) < 0.05              # full-mean slope would be ≈ 1
     @test_throws ArgumentError loo_loadings(U[:, 1:2], ["A", "B"])
 end
+
+@testset "composition" begin
+    n = 200_000
+    rng = Xoshiro(11)
+    gm = 2.5 .* randn(rng, n)
+    f = randn(rng, n)
+    ε = 4.0 .* randn(rng, n)
+    c = compose_name(fill(0.0, n), fill(1.2, n), 0.8, gm, f, ε, 6.25, 1.0, 16.0, 0.3)
+    @test isapprox(var(c.g), 16.0; rtol=0.02) && isapprox(cov(c.g, gm) / var(gm), 1.2; atol=0.02) && c.n_clipped == 0
+    for b in (3.0, -3.0)                                    # ρ = (9·6.25 + 0.64)/16 > 0.9: clipped, sign kept
+        c = compose_name(fill(0.0, n), fill(b, n), 0.8, gm, f, ε, 6.25, 1.0, 16.0, 0.3)
+        ρ = (9 * 6.25 + 0.64) / 16
+        @test all(c.β_eff .≈ b * sqrt(0.9 / ρ)) && c.n_clipped == n && isapprox(var(c.g), 16.0; rtol=0.03)
+    end
+    βt = repeat([0.5, 1.4], inner=1000, outer=n ÷ 2000)    # drifting β, no day clips (ρ = 0.806 at 1.4)
+    c = compose_name(fill(0.0, n), βt, 0.8, gm, f, ε, 6.25, 1.0, 16.0, 0.3)
+    @test isapprox(var(c.g), 16.0; rtol=0.03) && mean(c.β_eff) ≈ mean(βt) && c.n_clipped == 0
+    c = compose_name(fill(0.0, n), fill(1.0, n), 0.0, gm, f, ε, 6.25, 1.0, 16.0, 0.9)   # R² branch
+    @test isapprox(var(c.g), 6.25 / 0.9; rtol=0.03)
+    c = compose_name(fill(0.3, n), fill(1.0, n), 0.8, gm, f, ε .+ 5.0, 6.25, 1.0, 16.0, 0.3)
+    @test isapprox(mean(c.g), 0.3 + mean(gm) + 0.8 * mean(f); atol=1e-10)              # ε demeaned, α passes through
+end
