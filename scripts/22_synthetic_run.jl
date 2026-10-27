@@ -4,7 +4,10 @@
 #   path_<p>.csv   one summary row per run (the columns of the real summaries, plus path_id, the set flags and error);
 #   bench_<p>.csv  SPY buy-and-hold and equal-weight universe buy-and-hold on the path;
 #   meta_<p>.csv   λ, timings (s), clip share, names with online β̂ ≤ 0, error rows and threads.
-# A path whose path_<p>.csv exists is skipped, so a stopped run picks up where it left off.
+# A path whose path_<p>.csv exists is skipped, so a stopped run picks up where it left off. A path whose work throws
+# gets error_<p>.txt (the message and backtrace) and no path_<p>.csv; the run moves on, and the next launch retries it.
+# A calibration over 30 s switches the remaining paths to the fixed-λ calibration (λ = 0). That switch holds only
+# within one process: a relaunch starts again with the full calibration.
 #
 # Arguments (at most one):
 #   --smoke     the first 20 paths by run order, written to results/synthetic/smoke/rows/
@@ -176,6 +179,21 @@ function run_path(gen, s, runs, row, n_typical::Int, fixed_λ::Bool)
     return (rows=rows, bench=bench, meta=meta)
 end
 
+"""
+    write_path_error(dir::AbstractString, p::Int, text::AbstractString)::Nothing
+
+Write `text` (why path `p` failed: the message and backtrace) to `dir/error_<p>.txt`, through `error_<p>.txt.tmp`
+and a move. No `path_<p>.csv` is written, so `path_done` stays false and the next launch retries the path.
+"""
+function write_path_error(dir::AbstractString, p::Int, text::AbstractString)::Nothing
+    mkpath(dir)
+    final = joinpath(dir, "error_$(p).txt")
+    tmp = final * ".tmp"
+    write(tmp, text)
+    mv(tmp, final; force=true)
+    return nothing
+end
+
 function main(args=ARGS)
     t_start = time()
     opts = parse_args(collect(String, args))
@@ -214,11 +232,34 @@ function main(args=ARGS)
     fixed_λ = false
     walls = Float64[]
     n_error_rows = 0
+    n_failed = 0
     for (k, i) in enumerate(todo)
         row = paths[i, :]
         t0 = time()
-        res = run_path(gen, s, runs, row, sel.n_typical, fixed_λ)
-        write_path_files(outdir, row.path_id, res.rows, res.bench, res.meta)
+        # the path's work; a failure is logged to error_<p>.txt and the run moves on (Ctrl-C still stops it)
+        res = nothing
+        failure = ""
+        try
+            res = run_path(gen, s, runs, row, sel.n_typical, fixed_λ)
+            write_path_files(outdir, row.path_id, res.rows, res.bench, res.meta)
+        catch err
+            if err isa InterruptException
+                rethrow()
+            end
+            bt = catch_backtrace()
+            failure = "path $(row.path_id) failed:\n" * sprint(showerror, err) * "\n" * sprint(Base.show_backtrace, bt) * "\n"
+        end
+        if failure != ""
+            n_failed += 1
+            write_path_error(outdir, row.path_id, failure)
+            println("path ", row.path_id, " (", k, " of ", length(todo), "): FAILED; no path file written, the next launch ",
+                "retries it; details in error_", row.path_id, ".txt")
+            print(failure)
+            flush(stdout)
+            continue
+        end
+        # the path succeeded: drop a stale error file from an earlier failed attempt
+        rm(joinpath(outdir, "error_$(row.path_id).txt"); force=true)
         wall = time() - t0
         push!(walls, wall)
         m = res.meta[1, :]
@@ -251,7 +292,7 @@ function main(args=ARGS)
     end
 
     # the totals
-    println("ran ", length(todo), ", skipped ", n_skipped, ", error rows ", n_error_rows)
+    println("ran ", length(walls), ", failed ", n_failed, ", skipped ", n_skipped, ", error rows ", n_error_rows)
     if !isempty(walls)
         println("seconds per path: mean ", round(mean(walls); digits=1), ", median ", round(median(walls); digits=1),
             ", first path ", round(walls[1]; digits=1))

@@ -25,6 +25,9 @@ end
     @test length(runs) == 532 && allunique(r.label for r in runs)
     @test all(r.seed in 5660:5664 for r in runs)
     @test count(r -> r.settings.basket_K in (5, 34) && r.screen in (:global_gamma, :random_global), runs) == 168
+    @test count(r -> r.screen in (:bandit, :gamma, :random), runs) == 154                       # tier 1
+    @test count(r -> r.settings.basket_K == 13 && r.screen in grid.universe_screens, runs) == 182  # universe, K = 13
+    @test count(r -> r.screen == :fixed, runs) == 28                                             # fixed lists
 end
 @testset "path rows match the cached runner" begin
     md, ctx = study_ctx()

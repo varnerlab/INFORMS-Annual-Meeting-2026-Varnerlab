@@ -148,6 +148,11 @@ function run_synthetic_path(md::MyMarketData, calib::MyCalibration, runs::Vector
             end
         end
     end
+    # every run's hash, computed before the threaded loop
+    hashes = String[]
+    for r in runs
+        push!(hashes, study_hash(r; fingerprint=fp))
+    end
     # the runs, threaded; run k fills slot k
     if Threads.nthreads() > 1
         BLAS.set_num_threads(1)
@@ -155,7 +160,7 @@ function run_synthetic_path(md::MyMarketData, calib::MyCalibration, runs::Vector
     rows = Vector{Dict{Symbol,Any}}(undef, length(runs))
     Threads.@threads :dynamic for k in eachindex(runs)
         r = runs[k]
-        h = study_hash(r; fingerprint=fp)
+        h = hashes[k]
         try
             c = ctxs[context_key(r.settings)]
             if c isa Exception
@@ -172,10 +177,6 @@ function run_synthetic_path(md::MyMarketData, calib::MyCalibration, runs::Vector
         end
     end
     # sorted by hash, in the columns of rebuild_study_summary plus error
-    hashes = String[]
-    for row in rows
-        push!(hashes, row[:hash])
-    end
     rows = rows[sortperm(hashes)]
     df = DataFrame()
     for c in vcat(_STUDY_SUMMARY_COLUMNS, [:error])
