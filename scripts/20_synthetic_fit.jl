@@ -127,7 +127,14 @@ function main()
     E = sim_residuals(md, ols.params, SYNTH_TRAIN[1], SYNTH_TRAIN[2])
     sf = sector_factors(E, md.sector)
     S = length(sf.sectors)
-    δ = loo_loadings(E, md.sector)
+    # sector loadings: leave-one-out slopes, scaled per sector so the real shared co-movement is reproduced
+    δ = sector_loadings(E, md.sector)
+    δ_loo = loo_loadings(E, md.sector)
+    loading_scale = zeros(Float64, S)
+    for s in 1:S
+        j = findfirst(==(sf.sectors[s]), md.sector)
+        loading_scale[s] = δ[j] / δ_loo[j]
+    end
     σ²_m = var(g_m[rows])
     σ²_s = [var(sf.F[:, s]) for s in 1:S]
     σ²_gen = [var(G[rows, j]) for j in 1:N]
@@ -147,6 +154,7 @@ function main()
     end
     println("ε_center − mean real training growth: median ", round(median(center_gap); digits=4), ", range [",
         round(minimum(center_gap); digits=4), ", ", round(maximum(center_gap); digits=4), "] yr⁻¹")
+    println("sector loading scales (sector_loadings ÷ loo_loadings): ", join(["$(sf.sectors[s]) $(round(loading_scale[s]; digits=4))" for s in 1:S], ", "))
     println("sector model long-run means (yr⁻¹): ", join(["$(sf.sectors[s]) $(round(sector_mean[s]; digits=4))" for s in 1:S], ", "))
 
     # Step 5: the stored market surrogate
@@ -220,7 +228,7 @@ function main()
     for s in 1:S
         members = findall(==(s), sector_index)
         sectors[sf.sectors[s]] = Dict{String,Any}("delta_median" => median(δ[members]), "sigma_s" => sqrt(σ²_s[s]),
-            "model_mean" => sector_mean[s])
+            "model_mean" => sector_mean[s], "loading_scale" => loading_scale[s])
     end
     table = [Dict{String,Any}("h" => r.h, "k_median" => r.k_median, "zero_share" => r.zero_share, "acf252" => r.acf252)
         for r in eachrow(fb.table)]

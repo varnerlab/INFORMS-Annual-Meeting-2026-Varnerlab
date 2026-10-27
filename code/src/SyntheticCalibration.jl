@@ -134,7 +134,7 @@ function name_growth(gen::MySyntheticGenerator, d::NamedTuple, i::Int, α_c::Rea
     α = α_c .+ drift_path(d.Zα[:, i], gen.h_α, k_α)
     β = gen.β_center[i] .+ drift_path(d.Zβ[:, i], h_β, k_β)
     out = compose_name(α, β, gen.δ[i], d.g_m, d.F[:, s], d.E[:, i], gen.σ²_m, gen.σ²_s[s], gen.σ²_gen[i], gen.r²[i];
-        ε_center=gen.ε_center[i])
+        ε_center=gen.ε_center[i], β²_mean=gen.β_center[i]^2 + drift_variance(h_β, k_β))
     return out.g
 end
 

@@ -119,6 +119,11 @@ and fat tails. Synthetic SPY is this market path, starting at the real SPY close
    names.
 3. **Loading.** Each name's δᵢ is the OLS slope of eᵢ on the leave-one-out sector mean, i.e. the mean without name i
    **(my call:** this avoids the self-inclusion bias in small sectors, which have 15–17 names**)**.
+   **Changed 2026-10-27 (user: "fix the sector co-movement first"):** the leave-one-out slopes are then scaled by one
+   factor κ per sector, so that δᵢ·δⱼ·σ_s² averaged over the sector's pairs equals the real mean pairwise residual
+   covariance. The slope is fitted on the leave-one-out mean but multiplies a factor with the full mean's variance, and
+   that pairing undercounted the shared co-movement in every sector (V5 read 0.02–0.07 low; Communication Services
+   0.05 against 0.09). κ runs from 1.02 (Financials, Utilities) to 1.34 (Communication Services).
 4. **Fit.** Fit one JumpHMM per sector to the index exp(Σ f_s·Δt). Use the same JumpHMM settings as the stored
    per-ticker surrogates **(my call)**.
 5. **Draw.** On each path the 11 sector paths are drawn independently of each other and of the market (user).
@@ -216,6 +221,11 @@ calibration years included. With fixed values, a burst raises names' variance th
 
 f = 0.10 as in the paper. The sign is kept, so negative-β names stay hedges.
 - sᵢ(t) is recomputed every day, so each name's total variance stays at its JumpHMM level as β moves **(my call)**.
+- **Changed 2026-10-27 (user: "fix the sector co-movement first"):** the variance is matched on average over the β
+  drift, not day by day. ρ̄ᵢ uses the long-run mean of βᵢ(t)², which is β̄ᵢ² plus the drift's stationary variance,
+  so sᵢ² and any clip scale are fixed for the whole path. A day's variance then rises and falls with βᵢ(t)², as a
+  real name's does. Matching each day clipped 15–24% of name-days in Energy, Utilities, Financials and Real Estate
+  (days when β drifted high) and shrank the sector term on them. The clipped share fell from 8.8% to under 1%.
 - Log the share of name-days that are clipped.
 - Keep the paper's R²-preserving branch for any name with real R² ≥ 0.80. None is expected among single stocks.
 

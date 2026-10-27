@@ -82,7 +82,7 @@ export group_summary, SUMMARY_METRICS, paired_win_rate, gamma_percentile, hedge_
     passive_references, markdown_table, compare_summaries, sort_table, TABLE_ALLOCATOR_ORDER, TABLE_SCREEN_ORDER,
     eta_frame, ETA_METRICS, REGIME_METRICS, eta_solver_table
 export center_seed, model_long_run_mean
-export path_seed, growth_window, ema_rate, drift_path, sim_residuals, sector_factors, loo_loadings, SYNTH_FLOOR, SYNTH_R2_PRESERVE, compose_name, MySyntheticGenerator, with_generator, synthetic_draws, synthetic_growth, market_data_from_growth, synthetic_market
+export path_seed, growth_window, ema_rate, drift_path, drift_variance, sim_residuals, sector_factors, loo_loadings, sector_loadings, SYNTH_FLOOR, SYNTH_R2_PRESERVE, compose_name, MySyntheticGenerator, with_generator, synthetic_draws, synthetic_growth, market_data_from_growth, synthetic_market
 export SYNTH_HMM, SYNTH_TRAIN, SYNTH_ALPHA_WINDOWS, fit_name_model, model_sd_ratio, ewls_beta_path, beta_path_stats,
     real_drift_targets, bank_beta_stats, fit_beta_drift, alpha_parts, fit_alpha_drift
 export market_path_stats, path_sets

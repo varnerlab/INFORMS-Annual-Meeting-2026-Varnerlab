@@ -22,6 +22,7 @@ end
     @test isapprox(cor(x[1:end-252], x[253:end]), 0.5; atol=0.05)          # (1-a)^252 = 0.5
     @test drift_path(z, 63, 3.0) ≈ 3.0 .* drift_path(z, 63, 1.0)
     @test all(iszero, drift_path(z[1:100], 63, 0.0))
+    @test drift_variance(252, 2.0) ≈ 4.0 * a / (2 - a) && isapprox(var(x), drift_variance(252, 2.0); rtol=0.06)
 end
 @testset "path seeds and growth windows" begin
     ids = vcat(1:200, 1_000_001:1_000_020)
@@ -51,6 +52,16 @@ end
     rng = Xoshiro(3); U = randn(rng, 5000, 12)                          # no common factor
     @test abs(mean(loo_loadings(U, fill("A", 12)))) < 0.05              # full-mean slope would be ≈ 1
     @test_throws ArgumentError loo_loadings(U[:, 1:2], ["A", "B"])
+    δ = sector_loadings(E, md.sector)
+    for (s, name) in enumerate(sf.sectors)                              # the shared co-movement is reproduced exactly
+        m = findall(==(name), md.sector); C = cov(E[:, m]); k = length(m)
+        real_cov = (sum(C) - sum(C[i, i] for i in 1:k)) / (k * (k - 1))
+        model_cov = (sum(δ[m])^2 - sum(δ[m] .^ 2)) * var(sf.F[:, s]) / (k * (k - 1))
+        @test isapprox(model_cov, real_cov; rtol=1e-10)
+        @test δ[m] ./ loo_loadings(E, md.sector)[m] ≈ fill(δ[m[1]] / loo_loadings(E, md.sector)[m[1]], k)   # one scale per sector
+    end
+    @test isapprox(median(δ), sqrt(0.5 / (0.5 + 0.5 / 12)); atol=0.03)  # δ²·var(full mean) = the shared variance
+    @test_throws ArgumentError sector_loadings(hcat(U[:, 1], -U[:, 1], U[:, 2]), fill("A", 3))   # mean pairwise covariance < 0
 end
 
 @testset "composition" begin
@@ -59,19 +70,26 @@ end
     gm = 2.5 .* randn(rng, n)
     f = randn(rng, n)
     ε = 4.0 .* randn(rng, n)
-    c = compose_name(fill(0.0, n), fill(1.2, n), 0.8, gm, f, ε, 6.25, 1.0, 16.0, 0.3; ε_center=0.0)
+    c = compose_name(fill(0.0, n), fill(1.2, n), 0.8, gm, f, ε, 6.25, 1.0, 16.0, 0.3; ε_center=0.0, β²_mean=1.44)
     @test isapprox(var(c.g), 16.0; rtol=0.02) && isapprox(cov(c.g, gm) / var(gm), 1.2; atol=0.02) && c.n_clipped == 0
-    for b in (3.0, -3.0)                                    # ρ = (9·6.25 + 0.64)/16 > 0.9: clipped, sign kept
-        c = compose_name(fill(0.0, n), fill(b, n), 0.8, gm, f, ε, 6.25, 1.0, 16.0, 0.3; ε_center=0.0)
+    for b in (3.0, -3.0)                                    # ρ̄ = (9·6.25 + 0.64)/16 > 0.9: clipped, sign kept
+        c = compose_name(fill(0.0, n), fill(b, n), 0.8, gm, f, ε, 6.25, 1.0, 16.0, 0.3; ε_center=0.0, β²_mean=9.0)
         ρ = (9 * 6.25 + 0.64) / 16
         @test all(c.β_eff .≈ b * sqrt(0.9 / ρ)) && c.n_clipped == n && isapprox(var(c.g), 16.0; rtol=0.03)
     end
-    βt = repeat([0.5, 1.4], inner=1000, outer=n ÷ 2000)    # drifting β, no day clips (ρ = 0.806 at 1.4)
-    c = compose_name(fill(0.0, n), βt, 0.8, gm, f, ε, 6.25, 1.0, 16.0, 0.3; ε_center=0.0)
+    βt = repeat([0.5, 1.4], inner=1000, outer=n ÷ 2000)    # drifting β, no clip (ρ̄ = 0.472)
+    c = compose_name(fill(0.0, n), βt, 0.8, gm, f, ε, 6.25, 1.0, 16.0, 0.3; ε_center=0.0, β²_mean=mean(βt .^ 2))
     @test isapprox(var(c.g), 16.0; rtol=0.03) && mean(c.β_eff) ≈ mean(βt) && c.n_clipped == 0
-    c = compose_name(fill(0.0, n), fill(1.0, n), 0.0, gm, f, ε, 6.25, 1.0, 16.0, 0.9; ε_center=0.0)   # R² branch
+    # Regression: holding each day's variance fixed clipped the days at β = 1.6 (day ρ = 1.04) and shrank the
+    # sector term on them. The variance is held on average (ρ̄ = 0.589), so no day clips and the loading is intact.
+    βt = repeat([0.5, 1.6], inner=1000, outer=n ÷ 2000)
+    c = compose_name(fill(0.0, n), βt, 0.8, gm, f, ε, 6.25, 1.0, 16.0, 0.3; ε_center=0.0, β²_mean=mean(βt .^ 2))
+    @test c.n_clipped == 0 && c.β_eff == βt && isapprox(var(c.g), 16.0; rtol=0.03)
+    ρ̄ = (mean(βt .^ 2) * 6.25 + 0.64) / 16
+    @test c.g ≈ βt .* gm .+ 0.8 .* f .+ sqrt(1 - ρ̄) .* ε                # full loading on every day, one s² for the path
+    c = compose_name(fill(0.0, n), fill(1.0, n), 0.0, gm, f, ε, 6.25, 1.0, 16.0, 0.9; ε_center=0.0, β²_mean=1.0)   # R² branch
     @test isapprox(var(c.g), 6.25 / 0.9; rtol=0.03)
-    c = compose_name(fill(0.3, n), fill(1.0, n), 0.8, gm, f, ε .+ 5.0, 6.25, 1.0, 16.0, 0.3; ε_center=5.0)
+    c = compose_name(fill(0.3, n), fill(1.0, n), 0.8, gm, f, ε .+ 5.0, 6.25, 1.0, 16.0, 0.3; ε_center=5.0, β²_mean=1.0)
     s² = 1 - (1.0^2 * 6.25 + 0.8^2 * 1.0) / 16.0                                       # no clip, no R² branch
     @test isapprox(mean(c.g), 0.3 + mean(gm) + 0.8 * mean(f) + sqrt(s²) * (mean(ε .+ 5.0) - 5.0); atol=1e-10)   # ε centered on ε_center, α passes through
 end

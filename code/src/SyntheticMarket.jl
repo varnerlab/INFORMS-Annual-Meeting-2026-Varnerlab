@@ -101,6 +101,17 @@ function drift_path(z::AbstractVector{<:Real}, h::Real, k::Real)::Vector{Float64
 end
 
 """
+    drift_variance(h::Real, k::Real)::Float64
+
+Stationary variance k²·a/(2−a) of `drift_path` with half-life `h` (trading days) and scale `k`, where a =
+`ema_rate(h)` (units of k squared).
+"""
+function drift_variance(h::Real, k::Real)::Float64
+    a = ema_rate(h)
+    return k^2 * a / (2 - a)
+end
+
+"""
     sim_residuals(md::MyMarketData, params::Dict{String,MySIMParameterEstimate}, start::Date, stop::Date)::Matrix{Float64}
 
 SIM residuals eᵢ = gᵢ − αᵢ − βᵢ·g_m (yr⁻¹) for every ticker, on the growth rows `growth_window(md.dates, start, stop)`.
@@ -186,6 +197,46 @@ function loo_loadings(E::AbstractMatrix, sector::Vector{String})::Vector{Float64
 end
 
 """
+    sector_loadings(E::AbstractMatrix, sector::Vector{String})::Vector{Float64}
+
+Sector loadings δᵢ (dimensionless) for the generator. Each sector's `loo_loadings` are multiplied by one scale κ,
+chosen so that the shared co-movement the generator builds, δᵢ·δⱼ·var(f_s) averaged over the pairs i ≠ j in the
+sector, equals the mean pairwise covariance of the columns of `E` (yr⁻², days × tickers). f_s is the full
+equal-weight sector mean (`sector_factors`), the series the sector model is fit to. The leave-one-out slopes keep
+each name's relative loading; the scale corrects their level, which is biased low when paired with var(f_s).
+Throws `ArgumentError` for a sector where either mean pairwise covariance is not positive.
+"""
+function sector_loadings(E::AbstractMatrix, sector::Vector{String})::Vector{Float64}
+    δ = loo_loadings(E, sector)
+    sf = sector_factors(E, sector)
+    for (s, name) in enumerate(sf.sectors)
+        members = findall(==(name), sector)
+        n = length(members)
+        # mean pairwise covariance: Σ_{i≠j} cov(eᵢ, eⱼ) = var(Σ eᵢ) − Σ var(eᵢ), and Σ eᵢ = n·f_s
+        own = 0.0
+        for i in members
+            own += var(view(E, :, i))
+        end
+        real_cov = (n^2 * var(view(sf.F, :, s)) - own) / (n * (n - 1))
+        real_cov > 0 || throw(ArgumentError("sector $(name) has mean pairwise residual covariance $(real_cov); it must be positive"))
+        # the same mean for the leave-one-out loadings: Σ_{i≠j} δᵢδⱼ = (Σ δᵢ)² − Σ δᵢ²
+        total = 0.0
+        squares = 0.0
+        for i in members
+            total += δ[i]
+            squares += δ[i]^2
+        end
+        model_cov = (total^2 - squares) * var(view(sf.F, :, s)) / (n * (n - 1))
+        model_cov > 0 || throw(ArgumentError("sector $(name) leave-one-out loadings give mean pairwise covariance $(model_cov); it must be positive"))
+        κ = sqrt(real_cov / model_cov)
+        for i in members
+            δ[i] = κ * δ[i]
+        end
+    end
+    return δ
+end
+
+"""
     SYNTH_FLOOR
 
 Smallest share of a synthetic name's variance that stays idiosyncratic (dimensionless).
@@ -200,26 +251,30 @@ Real-data R² (dimensionless) at or above which a name keeps its real R² instea
 const SYNTH_R2_PRESERVE = 0.80
 
 """
-    compose_name(α, β, δ, g_m, f, ε, σ²_m, σ²_s, σ²_gen, r²; ε_center, floor=SYNTH_FLOOR, r2_threshold=SYNTH_R2_PRESERVE)::NamedTuple{(:g, :β_eff, :n_clipped)}
+    compose_name(α, β, δ, g_m, f, ε, σ²_m, σ²_s, σ²_gen, r²; ε_center, β²_mean, floor=SYNTH_FLOOR, r2_threshold=SYNTH_R2_PRESERVE)::NamedTuple{(:g, :β_eff, :n_clipped)}
 
-Compose one synthetic name's growth rate g[t] = α[t] + b·g_m[t] + d·f[t] + √s²·ε̃[t] (yr⁻¹) for every day t. α (yr⁻¹)
-and β (dimensionless) are per-day paths, δ is the sector loading (dimensionless), g_m, f and ε are the market
-growth, sector factor and raw JumpHMM draw (yr⁻¹), and σ²_m, σ²_s, σ²_gen are the fixed variances of g_m, f and ε
-(yr⁻²). r² is the real R² (dimensionless).
+Compose one synthetic name's growth rate g[t] = α[t] + c·β[t]·g_m[t] + c·δ·f[t] + √s²·ε̃[t] (yr⁻¹) for every day t.
+α (yr⁻¹) and β (dimensionless) are per-day paths, δ is the sector loading (dimensionless), g_m, f and ε are the
+market growth, sector factor and raw JumpHMM draw (yr⁻¹), and σ²_m, σ²_s, σ²_gen are the fixed variances of g_m, f
+and ε (yr⁻²). r² is the real R² (dimensionless). `β²_mean` (dimensionless, required) is the long-run mean of β[t]²,
+β̄² plus `drift_variance` for a drifting β.
 
 ε̃ = ε − `ε_center`, where `ε_center` (yr⁻¹, required) is the long-run mean of the model that drew ε
 (`model_long_run_mean`). The center is fixed, not the path's own mean: removing the path mean forces Σ ε̃ = 0 over
 the whole path, which ties the trading-window noise to the training-window noise (a name lucky in one window is
 unlucky in the other).
 
-Each day, v = β[t]²σ²_m + δ²σ²_s and ρ = v/σ²_gen. If r² ≥ r2_threshold, s² = v(1 − r²)/r²/σ²_gen and β, δ are kept.
-Otherwise, if ρ ≤ 1 − floor, s² = 1 − ρ and β, δ are kept. Otherwise β and δ are both scaled by
-c = √((1 − floor)/ρ), which keeps the sign of β, s² = floor, and the day counts as clipped.
+The variance is matched on average over the β drift, not day by day: v̄ = β²_mean·σ²_m + δ²σ²_s and ρ̄ = v̄/σ²_gen,
+and s² and c are the same on every day. If r² ≥ r2_threshold, s² = v̄(1 − r²)/r²/σ²_gen and c = 1. Otherwise, if
+ρ̄ ≤ 1 − floor, s² = 1 − ρ̄ and c = 1. Otherwise c = √((1 − floor)/ρ̄), which keeps the sign of β, s² = floor, and
+every day counts as clipped. A day's variance then rises and falls with β[t]², as a real name's does. Matching each
+day instead shrank or clipped the sector term on the days β drifted high, which cut the sector co-movement.
 
-Returns the growth path `g` (yr⁻¹), the per-day β after clipping `β_eff` (dimensionless) and the number of clipped days `n_clipped`.
+Returns the growth path `g` (yr⁻¹), the per-day β after clipping `β_eff` = c·β (dimensionless) and the number of
+clipped days `n_clipped` (0 or the path length).
 """
 function compose_name(α::AbstractVector, β::AbstractVector, δ::Real, g_m::AbstractVector, f::AbstractVector, ε::AbstractVector,
-                      σ²_m::Real, σ²_s::Real, σ²_gen::Real, r²::Real; ε_center::Real, floor::Real=SYNTH_FLOOR,
+                      σ²_m::Real, σ²_s::Real, σ²_gen::Real, r²::Real; ε_center::Real, β²_mean::Real, floor::Real=SYNTH_FLOOR,
                       r2_threshold::Real=SYNTH_R2_PRESERVE)::NamedTuple{(:g, :β_eff, :n_clipped)}
     T = length(g_m)
     if !(length(α) == T && length(β) == T && length(f) == T && length(ε) == T)
@@ -228,27 +283,26 @@ function compose_name(α::AbstractVector, β::AbstractVector, δ::Real, g_m::Abs
     0 < floor < 1 || throw(ArgumentError("floor must lie in (0, 1); got $(floor)"))
     σ²_gen > 0 || throw(ArgumentError("σ²_gen must be positive; got $(σ²_gen)"))
     r² > 0 || throw(ArgumentError("r² must be positive; got $(r²)"))
+    β²_mean >= 0 || throw(ArgumentError("β²_mean must be non-negative; got $(β²_mean)"))
+    # one variance split for the whole path, from the long-run mean of β²
+    v̄ = β²_mean * σ²_m + δ^2 * σ²_s
+    ρ̄ = v̄ / σ²_gen
+    c = 1.0
+    n_clipped = 0
+    if r² >= r2_threshold
+        s² = v̄ * (1 - r²) / r² / σ²_gen
+    elseif ρ̄ <= 1 - floor
+        s² = 1 - ρ̄
+    else
+        c = sqrt((1 - floor) / ρ̄)
+        s² = floor
+        n_clipped = T
+    end
     g = zeros(Float64, T)
     β_eff = zeros(Float64, T)
-    n_clipped = 0
     for t in 1:T
-        v = β[t]^2 * σ²_m + δ^2 * σ²_s
-        ρ = v / σ²_gen
-        b = β[t]
-        d = δ
-        if r² >= r2_threshold
-            s² = v * (1 - r²) / r² / σ²_gen
-        elseif ρ <= 1 - floor
-            s² = 1 - ρ
-        else
-            c = sqrt((1 - floor) / ρ)
-            b = c * β[t]
-            d = c * δ
-            s² = floor
-            n_clipped += 1
-        end
-        β_eff[t] = b
-        g[t] = α[t] + b * g_m[t] + d * f[t] + sqrt(s²) * (ε[t] - ε_center)
+        β_eff[t] = c * β[t]
+        g[t] = α[t] + β_eff[t] * g_m[t] + c * δ * f[t] + sqrt(s²) * (ε[t] - ε_center)
     end
     return (g=g, β_eff=β_eff, n_clipped=n_clipped)
 end
@@ -373,7 +427,7 @@ function synthetic_growth(gen::MySyntheticGenerator, d::NamedTuple)::NamedTuple{
         α = gen.α_center[i] .+ drift_path(d.Zα[:, i], gen.h_α, gen.k_α)
         β = gen.β_center[i] .+ drift_path(d.Zβ[:, i], gen.h_β, gen.k_β[i])
         out = compose_name(α, β, gen.δ[i], d.g_m, d.F[:, s], d.E[:, i], gen.σ²_m, gen.σ²_s[s], gen.σ²_gen[i], gen.r²[i];
-            ε_center=gen.ε_center[i])
+            ε_center=gen.ε_center[i], β²_mean=gen.β_center[i]^2 + drift_variance(gen.h_β, gen.k_β[i]))
         G[:, i] = out.g
         β_eff[:, i] = out.β_eff
         clipped[i] = out.n_clipped

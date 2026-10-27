@@ -1,31 +1,31 @@
 check,statistic,synthetic,reference,threshold,pass
 V1,"SPY growth 2014–2024, median over 10000 paths (yr⁻¹)",0.10540718073191904,0.10610227305653361,within 0.02 of reference,true
-V2,"equal-weight growth, rebalanced daily minus bought and held (yr⁻¹)",-0.0199948897455902,-0.02015583805864877,within 0.02 of reference,true
-V3,variance ÷ variance of the name's own draw,0.9987365238273243,1.0,"in [0.95, 1.05]",true
-V3,absolute gap between the OLS β and the mean composed β,0.021721114991766655,0.0,≤ 0.05,true
-V3,variance ÷ real variance,1.0683334029583427,1.0,report only,
-V4,"abs-growth autocorrelation at lag 1, synthetic − own draw",-0.038952003342251476,0.0,within 0.05 of reference,true
-V4,"abs-growth autocorrelation at lag 5, synthetic − own draw",-0.0027032466096927467,0.0,within 0.05 of reference,true
-V4,"abs-growth autocorrelation at lag 20, synthetic − own draw",-0.0009381425631091169,0.0,within 0.05 of reference,true
-V4,"abs-growth autocorrelation at lag 1, synthetic − real",-0.09681910913828723,0.0,report only,
-V4,"abs-growth autocorrelation at lag 5, synthetic − real",-0.17665556566787452,0.0,report only,
-V4,"abs-growth autocorrelation at lag 20, synthetic − real",-0.10538526510127744,0.0,report only,
-V5,mean residual correlation within Communication Services,0.05036494995155852,0.09370288321328873,within 0.05 of reference,true
-V5,mean residual correlation within Consumer Discretionary,0.09196480519501303,0.11216927663368444,within 0.05 of reference,true
-V5,mean residual correlation within Consumer Staples,0.17282487524765255,0.2040136425360882,within 0.05 of reference,true
-V5,mean residual correlation within Energy,0.47803052782927036,0.5416416320453354,within 0.05 of reference,false
-V5,mean residual correlation within Financials,0.20397647783399603,0.23855971280569918,within 0.05 of reference,true
-V5,mean residual correlation within Health Care,0.10216930181542602,0.12790641727192062,within 0.05 of reference,true
-V5,mean residual correlation within Industrials,0.11772947909316409,0.13535005272770953,within 0.05 of reference,true
-V5,mean residual correlation within Information Technology,0.08346338438732823,0.10199015112357732,within 0.05 of reference,true
-V5,mean residual correlation within Materials,0.1194419835633831,0.16603643429610476,within 0.05 of reference,true
-V5,mean residual correlation within Real Estate,0.31689543958202915,0.36595871183737344,within 0.05 of reference,true
-V5,mean residual correlation within Utilities,0.47594230051413233,0.5493492383783813,within 0.05 of reference,false
-V5,mean residual correlation across sectors,8.15936333259771e-5,0.030935305792821076,report only,
-V6,SD of the online β̂ ÷ the real SD,0.987033284692633,1.0,"in [0.9, 1.1]",true
-V6,lag-252 autocorrelation of the online β̂,0.18634554446245885,0.20621485720617153,report only,
+V2,"equal-weight growth, rebalanced daily minus bought and held (yr⁻¹)",-0.02322965437042218,-0.02015583805864877,within 0.02 of reference,true
+V3,variance ÷ variance of the name's own draw,0.9938536583600308,1.0,"in [0.95, 1.05]",true
+V3,absolute gap between the OLS β and the mean composed β,0.021398800623548042,0.0,≤ 0.05,true
+V3,variance ÷ real variance,1.06602169957229,1.0,report only,
+V4,"abs-growth autocorrelation at lag 1, synthetic − own draw",-0.0376236368841739,0.0,within 0.05 of reference,true
+V4,"abs-growth autocorrelation at lag 5, synthetic − own draw",0.003995785293751231,0.0,within 0.05 of reference,true
+V4,"abs-growth autocorrelation at lag 20, synthetic − own draw",0.005678233906522485,0.0,within 0.05 of reference,true
+V4,"abs-growth autocorrelation at lag 1, synthetic − real",-0.09711540580493364,0.0,report only,
+V4,"abs-growth autocorrelation at lag 5, synthetic − real",-0.17064715410765702,0.0,report only,
+V4,"abs-growth autocorrelation at lag 20, synthetic − real",-0.0967882145437603,0.0,report only,
+V5,mean residual correlation within Communication Services,0.0908163480511575,0.09370288321328873,within 0.05 of reference,true
+V5,mean residual correlation within Consumer Discretionary,0.10791854445279842,0.11216927663368444,within 0.05 of reference,true
+V5,mean residual correlation within Consumer Staples,0.20050208197330405,0.2040136425360882,within 0.05 of reference,true
+V5,mean residual correlation within Energy,0.535314964949019,0.5416416320453354,within 0.05 of reference,true
+V5,mean residual correlation within Financials,0.23419059818543603,0.23855971280569918,within 0.05 of reference,true
+V5,mean residual correlation within Health Care,0.12148785832292386,0.12790641727192062,within 0.05 of reference,true
+V5,mean residual correlation within Industrials,0.13417724934093214,0.13535005272770953,within 0.05 of reference,true
+V5,mean residual correlation within Information Technology,0.09834042965263695,0.10199015112357732,within 0.05 of reference,true
+V5,mean residual correlation within Materials,0.15865574586819758,0.16603643429610476,within 0.05 of reference,true
+V5,mean residual correlation within Real Estate,0.36140652498041564,0.36595871183737344,within 0.05 of reference,true
+V5,mean residual correlation within Utilities,0.5404564231912617,0.5493492383783813,within 0.05 of reference,true
+V5,mean residual correlation across sectors,0.00015065843335712692,0.030935305792821076,report only,
+V6,SD of the online β̂ ÷ the real SD,0.9854114808131107,1.0,"in [0.9, 1.1]",true
+V6,lag-252 autocorrelation of the online β̂,0.18842727136923842,0.20621485720617153,report only,
 V6,"share of paths with a name whose online β̂ ≤ 0 on some day in 2025–26 (reference: the real market's own yes/no, 1 = yes)",1.0,1.0,report only,
-V6,"names whose online β̂ ≤ 0 on some day in 2025–26, median over paths (range 4–18)",10.0,120.0,report only,
-V9,"cross-name SD of OLS α, 2014–2024 (yr⁻¹)",0.08939817889159057,0.07640258507556169,within 0.01 of reference,false
-V9,"correlation of OLS α, 2014–2019 vs 2020–2024",0.12656496700740602,0.1747594697166383,within 0.05 of reference,true
+V6,"names whose online β̂ ≤ 0 on some day in 2025–26, median over paths (range 2–11)",7.0,120.0,report only,
+V9,"cross-name SD of OLS α, 2014–2024 (yr⁻¹)",0.08906743425565765,0.07640258507556169,within 0.01 of reference,false
+V9,"correlation of OLS α, 2014–2019 vs 2020–2024",0.13416621109525084,0.1747594697166383,within 0.05 of reference,true
 V7,market-data fields that differ when path 2594 is built twice,0.0,0.0,= 0,true

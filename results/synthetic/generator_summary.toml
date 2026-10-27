@@ -1,63 +1,63 @@
 jumphmm_rev = "aaed969a4517bd9095ad7daaef82b83a74a03a17"
-wall_seconds = 81.73360896110535
+wall_seconds = 141.0200159549713
 
 [alpha]
-corr_fit = 0.14621090969440356
+corr_fit = 0.15021566535812306
 corr_target = 0.1747594697166383
 decision = "user 2026-10-27: α does not drift; the real 2014–2024 data leave no room for it"
 h_alpha = 252.0
 k_alpha_fixed_zero = true
-loss = 1.8437009463494438
-phi = 0.59
-pooled_stat_bank = -0.00019044957612752525
+loss = 1.6095890463009221
+phi = 0.6
+pooled_stat_bank = -0.0001796864365095769
 pooled_stat_real = -0.004292213880770519
-spread_fit = 0.08872205273699978
+spread_fit = 0.08810142994736546
 spread_target = 0.07640258507556169
 
 [alpha_joint_reference]
-corr = 0.14650190134353785
-loss_at_sd_alpha_zero = 1.8437009463494438
-loss_min = 1.8429866183412018
-phi = 0.59
-sd_alpha = 0.0025
-spread = 0.08874596609616145
+corr = 0.15021566535812306
+loss_at_sd_alpha_zero = 1.6095890463009221
+loss_min = 1.6095890463009221
+phi = 0.6
+sd_alpha = 0.0
+spread = 0.08810142994736546
 
 [beta]
 h_beta = 126.0
-k_median = 5.263663597248389
-k_q25 = 3.8525688057321346
-k_q75 = 7.046718506616612
+k_median = 4.974500711387177
+k_q25 = 3.7422124513743884
+k_q75 = 6.447726882519071
 zero_share = 0.0
 
     [[beta.table]]
-    acf252 = 0.05893330518606389
+    acf252 = 0.05889191703030262
     h = 63.0
-    k_median = 4.122917424463725
+    k_median = 3.854654864641739
     zero_share = 0.0
     [[beta.table]]
-    acf252 = 0.17757317027942876
+    acf252 = 0.1777759016851685
     h = 126.0
-    k_median = 5.263663597248389
+    k_median = 4.974500711387177
     zero_share = 0.0
     [[beta.table]]
-    acf252 = 0.30437852801735876
+    acf252 = 0.3071780495598631
     h = 252.0
-    k_median = 7.448431233718611
+    k_median = 7.0828584160612875
     zero_share = 0.0
     [[beta.table]]
-    acf252 = 0.39017394060947935
+    acf252 = 0.3966345657558669
     h = 504.0
-    k_median = 11.784921835661352
+    k_median = 10.96382652248868
     zero_share = 0.0
     [[beta.table]]
-    acf252 = 0.4365098137378023
+    acf252 = 0.4472154563672863
     h = 1008.0
-    k_median = 20.678342629222662
+    k_median = 18.468590352373877
     zero_share = 0.0
     [[beta.table]]
-    acf252 = 0.4397540134089597
+    acf252 = 0.48086731319147924
     h = 2016.0
-    k_median = 41.7863792229282
+    k_median = 33.93115242760673
     zero_share = 0.0
 
 [eps_center_gap]
@@ -71,57 +71,68 @@ median = 1.036662639703328
 min = 1.0063463486868862
 
 [sectors."Communication Services"]
-delta_median = 0.5867803085382535
+delta_median = 0.7843558084490173
+loading_scale = 1.336711196738947
 model_mean = -0.0006766641364925582
 sigma_s = 1.499979320589559
 
 [sectors."Consumer Discretionary"]
-delta_median = 0.769197076276958
+delta_median = 0.8341900083554568
+loading_scale = 1.0844945126326733
 model_mean = 0.0009947849262610749
 sigma_s = 1.7190323494473219
 
 [sectors."Consumer Staples"]
-delta_median = 0.8769845849390631
+delta_median = 0.9405645701513582
+loading_scale = 1.0724984068183059
 model_mean = 0.0013262421347098486
 sigma_s = 1.5760194687725153
 
 [sectors.Energy]
-delta_median = 0.9458637747779273
+delta_median = 0.9681163814042324
+loading_scale = 1.0235262277927175
 model_mean = 0.004806749481718999
 sigma_s = 4.2146020624795195
 
 [sectors.Financials]
-delta_median = 1.0265811673138057
+delta_median = 1.0471479282265623
+loading_scale = 1.0200342277528551
 model_mean = -0.006701146730895388
 sigma_s = 1.723631623462821
 
 [sectors."Health Care"]
-delta_median = 0.8392826717276215
+delta_median = 0.9109790988721878
+loading_scale = 1.0854258398984729
 model_mean = 0.0003413739039902611
 sigma_s = 1.3998133673471267
 
 [sectors.Industrials]
-delta_median = 0.9486549486528153
+delta_median = 1.0019178752341868
+loading_scale = 1.0561457320778331
 model_mean = -0.0009670929382468281
 sigma_s = 1.3496115393822283
 
 [sectors."Information Technology"]
-delta_median = 0.7603448250033281
+delta_median = 0.8129743947966703
+loading_scale = 1.0692180285347663
 model_mean = -0.0005039345144157254
 sigma_s = 1.4708999215799525
 
 [sectors.Materials]
-delta_median = 0.6693882070419611
+delta_median = 0.7704181738530329
+loading_scale = 1.1509288119333998
 model_mean = -0.002742895349187549
 sigma_s = 2.0042076005303393
 
 [sectors."Real Estate"]
-delta_median = 0.9159860348297035
+delta_median = 0.9524658445956211
+loading_scale = 1.0398257270076172
 model_mean = -0.002826210215855406
 sigma_s = 2.2928184872919437
 
 [sectors.Utilities]
-delta_median = 0.9935715222428319
+delta_median = 1.0144418862591165
+loading_scale = 1.0210053967420212
 model_mean = -0.0013896075810571587
 sigma_s = 2.4597316118688792
 
