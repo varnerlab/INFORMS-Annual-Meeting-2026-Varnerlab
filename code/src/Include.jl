@@ -43,6 +43,7 @@ include("StudyRunner.jl")
 include("Limits.jl")
 include("StudyTables.jl")
 include("SyntheticMarket.jl")
+include("SyntheticCalibration.jl")
 
 export MyMarketData, build, load_market_data, growth_rates, index_of, DATA_FILES, boundary_split_factor, split_adjustments,
     MySIMParameterEstimate, MyEWLSState, MyEWVarState, estimate_sim, fit_base_sim, ewls_init, ewls_update!,
@@ -79,3 +80,5 @@ export group_summary, SUMMARY_METRICS, paired_win_rate, gamma_percentile, hedge_
     passive_references, markdown_table, compare_summaries, sort_table, TABLE_ALLOCATOR_ORDER, TABLE_SCREEN_ORDER,
     eta_frame, ETA_METRICS, REGIME_METRICS, eta_solver_table
 export path_seed, growth_window, ema_rate, drift_path, sim_residuals, sector_factors, loo_loadings, SYNTH_FLOOR, SYNTH_R2_PRESERVE, compose_name, MySyntheticGenerator, with_generator, synthetic_draws, synthetic_growth, market_data_from_growth, synthetic_market
+export SYNTH_HMM, SYNTH_TRAIN, SYNTH_ALPHA_WINDOWS, fit_name_model, model_sd_ratio, ewls_beta_path, beta_path_stats,
+    real_drift_targets, bank_beta_stats, fit_beta_drift, alpha_parts, fit_alpha_drift
