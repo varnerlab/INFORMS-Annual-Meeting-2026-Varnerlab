@@ -1,4 +1,4 @@
-using Dates, Random, LinearAlgebra, DataFrames
+using Dates, Random, LinearAlgebra, DataFrames, Statistics
 using VLINFORMS2026
 
 # Synthetic market: 2014–2019 weekdays, 4 sectors × 12 names, β = 1, within-sector residual
@@ -191,4 +191,30 @@ function hand_result(; dates::Vector{Date}, equity=fill(1e5, length(dates)), xi=
         daily=DataFrame(date=dates, xi=Float64.(xi), beta_max=fill(Inf, n), portfolio_beta=zeros(n),
             hedge_weight=zeros(n), pool_size=zeros(Int, n)),
         targets=targets, projections=Dict{Date,MyProjection}()))
+end
+
+# ---- Synthetic-generator fixture (Task 5) ----
+
+# Small generator on synthetic_md(ρ=0.3): JumpHMM models (N = 10, ν = 5, no tune) for SPY, each name and each
+# sector factor; centers and r² from fit_base_sim, δ from loo_loadings, variances from the toy's own data.
+function toy_generator()
+    J = VLINFORMS2026.JumpHMM
+    md = synthetic_md(ρ=0.3)
+    fit = fit_base_sim(md, md.dates[1], md.dates[end])
+    E = sim_residuals(md, fit.params, md.dates[1], md.dates[end])
+    sf = sector_factors(E, md.sector)
+    δ = loo_loadings(E, md.sector)
+    fit_prices(prices) = J.fit(J.JumpHiddenMarkovModel, prices; N=10, ν=5.0, rf=0.0, dt=1/252)
+    market = fit_prices(md.spy_close)
+    names = [fit_prices(md.close[:, j]) for j in 1:length(md.tickers)]
+    factors = [fit_prices(exp.(vcat(0.0, cumsum(sf.F[:, s] .* (1/252))))) for s in 1:length(sf.sectors)]
+    return build(MySyntheticGenerator, (dates=md.dates, tickers=md.tickers, sector=md.sector,
+        sectors=sf.sectors, sector_index=[findfirst(==(s), sf.sectors) for s in md.sector],
+        market=market, names=names, factors=factors,
+        α_center=[fit.params[t].α for t in md.tickers], β_center=[fit.params[t].β for t in md.tickers],
+        δ=δ, r²=[fit.params[t].r² for t in md.tickers],
+        σ²_m=var(growth_rates(md.spy_close)), σ²_s=[var(sf.F[:, s]) for s in 1:length(sf.sectors)],
+        σ²_gen=[var(growth_rates(md.close[:, i])) for i in 1:length(md.tickers)],
+        h_β=126.0, k_β=fill(2.0, 48), h_α=252.0, k_α=0.5, φ=1.0,
+        close0=md.close[1, :], spy0=md.spy_close[1], volume=vec(median(md.volume; dims=1)), g_f=md.g_f))
 end

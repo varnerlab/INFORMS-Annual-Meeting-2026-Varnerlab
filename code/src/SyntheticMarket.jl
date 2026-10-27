@@ -217,3 +217,165 @@ function compose_name(α::AbstractVector, β::AbstractVector, δ::Real, g_m::Abs
     end
     return (g=g, β_eff=β_eff, n_clipped=n_clipped)
 end
+
+"""
+    MySyntheticGenerator
+
+Everything needed to draw synthetic paths of the stock universe. Built with `build(MySyntheticGenerator, nt)`.
+
+Fields: `dates` (SPY trading days), `tickers`, `sector` (one per ticker), `sectors` (sorted unique sector labels),
+`sector_index` (position of each ticker's sector in `sectors`); `market`, `names`, `factors` (JumpHMM models for
+the market, each ticker and each sector); `α_center` (yr⁻¹), `β_center`, `δ` (sector loading), `r²` (real R²), all
+one per ticker; `σ²_m`, `σ²_s` (one per sector), `σ²_gen` (one per ticker) (yr⁻²); `h_β`, `h_α` (EMA half-lives,
+trading days), `k_β` (one per ticker), `k_α` (drift scales, same units as β and α yr⁻¹), `φ`; `close0` (USD/share,
+one per ticker), `spy0` (USD/share), `volume` (shares/day, one per ticker), `g_f` (yr⁻¹, one per date).
+"""
+mutable struct MySyntheticGenerator
+    dates::Vector{Date}
+    tickers::Vector{String}
+    sector::Vector{String}
+    sectors::Vector{String}
+    sector_index::Vector{Int}
+    market::Any
+    names::Vector
+    factors::Vector
+    α_center::Vector{Float64}
+    β_center::Vector{Float64}
+    δ::Vector{Float64}
+    r²::Vector{Float64}
+    σ²_m::Float64
+    σ²_s::Vector{Float64}
+    σ²_gen::Vector{Float64}
+    h_β::Float64
+    k_β::Vector{Float64}
+    h_α::Float64
+    k_α::Float64
+    φ::Float64
+    close0::Vector{Float64}
+    spy0::Float64
+    volume::Vector{Float64}
+    g_f::Vector{Float64}
+    MySyntheticGenerator() = new()
+end
+
+"""
+    build(::Type{MySyntheticGenerator}, data::NamedTuple)::MySyntheticGenerator
+
+Build a `MySyntheticGenerator` from a NamedTuple holding every field (units as in the type docstring).
+Throws `ArgumentError` naming a missing field.
+"""
+function build(::Type{MySyntheticGenerator}, data::NamedTuple)::MySyntheticGenerator
+    model = MySyntheticGenerator()
+    for f ∈ fieldnames(MySyntheticGenerator)
+        haskey(data, f) || throw(ArgumentError("Cannot build MySyntheticGenerator: missing field $(f)"))
+        setfield!(model, f, data[f])
+    end
+    return model
+end
+
+"""
+    with_generator(gen::MySyntheticGenerator; kw...)::MySyntheticGenerator
+
+Copy of `gen` with the named fields replaced. Unchanged fields are shared with `gen`, not copied.
+Throws `ArgumentError` for a keyword that is not a field of `MySyntheticGenerator`.
+"""
+function with_generator(gen::MySyntheticGenerator; kw...)::MySyntheticGenerator
+    fields = fieldnames(MySyntheticGenerator)
+    for k in keys(kw)
+        k ∈ fields || throw(ArgumentError("with_generator: $(k) is not a field of MySyntheticGenerator"))
+    end
+    return build(MySyntheticGenerator, merge((; (f => getfield(gen, f) for f in fields)...), NamedTuple(kw)))
+end
+
+"""
+    synthetic_draws(gen::MySyntheticGenerator, p::Int)::NamedTuple{(:g_m, :jumps, :F, :E, :Zβ, :Zα)}
+
+Raw random draws for synthetic path `p`, with n = `length(gen.dates) − 1` growth days and N tickers. `g_m` (yr⁻¹, n)
+and `jumps` (n) are the market draw. `F` (yr⁻¹, n × sectors) holds one sector-factor draw per column and `E`
+(yr⁻¹, n × N) one ticker draw per column. `Zβ` and `Zα` (n × N) are standard normals for the β and α drifts.
+Every stream is seeded from `path_seed(p, ...)`, so the draws do not depend on the thread count.
+"""
+function synthetic_draws(gen::MySyntheticGenerator, p::Int)::NamedTuple{(:g_m, :jumps, :F, :E, :Zβ, :Zα)}
+    n = length(gen.dates) - 1
+    N = length(gen.tickers)
+    S = length(gen.sectors)
+    # market draw
+    mkt = JumpHMM.simulate(gen.market, n; n_paths=1, seed=path_seed(p, :market)).paths[1]
+    # sector factor draws
+    F = zeros(Float64, n, S)
+    for s in 1:S
+        F[:, s] = JumpHMM.simulate(gen.factors[s], n; n_paths=1, seed=path_seed(p, :sector, s)).paths[1].observations
+    end
+    # ticker draws, threaded over tickers
+    E = zeros(Float64, n, N)
+    Threads.@threads for j in 1:N
+        E[:, j] = JumpHMM.simulate(gen.names[j], n; n_paths=1, seed=path_seed(p, :name, j)).paths[1].observations
+    end
+    # drift shocks: all of Zβ, then all of Zα, from one seeded stream
+    rng = Xoshiro(path_seed(p, :drift))
+    Zβ = randn(rng, n, N)
+    Zα = randn(rng, n, N)
+    return (g_m=mkt.observations, jumps=mkt.jumps, F=F, E=E, Zβ=Zβ, Zα=Zα)
+end
+
+"""
+    synthetic_growth(gen::MySyntheticGenerator, d::NamedTuple)::NamedTuple{(:G, :β_eff, :clip_share)}
+
+Growth rates of every ticker for the draws `d` from `synthetic_draws`. For ticker i, α(t) = `α_center[i]` plus the
+α drift and β(t) = `β_center[i]` plus the β drift, and `compose_name` builds the growth. `G` (yr⁻¹, n × N) holds the
+growth rates, `β_eff` (n × N) the per-day β after clipping, and `clip_share` (dimensionless) the share of the n·N
+name-days that were clipped.
+"""
+function synthetic_growth(gen::MySyntheticGenerator, d::NamedTuple)::NamedTuple{(:G, :β_eff, :clip_share)}
+    n, N = size(d.E)
+    G = zeros(Float64, n, N)
+    β_eff = zeros(Float64, n, N)
+    clipped = zeros(Int, N)
+    Threads.@threads for i in 1:N
+        s = gen.sector_index[i]
+        α = gen.α_center[i] .+ drift_path(d.Zα[:, i], gen.h_α, gen.k_α)
+        β = gen.β_center[i] .+ drift_path(d.Zβ[:, i], gen.h_β, gen.k_β[i])
+        out = compose_name(α, β, gen.δ[i], d.g_m, d.F[:, s], d.E[:, i], gen.σ²_m, gen.σ²_s[s], gen.σ²_gen[i], gen.r²[i])
+        G[:, i] = out.g
+        β_eff[:, i] = out.β_eff
+        clipped[i] = out.n_clipped
+    end
+    return (G=G, β_eff=β_eff, clip_share=sum(clipped) / (n * N))
+end
+
+"""
+    market_data_from_growth(gen::MySyntheticGenerator, g_m::Vector, G::Matrix)::MyMarketData
+
+Turn the market growth `g_m` (yr⁻¹, n) and ticker growth `G` (yr⁻¹, n × N) into a `MyMarketData` on `gen.dates`.
+Closes start at `gen.close0` and `gen.spy0` (USD/share) and compound as exp(g·Δt) with Δt = 1/252 yr; opens equal
+closes; volume is `gen.volume` (shares/day) on every date. Throws `ArgumentError` naming the first ticker whose
+close is not finite or not positive.
+"""
+function market_data_from_growth(gen::MySyntheticGenerator, g_m::Vector, G::Matrix)::MyMarketData
+    Δt = 1 / 252
+    n, N = size(G)
+    close = gen.close0' .* exp.(vcat(zeros(1, N), cumsum(G .* Δt; dims=1)))
+    spy = gen.spy0 .* exp.(vcat(0.0, cumsum(g_m .* Δt)))
+    for j in 1:N
+        for t in 1:(n + 1)
+            if !(isfinite(close[t, j]) && close[t, j] > 0)
+                throw(ArgumentError("ticker $(gen.tickers[j]) has close $(close[t, j]) on day $(t); closes must be finite and positive"))
+            end
+        end
+    end
+    return build(MyMarketData, (dates=gen.dates, tickers=gen.tickers, open=close, close=close,
+        volume=repeat(gen.volume', n + 1), spy_open=spy, spy_close=spy, sector=gen.sector, g_f=gen.g_f))
+end
+
+"""
+    synthetic_market(gen::MySyntheticGenerator, p::Int)::NamedTuple{(:md, :draws, :β_eff, :clip_share)}
+
+Synthetic path `p`: the draws, the composed growth and the resulting `MyMarketData` `md`. `β_eff` (n × N) and
+`clip_share` (dimensionless) come from `synthetic_growth`.
+"""
+function synthetic_market(gen::MySyntheticGenerator, p::Int)::NamedTuple{(:md, :draws, :β_eff, :clip_share)}
+    draws = synthetic_draws(gen, p)
+    gr = synthetic_growth(gen, draws)
+    md = market_data_from_growth(gen, draws.g_m, gr.G)
+    return (md=md, draws=draws, β_eff=gr.β_eff, clip_share=gr.clip_share)
+end

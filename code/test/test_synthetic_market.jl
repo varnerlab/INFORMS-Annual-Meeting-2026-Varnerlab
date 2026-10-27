@@ -72,3 +72,25 @@ end
     c = compose_name(fill(0.3, n), fill(1.0, n), 0.8, gm, f, ε .+ 5.0, 6.25, 1.0, 16.0, 0.3)
     @test isapprox(mean(c.g), 0.3 + mean(gm) + 0.8 * mean(f); atol=1e-10)              # ε demeaned, α passes through
 end
+
+@testset "synthetic market path" begin
+    gen = toy_generator(); n = length(gen.dates) - 1
+    a = synthetic_market(gen, 7); b = synthetic_market(gen, 7); c = synthetic_market(gen, 8)
+    for fld in fieldnames(MyMarketData)                                   # V7: bitwise
+        @test getfield(a.md, fld) == getfield(b.md, fld)
+    end
+    @test a.md.close != c.md.close
+    J = VLINFORMS2026.JumpHMM
+    @test a.draws.g_m == J.simulate(gen.market, n; n_paths=1, seed=path_seed(7, :market)).paths[1].observations
+    for j in (1, 48)                                                      # independent of threading
+        @test a.draws.E[:, j] == J.simulate(gen.names[j], n; n_paths=1, seed=path_seed(7, :name, j)).paths[1].observations
+    end
+    @test size(a.md.close) == (n + 1, 48) && a.md.open == a.md.close
+    @test growth_rates(a.md.close) ≈ synthetic_growth(gen, a.draws).G
+    @test growth_rates(a.md.spy_close) ≈ a.draws.g_m
+    g0 = with_generator(gen; k_β=zeros(48), k_α=0.0)
+    s0 = synthetic_growth(g0, a.draws)                                    # toy β ≈ 1 never clips
+    @test s0.clip_share == 0.0 && s0.β_eff == repeat(gen.β_center', n)
+    G = synthetic_growth(gen, a.draws).G; G[5, 3] = -Inf
+    @test_throws ArgumentError market_data_from_growth(gen, a.draws.g_m, G)
+end
