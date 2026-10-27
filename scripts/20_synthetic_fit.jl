@@ -1,6 +1,7 @@
 # Task 6 of the synthetic-market plan: fit the generator on the real 2014–2024 data. Refits the JumpHMM model of every
-# name and every sector, fits the β and α drift so the study's own estimators see the real drift on synthetic data,
-# and writes results/synthetic/generator.jld2 (key "generator") and results/synthetic/generator_summary.toml.
+# name and every sector, fits the β drift so the study's own estimators see the real drift on synthetic data, fits
+# the α center pull φ with no α drift (user decision 2026-10-27), and writes results/synthetic/generator.jld2 (key
+# "generator") and results/synthetic/generator_summary.toml.
 # Run with threads: julia --project=code -t 30 scripts/20_synthetic_fit.jl
 using Pkg
 Pkg.activate(normpath(joinpath(@__DIR__, "..", "code")); io=devnull)
@@ -186,17 +187,20 @@ function main()
     println("h_β = ", fb.h_β, ", k_β median ", round(median(fb.k_β); digits=4), ", share k_β = 0 ",
         round(count(iszero, fb.k_β) / N; digits=4), ", names at the sd_max cap ", n_cap)
     gen1 = with_generator(gen0; h_β=fb.h_β, k_β=fb.k_β)
+    # The joint (φ, σ_α) fit, kept for reference only
     fa = fit_alpha_drift(gen1, bank, targets)
     a_α = ema_rate(gen1.h_α)
     sd_α = fa.k_α * sqrt(a_α / (2 - a_α))
-    println("α drift fit: φ = ", fa.φ, ", k_α = ", round(fa.k_α; digits=4), " (stationary SD ", round(sd_α; digits=4),
-        " yr⁻¹), spread ", round(fa.spread; digits=4), " vs ", round(targets.spread; digits=4), ", corr ",
-        round(fa.corr; digits=4), " vs ", round(targets.corr; digits=4), ", loss ", round(fa.loss; digits=4))
-    if fa.k_α == 0
-        error("α drift fit gave k_α = 0: decision 4 says α drifts, and the data leave no room for it. Stopping.")
-    end
+    println("α joint fit (reference only): φ = ", fa.φ, ", stationary SD ", round(sd_α; digits=4), " yr⁻¹, spread ",
+        round(fa.spread; digits=4), ", corr ", round(fa.corr; digits=4), ", loss ", round(fa.loss; digits=4))
+    # User decision 2026-10-27: α does not drift, because the real 2014–2024 data leave no room for it. So φ is fitted
+    # alone with the drift fixed at zero, and the generator gets k_α = 0 (h_α = 252 stays as a stored value).
+    f0 = fit_alpha_drift(gen1, bank, targets; sdα_grid=[0.0])
+    println("α adopted fit (k_α = 0): φ = ", f0.φ, ", spread ", round(f0.spread; digits=4), " vs ",
+        round(targets.spread; digits=4), ", corr ", round(f0.corr; digits=4), " vs ", round(targets.corr; digits=4),
+        ", loss ", round(f0.loss; digits=4))
     ā = mean(targets.α_full)
-    gen = with_generator(gen1; α_center=ā .+ fa.φ .* (targets.α_full .- ā), k_α=fa.k_α, φ=fa.φ)
+    gen = with_generator(gen1; α_center=ā .+ f0.φ .* (targets.α_full .- ā), k_α=0.0, φ=f0.φ)
 
     # Step 8: save the generator, then the summary
     mkpath(OUT_DIR)
@@ -228,10 +232,13 @@ function main()
         "beta" => Dict{String,Any}("h_beta" => fb.h_β, "k_median" => median(fb.k_β),
             "k_q25" => quantile(fb.k_β, 0.25), "k_q75" => quantile(fb.k_β, 0.75),
             "zero_share" => count(iszero, fb.k_β) / N, "table" => table),
-        "alpha" => Dict{String,Any}("phi" => fa.φ, "k_alpha" => fa.k_α, "sd_alpha" => sd_α, "h_alpha" => gen.h_α,
-            "spread_fit" => fa.spread, "spread_target" => targets.spread, "corr_fit" => fa.corr,
-            "corr_target" => targets.corr, "loss" => fa.loss,
+        "alpha" => Dict{String,Any}("phi" => f0.φ, "h_alpha" => gen.h_α, "k_alpha_fixed_zero" => true,
+            "decision" => "user 2026-10-27: α does not drift; the real 2014–2024 data leave no room for it",
+            "spread_fit" => f0.spread, "spread_target" => targets.spread, "corr_fit" => f0.corr,
+            "corr_target" => targets.corr, "loss" => f0.loss,
             "pooled_stat_real" => pooled_real, "pooled_stat_bank" => pooled_bank),
+        "alpha_joint_reference" => Dict{String,Any}("phi" => fa.φ, "sd_alpha" => sd_α, "spread" => fa.spread,
+            "corr" => fa.corr, "loss_at_sd_alpha_zero" => f0.loss, "loss_min" => fa.loss),
         "targets" => Dict{String,Any}("alpha_spread" => targets.spread, "alpha_corr" => targets.corr,
             "beta_acf252" => targets.acf252, "beta_sd_median" => median(targets.sd_β)),
         "sectors" => sectors,

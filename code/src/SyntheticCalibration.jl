@@ -285,7 +285,7 @@ two half-window α̂ across names). Name i's center is cᵢ(φ) = ā + φ(α̂�
 point (φ, σ_α), with k = σ_α/√(a/(2−a)) and a = `ema_rate(gen1.h_α)`, the spread and corr are taken per path and
 averaged over paths. The loss is ((spread − targets.spread)/0.01)² + ((corr − targets.corr)/0.05)². Returns the
 grid minimizer: `φ`, `k_α`, its `spread` (yr⁻¹), `corr` and `loss`. The caller sets `α_center` = c(φ) in the
-generator.
+generator. `sdα_grid=[0.0]` fits φ alone with no α drift.
 """
 function fit_alpha_drift(gen1::MySyntheticGenerator, bank::Vector, targets; φ_grid=0.0:0.01:1.5, sdα_grid=0.0:0.0025:0.15,
                          windows=SYNTH_ALPHA_WINDOWS)::NamedTuple{(:φ, :k_α, :spread, :corr, :loss)}

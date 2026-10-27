@@ -1,0 +1,132 @@
+jumphmm_rev = "aaed969a4517bd9095ad7daaef82b83a74a03a17"
+wall_seconds = 81.73360896110535
+
+[alpha]
+corr_fit = 0.14621090969440356
+corr_target = 0.1747594697166383
+decision = "user 2026-10-27: α does not drift; the real 2014–2024 data leave no room for it"
+h_alpha = 252.0
+k_alpha_fixed_zero = true
+loss = 1.8437009463494438
+phi = 0.59
+pooled_stat_bank = -0.00019044957612752525
+pooled_stat_real = -0.004292213880770519
+spread_fit = 0.08872205273699978
+spread_target = 0.07640258507556169
+
+[alpha_joint_reference]
+corr = 0.14650190134353785
+loss_at_sd_alpha_zero = 1.8437009463494438
+loss_min = 1.8429866183412018
+phi = 0.59
+sd_alpha = 0.0025
+spread = 0.08874596609616145
+
+[beta]
+h_beta = 126.0
+k_median = 5.263663597248389
+k_q25 = 3.8525688057321346
+k_q75 = 7.046718506616612
+zero_share = 0.0
+
+    [[beta.table]]
+    acf252 = 0.05893330518606389
+    h = 63.0
+    k_median = 4.122917424463725
+    zero_share = 0.0
+    [[beta.table]]
+    acf252 = 0.17757317027942876
+    h = 126.0
+    k_median = 5.263663597248389
+    zero_share = 0.0
+    [[beta.table]]
+    acf252 = 0.30437852801735876
+    h = 252.0
+    k_median = 7.448431233718611
+    zero_share = 0.0
+    [[beta.table]]
+    acf252 = 0.39017394060947935
+    h = 504.0
+    k_median = 11.784921835661352
+    zero_share = 0.0
+    [[beta.table]]
+    acf252 = 0.4365098137378023
+    h = 1008.0
+    k_median = 20.678342629222662
+    zero_share = 0.0
+    [[beta.table]]
+    acf252 = 0.4397540134089597
+    h = 2016.0
+    k_median = 41.7863792229282
+    zero_share = 0.0
+
+[eps_center_gap]
+max = 0.01510989350706754
+median = -0.0013521750856668041
+min = -0.06992638753748623
+
+[model_sd_ratio]
+max = 1.251057588063157
+median = 1.036662639703328
+min = 1.0063463486868862
+
+[sectors."Communication Services"]
+delta_median = 0.5867803085382535
+model_mean = -0.0006766641364925582
+sigma_s = 1.499979320589559
+
+[sectors."Consumer Discretionary"]
+delta_median = 0.769197076276958
+model_mean = 0.0009947849262610749
+sigma_s = 1.7190323494473219
+
+[sectors."Consumer Staples"]
+delta_median = 0.8769845849390631
+model_mean = 0.0013262421347098486
+sigma_s = 1.5760194687725153
+
+[sectors.Energy]
+delta_median = 0.9458637747779273
+model_mean = 0.004806749481718999
+sigma_s = 4.2146020624795195
+
+[sectors.Financials]
+delta_median = 1.0265811673138057
+model_mean = -0.006701146730895388
+sigma_s = 1.723631623462821
+
+[sectors."Health Care"]
+delta_median = 0.8392826717276215
+model_mean = 0.0003413739039902611
+sigma_s = 1.3998133673471267
+
+[sectors.Industrials]
+delta_median = 0.9486549486528153
+model_mean = -0.0009670929382468281
+sigma_s = 1.3496115393822283
+
+[sectors."Information Technology"]
+delta_median = 0.7603448250033281
+model_mean = -0.0005039345144157254
+sigma_s = 1.4708999215799525
+
+[sectors.Materials]
+delta_median = 0.6693882070419611
+model_mean = -0.002742895349187549
+sigma_s = 2.0042076005303393
+
+[sectors."Real Estate"]
+delta_median = 0.9159860348297035
+model_mean = -0.002826210215855406
+sigma_s = 2.2928184872919437
+
+[sectors.Utilities]
+delta_median = 0.9935715222428319
+model_mean = -0.0013896075810571587
+sigma_s = 2.4597316118688792
+
+[targets]
+alpha_corr = 0.1747594697166383
+alpha_spread = 0.07640258507556169
+beta_acf252 = 0.20621485720617153
+beta_sd_median = 0.20849589489015388
