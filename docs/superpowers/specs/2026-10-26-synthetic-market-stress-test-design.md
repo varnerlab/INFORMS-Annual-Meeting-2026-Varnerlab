@@ -87,7 +87,8 @@ Anti-goals: things that would make this a failure even if it runs.
 2. No copula reorder. It destroys each name's volatility clustering, and the paper skips it.
 3. Recalibrate everything on the synthetic history. In the user's words: "update all of our parameters using that
    synthetic truth".
-4. β drifts over time, and α drifts too. Both drifts are EMAs, like the rest of the approach.
+4. β drifts over time, and α drifts too. Both drifts are EMAs, like the rest of the approach. **Changed
+   2026-10-27 (user): α does not drift.** The real 2014–2024 data leave no room for it (§4.3).
 5. Add co-movement within sectors with a sector factor. Start with independent sector factors.
 6. The purpose is §1: how the strategies could perform in regimes we have not seen yet.
 7. The user rejected a "null world" in which every name has the same true α. Don't use it.
@@ -172,9 +173,19 @@ universe mean)**.
 - Start the fit from φ ≈ 0.042/0.076 ≈ 0.55.
 - Names keep their order: NVDA stays above KR, by less.
 
+**2026-10-27: α drift dropped (user).** The joint fit of φ and k_α put the α drift at the first grid step above 0,
+and the fit was no better than with no drift at all. The pooled α statistic on real data is −0.004, which the floor
+sets to 0. The α changes between 2014–2019 and 2020–2024 are about what estimation noise alone would produce. So k_α = 0,
+and φ is fitted alone to the V9 targets. The joint fit is kept in `generator_summary.toml` for reference. The
+carry-over that makes γ look good is set by φ, which matches the real 0.18. The caveat stays: real 2014–2024 α
+carried into 2025–26 at −0.12, and the synthetic world cannot produce that reversal.
+
 ### 4.4 Each name's own noise
 
 ε̃ᵢ(t) is a draw from the name's JumpHMM marginal, fit to its full growth over 2014–2024, and demeaned over the path.
+**Changed 2026-10-27 (builder fix):** ε̃ is centered on the model's long-run mean, taken from a fixed-seed draw of
+1,000,000 steps, not on the path's own mean. Demeaning over the path forces the 2025–26 noise to cancel the 2014–2024
+noise. That built in a reversal: across names, the noise parts of training α̂ and 2025–26 α̂ correlated −0.48.
 It is not reordered, so the name keeps its own clustering and jumps.
 
 - **Refit every name's model on the study's own data (my call).** The stored eCornell models
