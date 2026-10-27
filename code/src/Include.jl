@@ -41,6 +41,7 @@ include("StudyBacktest.jl")
 include("StudyRunner.jl")
 include("Limits.jl")
 include("StudyTables.jl")
+include("SyntheticMarket.jl")
 
 export MyMarketData, build, load_market_data, growth_rates, index_of, DATA_FILES, boundary_split_factor, split_adjustments,
     MySIMParameterEstimate, MyEWLSState, MyEWVarState, estimate_sim, fit_base_sim, ewls_init, ewls_update!,
@@ -76,3 +77,4 @@ export limits_row, limits_day, limits_failures
 export group_summary, SUMMARY_METRICS, paired_win_rate, gamma_percentile, hedge_effect, long_vs_short_hedge,
     passive_references, markdown_table, compare_summaries, sort_table, TABLE_ALLOCATOR_ORDER, TABLE_SCREEN_ORDER,
     eta_frame, ETA_METRICS, REGIME_METRICS, eta_solver_table
+export path_seed, growth_window, ema_rate, drift_path
