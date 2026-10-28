@@ -6,13 +6,21 @@
 %   - a pale bar from each row's lowest to highest dot, for each hedge setting;
 %   - optional vertical lines: SPY buy-and-hold (coral, dashed), equal-weight universe (grey, dotted) and a midline
 %     (grey, dashed), each drawn only when its key is set.
-% Keys: xmin, xmax, xstep, xprecision (decimals on the tick labels), spy, ew, midline, width, height (of the plot area), rowlabels (true or false) and xlabel.
+% Keys: xmin, xmax, xstep, xprecision (decimals on the tick labels), spy, ew, midline, width, height (of the plot
+% area), rowlabels (true or false), xlabel and title (above the plot; \\ breaks a line). Panels set side by side
+% line up on their x axes. Extra axis options for one panel go in the style vndot extra, which \vndotplot clears
+% when it is done.
 % The dots file has columns row, group_index, hedge and value; the bars file has row, group_index, label, group,
 % hedge, lo and hi. Both come from scripts/30_talk_data.jl.
 %
 % \vndotreadrefs{<refs.csv>} sets \vndotSPY and \vndotEW from a refs file (columns name, value); a name that is not
 % in the file leaves its macro empty.
-% \vndotlegend[<keys>] draws the legend on one line. Keys: spy and ew (true or false), which items to show.
+% \vndotreadaxis{<axes.csv>}{<set>} sets \vndotAxisLo and \vndotAxisHi from the row of an axes file (columns set, lo,
+% hi) whose set is <set>.
+% \vndotlegend[<keys>] draws the legend on one line. Keys: legend spy and legend ew (true or false), which items to
+% show.
+% \vndotupper{<text>} is <text> in capitals with γ left as it is: γ is a symbol on these slides, and capitals
+% would turn it into Γ.
 
 \definecolor{vndotoff}{HTML}{579ACA}
 \definecolor{vndoton}{HTML}{2F6FAE}
@@ -30,6 +38,9 @@
   vndot off/.style={circle, fill=vndotoff, draw=none, inner sep=0pt, minimum size=4.4pt},
   vndot on/.style={circle, fill=white, draw=vndoton, line width=0.8pt, inner sep=0pt, minimum size=4pt},
 }
+
+% extra axis options for the next panel only; \vndotplot clears this style when it is done
+\pgfplotsset{vndot extra/.style={}}
 
 % keep only the table rows whose column #1 reads #2 (the hedge column reads false or true)
 \pgfplotsset{
@@ -59,13 +70,14 @@
   height/.estore in=\vndotHeight,
   rowlabels/.estore in=\vndotRowLabels,
   xlabel/.store in=\vndotXlabel,
+  title/.store in=\vndotTitle,
   legend spy/.estore in=\vndotLegendSpy,
   legend ew/.estore in=\vndotLegendEw,
 }
 
 \newcommand{\vndotdefaults}{%
   \pgfkeys{/vndot, xmin=0.95, xmax=1.75, xstep=0.1, xprecision=1, spy={}, ew={}, midline={}, width=8cm, height=4cm,
-    rowlabels=true, xlabel={}}%
+    rowlabels=true, xlabel={}, title={}}%
 }
 
 \def\vndotTrue{true}
@@ -93,6 +105,37 @@
   }%
 }
 
+% \vndotreadaxis{<axes.csv>}{<set>}: \vndotAxisLo and \vndotAxisHi from the row of that set
+\newcommand{\vndotreadaxis}[2]{%
+  \def\vndotAxisLo{}%
+  \def\vndotAxisHi{}%
+  \edef\vndotWantSet{#2}%
+  \pgfplotstableread[col sep=comma]{#1}\vndotAxes
+  \pgfplotstablegetrowsof{\vndotAxes}%
+  \pgfmathtruncatemacro\vndotAxisLast{\pgfplotsretval - 1}%
+  \pgfplotsforeachungrouped \vndotI in {0,...,\vndotAxisLast}{%
+    \pgfplotstablegetelem{\vndotI}{set}\of\vndotAxes
+    \edef\vndotThisSet{\pgfplotsretval}%
+    \ifx\vndotThisSet\vndotWantSet
+      \pgfplotstablegetelem{\vndotI}{lo}\of\vndotAxes
+      \edef\vndotAxisLo{\pgfplotsretval}%
+      \pgfplotstablegetelem{\vndotI}{hi}\of\vndotAxes
+      \edef\vndotAxisHi{\pgfplotsretval}%
+    \fi
+  }%
+}
+
+% \vndotupper{<text>}: capitals, with γ kept lower case
+\ExplSyntaxOn
+\cs_generate_variant:Nn \text_uppercase:n { V }
+\cs_new_protected:Npn \vndotupper #1
+  {
+    \tl_set:Ne \l_tmpa_tl {#1}
+    \tl_replace_all:Nnn \l_tmpa_tl { γ } { \NoCaseChange { γ } }
+    \text_uppercase:V \l_tmpa_tl
+  }
+\ExplSyntaxOff
+
 % \vndotplot[<keys>]{<dots.csv>}{<bars.csv>}
 \newcommand{\vndotplot}[3][]{%
   \vndotdefaults
@@ -107,7 +150,13 @@
   \let\vndotLastGroup\pgfplotsretval
   \pgfmathsetmacro\vndotYmin{-(\vndotLastRow + 0.7*\vndotLastGroup) - 0.5}%
   \def\vndotYmax{-0.2}%
-  \begin{tikzpicture}
+  % a title only when one is set: an empty title still takes a line
+  \ifx\vndotTitle\empty
+    \pgfplotsset{vndot title/.style={}}%
+  \else
+    \pgfplotsset{vndot title/.style={title={\vndotTitle}}}%
+  \fi
+  \begin{tikzpicture}[baseline=(current axis.south)]
     \begin{axis}[
       width=\vndotWidth, height=\vndotHeight, scale only axis,
       clip=false,
@@ -121,8 +170,11 @@
       xticklabel style={/pgf/number format/assume math mode=true, /pgf/number format/fixed,
         /pgf/number format/fixed zerofill, /pgf/number format/precision=\vndotXprecision},
       xlabel={\vndotXlabel},
+      vndot title,
+      title style={align=center, font=\fontsize{8.5}{10}\selectfont, text=vnslideink, yshift=-2pt},
       xlabel style={font=\fontsize{8.5}{10}\selectfont, color=vnslidebody, yshift=3pt},
       every axis plot/.append style={line join=round},
+      vndot extra,
     ]
       % reference lines, behind the bars and dots
       \ifx\vndotMidAt\empty
@@ -187,7 +239,7 @@
               \edef\vndotCmd{\noexpand\node[anchor=east, inner sep=0pt, xshift=-6pt,
                 font=\noexpand\fontsize{6}{7.2}\noexpand\selectfont\noexpand\addfontfeatures{LetterSpace=10},
                 text=vnslidelink]
-                at (axis cs:\vndotXmin,\vndotYgroup) {\noexpand\MakeUppercase{\vndotGroup}};}%
+                at (axis cs:\vndotXmin,\vndotYgroup) {\noexpand\vndotupper{\vndotGroup}};}%
               \vndotCmd
               \edef\vndotPrevGroup{\vndotGroupIndex}%
             \fi
@@ -196,6 +248,7 @@
       \fi
     \end{axis}
   \end{tikzpicture}%
+  \pgfplotsset{vndot extra/.style={}}%
 }
 
 % \vndotlegend[<keys>]: the legend on one line

@@ -198,6 +198,81 @@ function talk_largek_shares(rows::DataFrame; sg_max_K::Int=34)::DataFrame
     return out
 end
 
+"""
+    talk_from_wide(t::DataFrame; hedge::Bool, scale::Real=1.0)::NamedTuple{(:dots, :refs)}
+
+A wide synthetic table (column `Ticker picker`, then one column per utility) as the talk's dot and reference tables
+for one hedge setting:
+- `dots`: one row per `TALK_REALRUN_ROWS` picker × utility, in slide order then `TABLE_ALLOCATOR_ORDER`, with
+  columns `row`, `group_index`, `label`, `group`, `allocator`, `hedge`, `value` and `picker` (the picker key). The
+  table row of each picker is found by its `PICKER_ROWS` name; pickers not on the slide are left out.
+- `refs`: columns `name` and `value` for `"SPY buy-and-hold"` and `"equal-weight universe"`.
+`value` is `scale` times the table cell, in the units of the table times `scale` (ending wealth ÷ start for the
+wealth tables; `scale = 100` turns a fraction into a percentile). Throws `ArgumentError` when a picker or a reference
+row is missing.
+"""
+function talk_from_wide(t::DataFrame; hedge::Bool, scale::Real=1.0)::NamedTuple{(:dots, :refs)}
+    # table row of each name
+    where_ = Dict{String,Int}()
+    names_ = string.(t[!, "Ticker picker"])
+    for i in eachindex(names_)
+        where_[names_[i]] = i
+    end
+    table_name = Dict{String,String}()
+    for (key, name) in PICKER_ROWS
+        table_name[key] = name
+    end
+
+    # one dot per slide picker and utility
+    pos = _talk_row_positions()
+    dots = DataFrame(row=Int[], group_index=Int[], label=String[], group=String[], allocator=String[], hedge=Bool[],
+        value=Float64[], picker=String[])
+    for (key, label, group) in TALK_REALRUN_ROWS
+        name = table_name[key]
+        if !haskey(where_, name)
+            throw(ArgumentError("talk_from_wide: no row named $(name)"))
+        end
+        for a in TABLE_ALLOCATOR_ORDER
+            push!(dots, (pos[key][1], pos[key][2], label, group, a, hedge, scale * t[where_[name], a], key))
+        end
+    end
+
+    # the passive references: the same value in every utility column, so the first one is read
+    refs = DataFrame(name=String[], value=Float64[])
+    for name in ["SPY buy-and-hold", "equal-weight universe"]
+        if !haskey(where_, name)
+            throw(ArgumentError("talk_from_wide: no row named $(name)"))
+        end
+        push!(refs, (name, scale * t[where_[name], TABLE_ALLOCATOR_ORDER[1]]))
+    end
+    return (dots=dots, refs=refs)
+end
+
+"""
+    talk_largek_dots(shares::DataFrame)::DataFrame
+
+The large-book head-to-heads (`talk_largek_shares` output) as a dot table: one row per basket size K in increasing
+order, labeled `"<K> names"`, all in the group `"Global γ against random picks"`, with columns `row`, `group_index`,
+`label`, `group`, `allocator`, `hedge`, `value` (100·share, percent of seed pairs in which global γ ends higher) and
+`picker`.
+"""
+function talk_largek_dots(shares::DataFrame)::DataFrame
+    Ks = sort(unique(Int.(shares.K)))
+    rank = Dict{Int,Int}()
+    for (i, K) in enumerate(Ks)
+        rank[K] = i
+    end
+    out = DataFrame(row=Int[], group_index=Int[], label=String[], group=String[], allocator=String[], hedge=Bool[],
+        value=Float64[], picker=String[])
+    for i in 1:nrow(shares)
+        K = Int(shares.K[i])
+        push!(out, (rank[K], 0, "$(K) names", "Global γ against random picks", string(shares.allocator[i]),
+            Bool(shares.hedge[i]), 100 * shares.share[i], "global_gamma|K=$(K)"))
+    end
+    sort!(out, [:row]; alg=MergeSort)
+    return out
+end
+
 # `x` rounded to `digits` decimals as text, with trailing zeros kept (1.7 with 2 digits is "1.70").
 function _talk_decimals(x::Real, digits::Int)::String
     text = string(round(Float64(x); digits=digits))

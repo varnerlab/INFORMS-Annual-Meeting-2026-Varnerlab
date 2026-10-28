@@ -1,2 +1,13 @@
+% Backup (spec, B2): global γ against random picks from the whole universe, by basket size, as the share of seed
+% pairs in which global γ ends higher.
 \begin{frame}{Does this work for a real-sized book?}
+  \vspace{2pt}
+  \vndotplot[xmin=0, xmax=100, xstep=25, xprecision=0, midline=50, width=9.1cm, height=2.6cm,
+    xlabel={share of seed pairs in which global γ ends higher than random picks (\%)}]%
+    {data/b2_dots.csv}{data/b2_bars.csv}\par
+  \vspace{4pt}
+  \vndotlegend[legend spy=false, legend ew=false]\par
+  \vfill
+  {\scriptsize Real-data backtest, 30 runs each. Stone–Geary left out at 100 and 200 names: its 1\%-per-name floor
+    uses the whole budget at 100 names and twice the budget at 200.\par}
 \end{frame}

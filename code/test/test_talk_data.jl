@@ -57,6 +57,19 @@ function largek_rows()::DataFrame
     return DataFrame(rows)
 end
 
+# A wide synthetic table: the two references, then the 14 `PICKER_ROWS` names, every utility cell `v`.
+function wide_table(v::Float64)::DataFrame
+    names = ["SPY buy-and-hold", "equal-weight universe"]
+    for (key, name) in PICKER_ROWS
+        push!(names, name)
+    end
+    t = DataFrame("Ticker picker" => names)
+    for a in ["CD", "CES", "CESw", "SG", "MinVar", "Tangent", "LS"]
+        t[!, a] = fill(v, length(names))
+    end
+    return t
+end
+
 # A 12-trading-day result: decisions on day 0 (initial) and day 3 (band_exit). The day-0 forecast has mean
 # W0·(1 + 0.01τ) and SD 0.01·W0 (USD) for τ = 1..21; the day-3 forecast starts from 0.95·W0.
 function tiny_result()::MyStudyResult
@@ -148,6 +161,28 @@ end
             "γ per sector & 1.200 & 1.200 & 1.200 & 1.200 & 1.200 & 1.200 & 1.100 \\\\"
         # a missing cell is an error
         @test_throws ArgumentError talk_table_rows(g[2:end, :], refs; hedge=false)
+    end
+
+    @testset "synthetic and large-book dots" begin
+        w = talk_from_wide(wide_table(1.1); hedge=false)
+        # the 10 slide rows × 7 utilities; the 5- and 34-name rows of the synthetic tables are not on the slide
+        @test nrow(w.dots) == 70 && all(w.dots.hedge .== false) && all(w.dots.value .== 1.1)
+        @test unique(w.dots.label) == [label for (key, label, group) in TALK_REALRUN_ROWS]
+        @test !any(w.dots.label .== "Global γ (5)") && w.dots.group[end] == "Hand-picked"
+        @test w.dots.row[1] == 1 && w.dots.group_index[end] == 2 && w.dots.allocator[1:7] == TABLE_ALLOCATOR_ORDER
+        @test w.refs.name == ["SPY buy-and-hold", "equal-weight universe"] && w.refs.value == [1.1, 1.1]
+        @test all(talk_from_wide(wide_table(1.1); hedge=true, scale=100).dots.value .≈ 110.0)
+        # a slide picker missing from the table is an error
+        t = wide_table(1.1)
+        @test_throws ArgumentError talk_from_wide(t[t[!, "Ticker picker"] .!= "Global γ (13)", :]; hedge=false)
+
+        s = talk_largek_shares(largek_rows())
+        d = talk_largek_dots(s)
+        cd = d[(d.allocator .== "CD") .& (d.hedge .== false), :]
+        @test cd.row == [1, 2] && cd.label == ["34 names", "100 names"] && cd.value == [50.0, 50.0]
+        @test all(d.group .== "Global γ against random picks") && all(d.group_index .== 0)
+        # Stone–Geary is not shown at 100 names, so that row has one dot fewer
+        @test sum(d.label .== "34 names") == 2 && sum(d.label .== "100 names") == 1
     end
 
     @testset "MPC episode" begin

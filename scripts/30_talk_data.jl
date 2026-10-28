@@ -18,6 +18,7 @@ const MPC_LABEL = "CD|fixed:l8b_13|hedge=false|seed=5660"     # the MPC slide's 
 const MPC_START, MPC_STOP = Date(2025, 10, 10), Date(2025, 12, 22)
 const MPC_REASONS = ["horizon_elapsed", "band_exit", "horizon_elapsed"]
 const MPC_Z = 1.96                                             # the trigger's band, SDs
+const SYN_SETS = ["typical", "burst_stress", "bear_stress"]   # the synthetic slide's panels, left to right
 const N_SYN_PATHS = 100                                        # generator paths on the JumpHMM slide
 const CLAIM_KURTOSIS, CLAIM_ACF1, CLAIM_ABS_ACF = 4.0, 0.15, 0.10   # fat tails, little autocorrelation, clustering
 const ROW_COLUMNS = [:hash, :label, :status, :allocator, :screen, :seed, :hedge, :basket_K, :W0, :terminal, :n_decisions]
@@ -125,7 +126,39 @@ function main()
     gs = read_rows(joinpath(RESULTS, "gamma_seeds", "gamma_seeds_summary.csv"))
     un = read_rows(joinpath(RESULTS, "universe_summary.csv"))
     head = vcat(gs[string.(gs.screen) .== "global_gamma", :], un[string.(un.screen) .== "random_global", :], big)
-    wrote("largek_shares.csv", talk_largek_shares(head))
+    shares = talk_largek_shares(head)
+    wrote("largek_shares.csv", shares)
+
+    # B2: the same head-to-heads as dots, one row per basket size
+    b2 = talk_largek_dots(shares)
+    wrote("b2_dots.csv", b2)
+    wrote("b2_bars.csv", talk_row_ranges(b2))
+
+    # the synthetic slide: one panel per set, both hedge settings stacked, and each panel's x range over its dots and
+    # references, padded by 0.005 and rounded out to a multiple of 0.05
+    tables = joinpath(RESULTS, "synthetic", "tables")
+    axes = DataFrame(set=String[], lo=Float64[], hi=Float64[])
+    for set in SYN_SETS
+        off = talk_from_wide(CSV.read(joinpath(tables, "$(set)_hedge_off_wealth_median.csv"), DataFrame); hedge=false)
+        on = talk_from_wide(CSV.read(joinpath(tables, "$(set)_hedge_on_wealth_median.csv"), DataFrame); hedge=true)
+        dots = vcat(off.dots, on.dots)
+        wrote("syn_$(set)_dots.csv", dots)
+        wrote("syn_$(set)_bars.csv", talk_row_ranges(dots))
+        wrote("syn_$(set)_refs.csv", off.refs)
+        values = vcat(dots.value, off.refs.value)
+        push!(axes, (set, floor((minimum(values) - 0.005) * 20) / 20, ceil((maximum(values) + 0.005) * 20) / 20))
+    end
+    wrote("syn_axes.csv", axes)
+
+    # B1: where each real result falls among the typical futures, as a percentile; SPY's own percentile is the line
+    off = talk_from_wide(CSV.read(joinpath(tables, "typical_real_percentile_hedge_off.csv"), DataFrame); hedge=false,
+        scale=100)
+    on = talk_from_wide(CSV.read(joinpath(tables, "typical_real_percentile_hedge_on.csv"), DataFrame); hedge=true,
+        scale=100)
+    b1 = vcat(off.dots, on.dots)
+    wrote("b1_dots.csv", b1)
+    wrote("b1_bars.csv", talk_row_ranges(b1))
+    wrote("b1_refs.csv", off.refs[off.refs.name .== "SPY buy-and-hold", :])
 
     # the numbers in the slide text; decisions per run over the runs of the real-run slide
     keys_ = Set(first.(TALK_REALRUN_ROWS))
