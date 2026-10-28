@@ -4,12 +4,13 @@
 # A path counts only when path_<p>.csv, bench_<p>.csv and meta_<p>.csv all exist and path_<p>.csv holds 532 run rows.
 # inflight_<p>.txt markers are ignored; error_<p>.txt marks a path that failed. The planned sets come from
 # results/synthetic/paths.csv, and the real references in the header and caveats from results/synthetic/checks.csv
-# (script 24). Nothing is optimized here, so no thread settings are needed.
+# (script 24), results/calibration_summary.toml (the real λ) and results/synthetic/generator.jld2 (how the generator
+# sets each name's α). Nothing is optimized here, so no thread settings are needed.
 #
 # Run: julia --project=code scripts/23_synthetic_tables.jl [rows directory]
 using Pkg
 Pkg.activate(normpath(joinpath(@__DIR__, "..", "code")); io=devnull)
-using VLINFORMS2026, Dates, Statistics, DataFrames, CSV
+using VLINFORMS2026, Dates, Statistics, DataFrames, CSV, JLD2, TOML
 
 const REPO = normpath(joinpath(@__DIR__, ".."))
 const SYN_DIR = joinpath(REPO, "results", "synthetic")
@@ -19,7 +20,6 @@ const CONFIG = joinpath(REPO, "config", "study.toml")
 const MD_START, MD_STOP = Date(2014, 1, 3), Date(2026, 9, 4)
 const N_RUNS = 532            # run rows in a complete path file (synthetic_runs with 5 seeds)
 const REAL_SEEDS = 5660:5664  # the seeds of the synthetic runs, kept from the real summaries
-const CALIB_MAX = 30          # s; script 22's CALIB_MAX: a slower calibration switches script 22 to λ = 0
 # The columns of a run row that the tables use.
 const ROW_COLUMNS = [:path_id, :label, :status, :allocator, :screen, :seed, :start, :stop, :hedge, :basket_K, :W0,
     :terminal, :realized_growth, :max_drawdown, :sharpe]
@@ -29,6 +29,7 @@ const HEDGES = [(false, "off"), (true, "on")]
 # The check rows of results/synthetic/checks.csv that the header and caveats read, by the start of `statistic`.
 const CHECK_BETA_2025 = "names whose online β̂ ≤ 0 on some day in 2025–26"
 const CHECK_BETA_WINDOWS = "names whose online β̂ ≤ 0 on some day of a real 2014–2024 window"
+const CHECK_BETA_LAST = "names whose online β̂ ≤ 0 on some day of the real window as long as 2025–26 that ends on"
 const CHECK_ALPHA_SPREAD = "cross-name SD of OLS α"
 const CHECK_ALPHA_HALVES = "correlation of OLS α, 2014–2019 vs 2020–2024"
 const CHECK_ALPHA_TRADE = "correlation of OLS α, 2014–2024 vs 2025–26"
@@ -389,6 +390,8 @@ function main(args=ARGS)
     pr.path_id = zeros(Int, nrow(pr))
     real_bench = bench_cells(pr; W0=s.W0)
     checks = CSV.read(joinpath(SYN_DIR, "checks.csv"), DataFrame)
+    real_λ = TOML.parsefile(joinpath(RESULTS, "calibration_summary.toml"))["lambda"]
+    gen = JLD2.load(joinpath(SYN_DIR, "generator.jld2"), "generator")
 
     # the paths finished and planned, per set
     n_paths = nrow(meta)
@@ -416,13 +419,29 @@ function main(args=ARGS)
     win = check_row(checks, CHECK_BETA_WINDOWS)
     win_n = match(r"median over the (\d+) windows", win.statistic)
     win_range = match(r"\(range (\d+)–(\d+)\)", win.statistic)
-    if win_n === nothing || win_range === nothing
-        error("checks.csv: the 2014–2024 window row does not state its window count and range: ", win.statistic)
+    win_step = match(r"a multiple of (\d+) trading days", win.statistic)
+    if win_n === nothing || win_range === nothing || win_step === nothing
+        error("checks.csv: the 2014–2024 window row does not state its window count, range and step: ", win.statistic)
+    end
+    step_text = string("one ending every ", win_step.captures[1], " trading days")
+    if win_step.captures[1] == "21"
+        step_text = step_text * ", about a month"
     end
     win_median = win.reference
     if isinteger(win_median)
         win_median = Int(win_median)
     end
+    last_win = check_row(checks, CHECK_BETA_LAST)
+    last_dates = match(r"ends on (\d{4}-\d{2}-\d{2}) \(from (\d{4}-\d{2}-\d{2})\)", last_win.statistic)
+    if last_dates === nothing
+        error("checks.csv: the last 2014–2024 window row does not state its dates: ", last_win.statistic)
+    end
+    # how the generator sets each name's α: its 2014–2024 α moved toward the average of all names, keeping the share
+    # φ of its distance from the average, with no drift (k_α = 0)
+    if !(0 < gen.φ <= 1) || gen.k_α != 0
+        error("the α caveat assumes 0 < φ ≤ 1 and no α drift; the generator has φ = ", gen.φ, ", k_α = ", gen.k_α)
+    end
+    α_pull = round(Int, 100 * (1 - gen.φ))
     α_spread = check_row(checks, CHECK_ALPHA_SPREAD)
     α_halves = check_row(checks, CHECK_ALPHA_HALVES)
     α_trade = check_row(checks, CHECK_ALPHA_TRADE)
@@ -473,9 +492,14 @@ function main(args=ARGS)
         " distinct paths; a path can be in more than one set). Paths that failed: ", data.n_failed, ". Paths skipped ",
         "because their files were incomplete: ", data.n_incomplete, ". Runs that failed inside finished paths: ",
         data.n_error_rows, " of ", with_commas(data.n_run_rows), ".")
-    println(io, "- On ", n_fixed, " of ", n_paths, " paths, the study used the co-movement between names as ",
-        "measured, without the usual step that tones it down. A run drops that step for the rest of its paths once ",
-        "the step takes over ", CALIB_MAX, " s on one path.")
+    if real_λ == 0
+        real_λ_text = "For the real market, that step chooses no toning down."
+    else
+        real_λ_text = string("For the real market, that step tones it down by ", real_λ, " on a scale from 0 (none) ",
+            "to 1 (full).")
+    end
+    println(io, "- On ", n_fixed, " of ", n_paths, " paths, the study skipped the step that chooses how much to tone ",
+        "down the co-movement between names, and used it as measured. ", real_λ_text)
     if minimum(clip) == maximum(clip)
         clip_text = string(round(100 * clip[1]; digits=1), "%. This share is the same on every path.")
     else
@@ -541,17 +565,23 @@ function main(args=ARGS)
         fixed(α_halves.synthetic, 2), " on synthetic paths against ", fixed(α_halves.reference, 2), " real, and ",
         "from 2014–2024 into 2025–26 with ", fixed(α_trade.synthetic, 2), " synthetic against ",
         fixed(α_trade.reference, 2), " real.")
-    println(io, "- Each name keeps its 2014–2024 average growth, so this is a best case for picking by γ.")
+    println(io, "- Each name keeps its 2014–2024 ranking by α. Its α is moved ", α_pull, "% of the way toward the ",
+        "average of all names, so it keeps ", round(Int, 100 * gen.φ), "% of its 2014–2024 distance from the average, ",
+        "and it does not drift over time. So this is a best case for picking by γ.")
     println(io, "- Sector factors are drawn independently, so there are no rotations between sectors beyond what the ",
         "market explains.")
     println(io, "- Names move with the market on the same day only; no name leads or lags the market.")
     println(io, "- The market model reproduces the regimes of 2014–2024. Worse regimes come only from rare draws, ",
         "which the stress sets collect.")
     println(io, "- The universe is fixed, as in the real run: no names enter or leave.")
-    println(io, "- Synthetic paths have few names whose β goes to 0 or below in 2025–26 (", nb_text, "), like real ",
-        "2014–2024 windows of the same length (median ", win_median, ", range ", win_range.captures[1], " to ",
-        win_range.captures[2], " over ", win_n.captures[1], " windows), while real 2025–26 had ", round(Int, real_nb),
-        ". So the hedge tables describe a 2014–2024-like world.")
+    println(io, "- Names whose β goes to 0 or below (the names the hedge can use): synthetic paths have a median of ",
+        nb_median, " in 2025–26 (range ", minimum(nb), " to ", maximum(nb), " across paths). Real periods of the ",
+        "same length within 2014–2024 had a median of ", win_median, " (range ", win_range.captures[1], " to ",
+        win_range.captures[2], " across ", win_n.captures[1], " overlapping periods, ", step_text, "). The real ",
+        "period just before 2025 (", last_dates.captures[2], " to ",
+        last_dates.captures[1], ") had ", round(Int, last_win.reference), ", and real 2025–26 had ",
+        round(Int, real_nb), ". So the synthetic paths look like a typical 2014–2024 period, while the real market ",
+        "already had more such names just before 2025 and many more in 2025–26.")
     println(io, "- The results describe this generator plus these strategies, not a forecast.")
     close(io)
 
