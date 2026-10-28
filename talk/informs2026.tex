@@ -1,0 +1,29 @@
+% INFORMS Annual Meeting 2026, Session TD47 (spec: docs/superpowers/specs/2026-10-28-informs-talk-slides-design.md).
+% Build: make (XeLaTeX). Every number comes from data/, written by scripts/30_talk_data.jl.
+\documentclass[aspectratio=169,11pt]{beamer}
+\usepackage{vnslides}
+\input{data/numbers.tex}
+
+\title{Coupling Interpretable Allocation, Model-Predictive Control, and Tail-Aware Forecasting for Live Portfolio Management}
+\subtitle{Jeffrey D. Varner · Cornell University}
+\author{INFORMS Annual Meeting 2026 · San Francisco · Session TD47 · November 3, 2026}
+
+\begin{document}
+
+\vntitlepage
+
+\input{slides/02-utility.tex}
+\input{slides/03-mpc.tex}
+\input{slides/04-jumphmm.tex}
+\input{slides/05-realrun.tex}
+\input{slides/06-synthetic.tex}
+\input{slides/07-conclusions.tex}
+\input{slides/08-acknowledgements.tex}
+
+\appendix
+\input{slides/b1-percentiles.tex}
+\input{slides/b2-large-books.tex}
+\input{slides/b3-tables-off.tex}
+\input{slides/b3-tables-on.tex}
+
+\end{document}

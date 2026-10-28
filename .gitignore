@@ -10,3 +10,14 @@ results/gamma_seeds/runs/
 results/large_k/runs/
 results/*/run.log
 !talk/data/
+talk/*.aux
+talk/*.log
+talk/*.nav
+talk/*.out
+talk/*.snm
+talk/*.toc
+talk/*.fdb_latexmk
+talk/*.fls
+talk/*.xdv
+talk/build/
+talk/informs2026.pdf
