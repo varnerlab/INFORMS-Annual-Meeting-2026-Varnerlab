@@ -46,6 +46,7 @@ include("SyntheticMarket.jl")
 include("SyntheticRunner.jl")
 include("SyntheticCalibration.jl")
 include("SyntheticChecks.jl")
+include("SyntheticTables.jl")
 
 export MyMarketData, build, load_market_data, growth_rates, index_of, DATA_FILES, boundary_split_factor, split_adjustments,
     MySIMParameterEstimate, MyEWLSState, MyEWVarState, estimate_sim, fit_base_sim, ewls_init, ewls_update!,
@@ -87,3 +88,5 @@ export SYNTH_HMM, SYNTH_TRAIN, SYNTH_ALPHA_WINDOWS, fit_name_model, model_sd_rat
     real_drift_targets, bank_beta_stats, fit_beta_drift, alpha_parts, fit_alpha_drift
 export market_path_stats, path_sets, synthetic_runs, run_synthetic_path, path_done, write_path_files
 export ew_rebalance_gap, abs_acf, mean_pairwise_corr, real_reference, path_diagnostics, check_table
+export PICKER_ROWS, picker_key, path_cells, bench_cells, grid_table, format_grid, head_to_head, head_to_head_grid,
+    real_percentiles
