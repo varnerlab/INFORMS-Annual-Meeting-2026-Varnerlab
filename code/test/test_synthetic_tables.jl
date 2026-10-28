@@ -83,16 +83,24 @@ end
     S = grid_table(C, B, :wealth; ids=[1, 2, 3], hedge=false, stat=:beat_spy)
     @test S[5, "CD"] ≈ 2 / 3                # random per sector, CD: 1.00 < 1.10, 1.20 > 1.10, 1.40 > 1.20
     @test S[3, "CD"] ≈ 1 / 3                # γ per sector, CD ties SPY on paths 1 and 3; a tie does not beat it
-    @test S[1, "CD"] == 0.0 && S[2, "LS"] ≈ 2 / 3   # SPY never beats itself; equal weight 1.05, 1.15, 1.25
+    @test isnan(S[1, "CD"]) && S[2, "LS"] ≈ 2 / 3   # SPY is not compared with itself; equal weight 1.05, 1.15, 1.25
     @test isnan(S[5, "SG"])
     Sd = grid_table(C, B, :max_drawdown; ids=[1, 2, 3], hedge=false, stat=:beat_spy)
     @test Sd[5, "CD"] ≈ 1 / 3               # a lower drawdown beats SPY: 0.25 < 0.30, 0.20 > 0.15, 0.15 > 0.10
-    # grid_table(:band): "median (p10–p90)" with 3 decimals
+    # grid_table(:band): "median (p10 to p90)" with 3 decimals
     Bd = grid_table(C, B, :wealth; ids=[1, 2, 3], hedge=false, stat=:band)
-    @test Bd[5, "CD"] == "1.200 (1.040–1.360)"      # random per sector, CD: 1.00, 1.20, 1.40
-    @test Bd[1, "CD"] == "1.100 (1.100–1.180)"      # SPY: 1.10, 1.10, 1.20
-    @test Bd[5, "SG"] == "n/a"
-    @test grid_table(C, B, :realized_growth; ids=[1, 2, 3], hedge=false, stat=:band)[5, "CD"] == "0.200 (0.040–0.360)"
+    @test Bd[5, "CD"] == "1.200 (1.040 to 1.360)"   # random per sector, CD: 1.00, 1.20, 1.40
+    @test Bd[1, "CD"] == "1.100 (1.100 to 1.180)"   # SPY: 1.10, 1.10, 1.20
+    @test Bd[5, "SG"] == "—"
+    @test grid_table(C, B, :realized_growth; ids=[1, 2, 3], hedge=false, stat=:band)[5, "CD"] == "0.200 (0.040 to 0.360)"
+    # band_table: the same bands as numbers, one row per grid row and utility
+    BT = band_table(C, B, :wealth; ids=[1, 2, 3], hedge=false)
+    @test names(BT) == ["Ticker picker", "utility", "n_paths", "median", "p10", "p90"] && nrow(BT) == 16 * 7
+    r = BT[(BT[!, "Ticker picker"] .== "Random per sector (33)") .& (BT.utility .== "CD"), :]
+    @test r.n_paths == [3] && r.median[1] ≈ 1.20 && r.p10[1] ≈ 1.04 && r.p90[1] ≈ 1.36
+    @test BT[1, "Ticker picker"] == "SPY buy-and-hold" && BT.p90[1] ≈ 1.18 && BT.utility[1:7] == TABLE_ALLOCATOR_ORDER
+    sg = BT[(BT[!, "Ticker picker"] .== "Random per sector (33)") .& (BT.utility .== "SG"), :]
+    @test sg.n_paths == [0] && isnan(sg.median[1])
     # an error row is excluded and n_seeds drops to 1 for that cell
     e = C[(C.path_id .== 3) .& (C.picker .== "random") .& (C.allocator .== "CES") .& .!C.hedge, :]
     @test e.n_seeds == [1] && e.wealth[1] ≈ 1.20
@@ -121,27 +129,33 @@ end
           (H.allocator .== "CD"), :]
     @test r.metric == ["wealth"] && r.n_paths == [3]
     @test r.median[1] ≈ 0.10 && r.p10[1] ≈ -0.14 && r.p90[1] ≈ 0.10 && r.share_above_0[1] ≈ 2 / 3   # 0.10, 0.10, −0.20
+    @test r.share_below_0[1] ≈ 1 / 3
     g = H[(H.comparison .== "Random per sector (33)") .& (H.metric .== "realized_growth") .& (H.allocator .== "CD"), :]
     @test g.hedge == ["on minus off"] && g.n_paths == [3]
     @test g.median[1] ≈ -0.02 && g.p10[1] ≈ -0.028 && g.p90[1] ≈ 0.004 && g.share_above_0[1] ≈ 1 / 3
     d = H[(H.comparison .== "Random per sector (33)") .& (H.metric .== "max_drawdown") .& (H.allocator .== "CD"), :]
-    @test d.median[1] ≈ -0.05 && d.share_above_0[1] == 0.0
+    @test d.median[1] ≈ -0.05 && d.share_above_0[1] == 0.0 && d.share_below_0[1] == 1.0
     n = H[(H.comparison .== "γ per sector (33)") .& (H.metric .== "realized_growth") .& (H.allocator .== "CD"), :]
     @test n.n_paths == [0] && isnan(n.median[1])     # no hedge-on runs of γ per sector
-    # head_to_head_grid: comparisons as rows, utilities as columns
-    HG = head_to_head_grid(H; hedge="off", metric="wealth")
+    # head_to_head_grid: comparisons (or pickers, for hedge on minus off) as rows, utilities as columns; one grid of
+    # bands and one of shares
+    HG = head_to_head_grid(H; hedge="off", metric="wealth", stat=:band)
     @test names(HG) == vcat("Comparison", TABLE_ALLOCATOR_ORDER) && nrow(HG) == 4
-    @test HG[1, "Comparison"] == "Global γ (5) minus Random, whole universe (5)" && HG[1, "CD"] == "n/a"
-    @test HG[4, "CD"] == "0.100 (−0.140–0.100); share above 0: 0.667"     # negatives print with U+2212
-    @test nrow(head_to_head_grid(H; hedge="on minus off", metric="max_drawdown")) == 14
-    @test head_to_head_grid(H; hedge="on minus off", metric="realized_growth")[3, "CD"] ==
-          "−0.020 (−0.028–0.004); share above 0: 0.333"                       # random per sector
+    @test HG[1, "Comparison"] == "Global γ (5) minus Random, whole universe (5)" && HG[1, "CD"] == "—"
+    @test HG[4, "CD"] == "0.100 (−0.140 to 0.100)"                        # negatives print with U+2212
+    @test head_to_head_grid(H; hedge="off", metric="wealth", stat=:share_above_0)[4, "CD"] == "0.667"
+    HD = head_to_head_grid(H; hedge="on minus off", metric="max_drawdown", stat=:share_below_0)
+    @test names(HD)[1] == "Ticker picker" && nrow(HD) == 14 && HD[3, "CD"] == "1.000"   # random per sector
+    @test head_to_head_grid(H; hedge="on minus off", metric="realized_growth", stat=:band)[3, "CD"] ==
+          "−0.020 (−0.028 to 0.004)"
+    @test_throws ArgumentError head_to_head_grid(H; hedge="off", metric="wealth", stat=:median)
     # format_grid: 3 decimals, and bold where the share of paths beating SPY is above 0.5
     G = grid_table(C, B, :wealth; ids=[1, 2, 3], hedge=false, stat=:median)
     S = grid_table(C, B, :wealth; ids=[1, 2, 3], hedge=false, stat=:beat_spy)
     F = format_grid(G; beat=S)
     @test F[5, "CD"] == "**1.200**" && F[3, "CD"] == "1.200" && F[2, "CD"] == "**1.150**" && F[1, "CD"] == "1.100"
-    @test F[5, "SG"] == "n/a" && format_grid(S)[5, "CD"] == "0.667"
+    @test F[5, "SG"] == "—" && format_grid(S)[5, "CD"] == "0.667"
+    @test format_grid(S)[1, "CD"] == "—"                 # the SPY cell of the beat-SPY table
     # real_percentiles: the share of paths at or below the real cell. Real γ per sector, CD ends at 1.20; real random
     # per sector, CD at the median of 1.05 and 1.15; real SPY at 1.15 and equal weight at 1.20.
     real_rows = DataFrame([syn_row(0, "gamma", "CD", 5660, false, 1.20), syn_row(0, "random", "CD", 5660, false, 1.05),

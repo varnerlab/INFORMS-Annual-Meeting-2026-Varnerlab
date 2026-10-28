@@ -83,11 +83,11 @@ function _syn_median(v)::Float64
     return median(x)
 end
 
-# `x` as text with 3 decimals ("−0.140", "1.200"), a negative with the minus sign U+2212 so it does not read as a
-# dash next to the en dash of a range; "n/a" when `x` is NaN or infinite.
+# `x` as text with 3 decimals ("−0.140", "1.200"), a negative with the minus sign U+2212; "—" when `x` is NaN or
+# infinite (no value).
 function _syn_fixed3(x::Real)::String
     if !isfinite(x)
-        return "n/a"
+        return "—"
     end
     m = round(Int, 1000 * x)
     sign = ""
@@ -98,12 +98,20 @@ function _syn_fixed3(x::Real)::String
     return string(sign, div(m, 1000), ".", lpad(string(rem(m, 1000)), 3, '0'))
 end
 
-# "median (p10–p90)" of `v` with 3 decimals; "n/a" when `v` is empty.
+# "median (p10 to p90)" as text with 3 decimals; "—" when there is no median.
+function _syn_band_text(m::Real, p10::Real, p90::Real)::String
+    if !isfinite(m)
+        return "—"
+    end
+    return string(_syn_fixed3(m), " (", _syn_fixed3(p10), " to ", _syn_fixed3(p90), ")")
+end
+
+# "median (p10 to p90)" of `v` with 3 decimals; "—" when `v` is empty.
 function _syn_band(v::Vector{Float64})::String
     if isempty(v)
-        return "n/a"
+        return "—"
     end
-    return string(_syn_fixed3(median(v)), " (", _syn_fixed3(quantile(v, 0.1)), "–", _syn_fixed3(quantile(v, 0.9)), ")")
+    return _syn_band_text(median(v), quantile(v, 0.1), quantile(v, 0.9))
 end
 
 """
@@ -185,6 +193,62 @@ function _syn_bench_lookup(bench::DataFrame, metric::Symbol)::Dict{Tuple{Int,Str
     return out
 end
 
+# The values behind each cell of the picker × utility grid of `metric` over the paths `ids` with hedge setting `hedge`
+# (rows and columns of `grid_table`): `labels` (the row names) and, for row r and utility k, `vals[r][k]` (the cell's
+# value on each path of `ids` that has it) and `spys[r][k]` (the SPY value of the same paths). Throws `ArgumentError`
+# for a `metric` other than the cell metrics, or a path of `ids` with no SPY row in `bench`.
+function _syn_grid_values(cells::DataFrame, bench::DataFrame, metric::Symbol, ids::AbstractVector{<:Integer},
+        hedge::Bool)::NamedTuple
+    if !(metric in _SYN_METRICS)
+        throw(ArgumentError("metric must be one of $(_SYN_METRICS); got $(metric)"))
+    end
+    cell = _syn_cell_lookup(cells, metric, hedge)
+    ref = _syn_bench_lookup(bench, metric)
+    for p in ids
+        if !haskey(ref, (p, _SYN_SPY))
+            throw(ArgumentError("path $(p) has no \"$(_SYN_SPY)\" row in bench"))
+        end
+    end
+    labels = String[]
+    vals = Vector{Vector{Vector{Float64}}}()
+    spys = Vector{Vector{Vector{Float64}}}()
+    # the reference rows, the same in every utility column
+    for name in _SYN_REFERENCES
+        v = Float64[]
+        sp = Float64[]
+        for p in ids
+            if haskey(ref, (p, name))
+                push!(v, ref[(p, name)])
+                push!(sp, ref[(p, _SYN_SPY)])
+            end
+        end
+        push!(labels, name)
+        push!(vals, [v for a in TABLE_ALLOCATOR_ORDER])
+        push!(spys, [sp for a in TABLE_ALLOCATOR_ORDER])
+    end
+    # the picker rows
+    for (key, name) in PICKER_ROWS
+        row_vals = Vector{Float64}[]
+        row_spys = Vector{Float64}[]
+        for a in TABLE_ALLOCATOR_ORDER
+            v = Float64[]
+            sp = Float64[]
+            for p in ids
+                if haskey(cell, (p, key, a))
+                    push!(v, cell[(p, key, a)])
+                    push!(sp, ref[(p, _SYN_SPY)])
+                end
+            end
+            push!(row_vals, v)
+            push!(row_spys, sp)
+        end
+        push!(labels, name)
+        push!(vals, row_vals)
+        push!(spys, row_spys)
+    end
+    return (labels=labels, vals=vals, spys=spys)
+end
+
 # One grid cell from the values `vals` of a cell on its paths and the SPY values `spys` of the same paths.
 function _syn_grid_stat(vals::Vector{Float64}, spys::Vector{Float64}, stat::Symbol, lower_is_better::Bool)
     if stat == :band
@@ -217,10 +281,11 @@ fraction; `:sharpe`) across the paths `ids`, from `cells` (`path_cells`) with he
 the names of `PICKER_ROWS`. Columns: `Ticker picker`, then the utilities of `TABLE_ALLOCATOR_ORDER`. A cell uses the
 paths of `ids` that have it. `stat`:
 - `:median`: the median across those paths (NaN when there are none);
-- `:band`: the text "median (p10–p90)" across those paths, with 3 decimals and "−" (U+2212) for a negative ("n/a"
+- `:band`: the text "median (p10 to p90)" across those paths, with 3 decimals and "−" (U+2212) for a negative ("—"
   when there are none);
 - `:beat_spy`: the share of those paths on which the cell is strictly better than that path's SPY (higher is better,
-  except `:max_drawdown`, where lower is better); 0 for the SPY row itself; NaN when there are none.
+  except `:max_drawdown`, where lower is better); NaN for the SPY row, which is not compared with itself, and when
+  there are no paths.
 Throws `ArgumentError` for another `stat` or `metric`, or for a path of `ids` with no SPY row in `bench`.
 """
 function grid_table(cells::DataFrame, bench::DataFrame, metric::Symbol; ids::AbstractVector{<:Integer}, hedge::Bool,
@@ -228,53 +293,45 @@ function grid_table(cells::DataFrame, bench::DataFrame, metric::Symbol; ids::Abs
     if !(stat in (:median, :band, :beat_spy))
         throw(ArgumentError("stat must be :median, :band or :beat_spy; got $(stat)"))
     end
-    if !(metric in _SYN_METRICS)
-        throw(ArgumentError("metric must be one of $(_SYN_METRICS); got $(metric)"))
-    end
+    g = _syn_grid_values(cells, bench, metric, ids, hedge)
     lower_is_better = metric == :max_drawdown
-    cell = _syn_cell_lookup(cells, metric, hedge)
-    ref = _syn_bench_lookup(bench, metric)
-    for p in ids
-        if !haskey(ref, (p, _SYN_SPY))
-            throw(ArgumentError("path $(p) has no \"$(_SYN_SPY)\" row in bench"))
-        end
-    end
-    labels = String[]
-    columns = [Any[] for a in TABLE_ALLOCATOR_ORDER]
-    # the reference rows, the same in every utility column
-    for name in _SYN_REFERENCES
-        vals = Float64[]
-        spys = Float64[]
-        for p in ids
-            if haskey(ref, (p, name))
-                push!(vals, ref[(p, name)])
-                push!(spys, ref[(p, _SYN_SPY)])
-            end
-        end
-        x = _syn_grid_stat(vals, spys, stat, lower_is_better)
-        push!(labels, name)
-        for k in eachindex(TABLE_ALLOCATOR_ORDER)
-            push!(columns[k], x)
-        end
-    end
-    # the picker rows
-    for (key, name) in PICKER_ROWS
-        push!(labels, name)
-        for (k, a) in enumerate(TABLE_ALLOCATOR_ORDER)
-            vals = Float64[]
-            spys = Float64[]
-            for p in ids
-                if haskey(cell, (p, key, a))
-                    push!(vals, cell[(p, key, a)])
-                    push!(spys, ref[(p, _SYN_SPY)])
-                end
-            end
-            push!(columns[k], _syn_grid_stat(vals, spys, stat, lower_is_better))
-        end
-    end
-    out = DataFrame("Ticker picker" => labels)
+    out = DataFrame("Ticker picker" => g.labels)
     for (k, a) in enumerate(TABLE_ALLOCATOR_ORDER)
-        out[!, a] = identity.(columns[k])
+        col = Any[]
+        for r in eachindex(g.labels)
+            if stat == :beat_spy && g.labels[r] == _SYN_SPY
+                push!(col, NaN)
+            else
+                push!(col, _syn_grid_stat(g.vals[r][k], g.spys[r][k], stat, lower_is_better))
+            end
+        end
+        out[!, a] = identity.(col)
+    end
+    return out
+end
+
+"""
+    band_table(cells, bench, metric::Symbol; ids, hedge::Bool)::DataFrame
+
+The numbers behind `grid_table(...; stat=:band)`, one row per grid row and utility: `Ticker picker`, `utility`,
+`n_paths` (paths of `ids` that have the cell, count), and the `median`, `p10` and `p90` (10th and 90th percentiles)
+across those paths, in the metric's units (NaN when there are none). Rows follow the grid: the two reference rows,
+then `PICKER_ROWS`, each over the utilities of `TABLE_ALLOCATOR_ORDER`. Throws `ArgumentError` as `grid_table` does.
+"""
+function band_table(cells::DataFrame, bench::DataFrame, metric::Symbol; ids::AbstractVector{<:Integer},
+        hedge::Bool)::DataFrame
+    g = _syn_grid_values(cells, bench, metric, ids, hedge)
+    out = DataFrame("Ticker picker" => String[], "utility" => String[], "n_paths" => Int[], "median" => Float64[],
+        "p10" => Float64[], "p90" => Float64[])
+    for r in eachindex(g.labels)
+        for (k, a) in enumerate(TABLE_ALLOCATOR_ORDER)
+            v = g.vals[r][k]
+            if isempty(v)
+                push!(out, (g.labels[r], a, 0, NaN, NaN, NaN))
+            else
+                push!(out, (g.labels[r], a, length(v), median(v), quantile(v, 0.1), quantile(v, 0.9)))
+            end
+        end
     end
     return out
 end
@@ -283,7 +340,7 @@ end
     format_grid(t::DataFrame; beat=nothing)::DataFrame
 
 A copy of the grid `t` (`grid_table` with `stat = :median` or `:beat_spy`, or `real_percentiles`) with every utility
-cell as text with 3 decimals ("n/a" for NaN). With `beat` (the `:beat_spy` grid of the same rows), a cell whose share
+cell as text with 3 decimals ("—" for NaN). With `beat` (the `:beat_spy` grid of the same rows), a cell whose share
 of paths beating SPY is above 0.5 is set in bold (`**…**`). Throws `ArgumentError` if `beat` has other rows.
 """
 function format_grid(t::DataFrame; beat::Union{Nothing,DataFrame}=nothing)::DataFrame
@@ -305,14 +362,15 @@ function format_grid(t::DataFrame; beat::Union{Nothing,DataFrame}=nothing)::Data
     return out
 end
 
-# A head-to-head row: the per-path differences `d` summarized (n_paths, median, p10, p90, share above 0).
+# A head-to-head row: the per-path differences `d` summarized (n_paths, median, p10, p90, shares above and below 0).
 function _syn_diff_row(comparison::String, metric::String, hedge::String, allocator::String, d::Vector{Float64})
     if isempty(d)
         return (comparison=comparison, metric=metric, hedge=hedge, allocator=allocator, n_paths=0, median=NaN,
-            p10=NaN, p90=NaN, share_above_0=NaN)
+            p10=NaN, p90=NaN, share_above_0=NaN, share_below_0=NaN)
     end
     return (comparison=comparison, metric=metric, hedge=hedge, allocator=allocator, n_paths=length(d),
-        median=median(d), p10=quantile(d, 0.1), p90=quantile(d, 0.9), share_above_0=count(>(0), d) / length(d))
+        median=median(d), p10=quantile(d, 0.1), p90=quantile(d, 0.9), share_above_0=count(>(0), d) / length(d),
+        share_below_0=count(<(0), d) / length(d))
 end
 
 """
@@ -326,7 +384,8 @@ Per-path differences of `cells` (`path_cells`) over the paths `ids`, per utility
   `realized_growth` (yr⁻¹), then in `max_drawdown` (fraction); `comparison` is the picker's name.
 Columns: `comparison`, `metric`, `hedge`, `allocator`, `n_paths` (paths of `ids` with both cells, count), and the
 `median`, `p10`, `p90` (10th and 90th percentiles) of the differences, in the metric's units, and `share_above_0`
-(fraction of those paths with a difference above 0). With no such path, `n_paths` is 0 and the rest NaN.
+and `share_below_0` (fractions of those paths with a difference above 0, and below 0). With no such path, `n_paths`
+is 0 and the rest NaN.
 """
 function head_to_head(cells::DataFrame; ids::AbstractVector{<:Integer})::DataFrame
     rows = []
@@ -370,14 +429,20 @@ function head_to_head(cells::DataFrame; ids::AbstractVector{<:Integer})::DataFra
 end
 
 """
-    head_to_head_grid(h::DataFrame; hedge::String, metric::String)::DataFrame
+    head_to_head_grid(h::DataFrame; hedge::String, metric::String, stat::Symbol)::DataFrame
 
 The rows of `h` (`head_to_head`) with this `hedge` ("off", "on" or "on minus off") and `metric` as a grid: one row
-per `comparison`, in the order of `h`, then one column per utility of `TABLE_ALLOCATOR_ORDER`. Each cell is the text
-"median (p10–p90); share above 0: s", with 3 decimals and "−" (U+2212) for a negative, where s is
-`share_above_0`, or "n/a" when no path has both cells.
+per `comparison`, in the order of `h`, then one column per utility of `TABLE_ALLOCATOR_ORDER`. The first column is
+`Ticker picker` for "on minus off" (each row is one picker) and `Comparison` otherwise. Each cell is text with 3
+decimals and "−" (U+2212) for a negative, or "—" when no path has both cells. `stat`:
+- `:band`: "median (p10 to p90)" of the differences;
+- `:share_above_0` or `:share_below_0`: the share of paths whose difference is above 0, or below 0.
+Throws `ArgumentError` for another `stat`.
 """
-function head_to_head_grid(h::DataFrame; hedge::String, metric::String)::DataFrame
+function head_to_head_grid(h::DataFrame; hedge::String, metric::String, stat::Symbol)::DataFrame
+    if !(stat in (:band, :share_above_0, :share_below_0))
+        throw(ArgumentError("stat must be :band, :share_above_0 or :share_below_0; got $(stat)"))
+    end
     comparisons = String[]
     text = Dict{Tuple{String,String},String}()
     for i in 1:nrow(h)
@@ -388,17 +453,22 @@ function head_to_head_grid(h::DataFrame; hedge::String, metric::String)::DataFra
             push!(comparisons, h.comparison[i])
         end
         if h.n_paths[i] == 0
-            text[(h.comparison[i], h.allocator[i])] = "n/a"
+            text[(h.comparison[i], h.allocator[i])] = "—"
+        elseif stat == :band
+            text[(h.comparison[i], h.allocator[i])] = _syn_band_text(h.median[i], h.p10[i], h.p90[i])
         else
-            text[(h.comparison[i], h.allocator[i])] = string(_syn_fixed3(h.median[i]), " (", _syn_fixed3(h.p10[i]), "–",
-                _syn_fixed3(h.p90[i]), "); share above 0: ", _syn_fixed3(h.share_above_0[i]))
+            text[(h.comparison[i], h.allocator[i])] = _syn_fixed3(h[i, stat])
         end
     end
-    out = DataFrame("Comparison" => comparisons)
+    first_column = "Comparison"
+    if hedge == "on minus off"
+        first_column = "Ticker picker"
+    end
+    out = DataFrame(first_column => comparisons)
     for a in TABLE_ALLOCATOR_ORDER
         col = String[]
         for c in comparisons
-            push!(col, get(text, (c, a), "n/a"))
+            push!(col, get(text, (c, a), "—"))
         end
         out[!, a] = col
     end
