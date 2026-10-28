@@ -132,8 +132,10 @@ end
     HG = head_to_head_grid(H; hedge="off", metric="wealth")
     @test names(HG) == vcat("Comparison", TABLE_ALLOCATOR_ORDER) && nrow(HG) == 4
     @test HG[1, "Comparison"] == "Global γ (5) minus Random, whole universe (5)" && HG[1, "CD"] == "n/a"
-    @test HG[4, "CD"] == "0.100 (-0.140–0.100); 0.667"
+    @test HG[4, "CD"] == "0.100 (−0.140–0.100); share above 0: 0.667"     # negatives print with U+2212
     @test nrow(head_to_head_grid(H; hedge="on minus off", metric="max_drawdown")) == 14
+    @test head_to_head_grid(H; hedge="on minus off", metric="realized_growth")[3, "CD"] ==
+          "−0.020 (−0.028–0.004); share above 0: 0.333"                       # random per sector
     # format_grid: 3 decimals, and bold where the share of paths beating SPY is above 0.5
     G = grid_table(C, B, :wealth; ids=[1, 2, 3], hedge=false, stat=:median)
     S = grid_table(C, B, :wealth; ids=[1, 2, 3], hedge=false, stat=:beat_spy)

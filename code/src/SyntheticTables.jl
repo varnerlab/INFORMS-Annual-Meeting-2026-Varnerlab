@@ -83,7 +83,8 @@ function _syn_median(v)::Float64
     return median(x)
 end
 
-# `x` as text with 3 decimals ("-0.140", "1.200"); "n/a" when `x` is NaN or infinite.
+# `x` as text with 3 decimals ("−0.140", "1.200"), a negative with the minus sign U+2212 so it does not read as a
+# dash next to the en dash of a range; "n/a" when `x` is NaN or infinite.
 function _syn_fixed3(x::Real)::String
     if !isfinite(x)
         return "n/a"
@@ -91,7 +92,7 @@ function _syn_fixed3(x::Real)::String
     m = round(Int, 1000 * x)
     sign = ""
     if m < 0
-        sign = "-"
+        sign = "−"
     end
     m = abs(m)
     return string(sign, div(m, 1000), ".", lpad(string(rem(m, 1000)), 3, '0'))
@@ -216,7 +217,8 @@ fraction; `:sharpe`) across the paths `ids`, from `cells` (`path_cells`) with he
 the names of `PICKER_ROWS`. Columns: `Ticker picker`, then the utilities of `TABLE_ALLOCATOR_ORDER`. A cell uses the
 paths of `ids` that have it. `stat`:
 - `:median`: the median across those paths (NaN when there are none);
-- `:band`: the text "median (p10–p90)" across those paths, with 3 decimals ("n/a" when there are none);
+- `:band`: the text "median (p10–p90)" across those paths, with 3 decimals and "−" (U+2212) for a negative ("n/a"
+  when there are none);
 - `:beat_spy`: the share of those paths on which the cell is strictly better than that path's SPY (higher is better,
   except `:max_drawdown`, where lower is better); 0 for the SPY row itself; NaN when there are none.
 Throws `ArgumentError` for another `stat` or `metric`, or for a path of `ids` with no SPY row in `bench`.
@@ -372,7 +374,8 @@ end
 
 The rows of `h` (`head_to_head`) with this `hedge` ("off", "on" or "on minus off") and `metric` as a grid: one row
 per `comparison`, in the order of `h`, then one column per utility of `TABLE_ALLOCATOR_ORDER`. Each cell is the text
-"median (p10–p90); share above 0", with 3 decimals, or "n/a" when no path has both cells.
+"median (p10–p90); share above 0: s", with 3 decimals and "−" (U+2212) for a negative, where s is
+`share_above_0`, or "n/a" when no path has both cells.
 """
 function head_to_head_grid(h::DataFrame; hedge::String, metric::String)::DataFrame
     comparisons = String[]
@@ -388,7 +391,7 @@ function head_to_head_grid(h::DataFrame; hedge::String, metric::String)::DataFra
             text[(h.comparison[i], h.allocator[i])] = "n/a"
         else
             text[(h.comparison[i], h.allocator[i])] = string(_syn_fixed3(h.median[i]), " (", _syn_fixed3(h.p10[i]), "–",
-                _syn_fixed3(h.p90[i]), "); ", _syn_fixed3(h.share_above_0[i]))
+                _syn_fixed3(h.p90[i]), "); share above 0: ", _syn_fixed3(h.share_above_0[i]))
         end
     end
     out = DataFrame("Comparison" => comparisons)

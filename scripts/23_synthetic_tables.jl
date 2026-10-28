@@ -88,11 +88,22 @@ function load_paths(dir::AbstractString, W0::Real)::NamedTuple
 end
 
 """
+    seeded_picker(key::AbstractString)::Bool
+
+True for a `PICKER_ROWS` key whose basket depends on the seed (bandit per sector and every random picker), which
+runs with 5 seeds per path; false for a picker that runs once per path.
+"""
+function seeded_picker(key::AbstractString)::Bool
+    return key == "bandit" || startswith(key, "random")
+end
+
+"""
     real_cells(W0::Real)::DataFrame
 
 `path_cells` of the real 2025–26 run: the rows of results/tier1_summary.csv and results/universe_summary.csv with
 seeds in `REAL_SEEDS`, as one path with `path_id` 0. Throws an error if a `PICKER_ROWS` picker lacks a cell for some
-utility and hedge setting, or a real row has a starting wealth other than `W0` (USD).
+utility and hedge setting, if such a cell has other than 5 seeds (`seeded_picker`) or 1 seed (the others), or if a
+real row has a starting wealth other than `W0` (USD).
 """
 function real_cells(W0::Real)::DataFrame
     parts = DataFrame[]
@@ -110,13 +121,21 @@ function real_cells(W0::Real)::DataFrame
     end
     d.path_id = zeros(Int, nrow(d))
     cells = path_cells(d)
-    # every picker of the tables has a real cell for every utility and hedge setting
+    # every picker of the tables has one real cell for every utility and hedge setting, over 5 seeds or 1
     for (key, name) in PICKER_ROWS
+        n_want = 1
+        if seeded_picker(key)
+            n_want = length(REAL_SEEDS)
+        end
         for a in TABLE_ALLOCATOR_ORDER
             for (hedge, hedge_text) in HEDGES
-                n = count((cells.picker .== key) .& (cells.allocator .== a) .& (cells.hedge .== hedge))
-                if n != 1
-                    error("real run: ", n, " cells for ", name, ", ", a, ", hedge ", hedge_text)
+                k = findall((cells.picker .== key) .& (cells.allocator .== a) .& (cells.hedge .== hedge))
+                if length(k) != 1
+                    error("real run: ", length(k), " cells for ", name, ", ", a, ", hedge ", hedge_text)
+                end
+                if cells.n_seeds[k[1]] != n_want
+                    error("real run: ", name, ", ", a, ", hedge ", hedge_text, " has ", cells.n_seeds[k[1]],
+                        " seeds, expected ", n_want)
                 end
             end
         end
@@ -173,7 +192,8 @@ function write_set(io::IO, tabdir::AbstractString, data, set::AbstractString, id
         check_grid(med, stem * " wealth")
         check_grid(beat, stem * " beat SPY")
         write_table(io, tabdir, stem * "_wealth_median", "Ending wealth ÷ start, median across paths. Bold: the " *
-            "cell beats that path's SPY on more than half of the paths.", med, format_grid(med; beat=beat))
+            "cell beats that path's SPY on more than half of the paths. Bold compares each path with its own SPY, " *
+            "so a bold median can sit slightly below the SPY row's median.", med, format_grid(med; beat=beat))
         write_table(io, tabdir, stem * "_wealth_beat_spy", "Share of paths on which the ending wealth beats that " *
             "path's SPY.", beat, format_grid(beat))
         bands = [(:realized_growth, "growth_band", "Realized growth (yr⁻¹)"),
@@ -217,9 +237,12 @@ function main(args=ARGS)
     if isempty(args)
         rows_dir = joinpath(SYN_DIR, "rows")
     else
-        rows_dir = String(rstrip(abspath(args[1]), '/'))
+        rows_dir = String(rstrip(normpath(abspath(args[1])), '/'))
     end
     out_dir = dirname(rows_dir)
+    if !(out_dir == SYN_DIR || startswith(out_dir, SYN_DIR * "/"))
+        error("the tables go next to the rows directory, so it must sit under ", SYN_DIR, "; got ", rows_dir)
+    end
     tabdir = joinpath(out_dir, "tables")
     mkpath(tabdir)
 
@@ -258,7 +281,7 @@ function main(args=ARGS)
     failing = String[]
     for i in 1:nrow(checks)
         if isequal(checks.pass[i], false)
-            push!(failing, string(checks.check[i], ", ", checks.statistic[i], ": ", round(checks.synthetic[i]; digits=3),
+            push!(failing, string(checks.statistic[i], ": ", round(checks.synthetic[i]; digits=3),
                 " against ", round(checks.reference[i]; digits=3)))
         end
     end
@@ -271,6 +294,20 @@ function main(args=ARGS)
         nb_median = Int(nb_median)
     end
     nb_text = string("median ", nb_median, " per path, range ", minimum(nb), "–", maximum(nb))
+    # random and bandit cells with all 5 seeds finished, against the count a full set of paths holds
+    n_seeded = 0
+    for (key, name) in PICKER_ROWS
+        if seeded_picker(key)
+            n_seeded += n_paths * length(TABLE_ALLOCATOR_ORDER) * length(HEDGES)
+        end
+    end
+    n_full = 0
+    for i in 1:nrow(data.cells)
+        if seeded_picker(data.cells.picker[i]) && data.cells.n_seeds[i] == length(REAL_SEEDS)
+            n_full += 1
+        end
+    end
+    n_short = n_seeded - n_full
 
     # tables.md
     io = open(joinpath(out_dir, "tables.md"), "w")
@@ -288,13 +325,16 @@ function main(args=ARGS)
     println(io, "- Share of name-days on which the generator scaled β and the sector loading down to hold a name's ",
         "variance: median ", round(median(clip); digits=4), " (range ", round(minimum(clip); digits=4), "–",
         round(maximum(clip); digits=4), ") across paths.")
-    println(io, "- Hedge pool: on ", round(100 * share_nb; digits=1), "% of paths at least one name's online β̂ ",
-        "fell to 0 or below on some day of 2025–26. Such names: ", nb_text, ". Real 2025–26: ",
-        round(Int, real_nb), " names.")
+    println(io, "- Names whose β, as the study updates it each day, goes to 0 or below at some point in 2025–26 ",
+        "(the names the hedge can use): at least one on ", round(100 * share_nb; digits=1), "% of paths; ", nb_text,
+        ". Real 2025–26: ", round(Int, real_nb), " names.")
     println(io, "- Generator checks (`results/synthetic/checks.csv`): ", n_passed, " of ", n_gated, " gated rows pass.",
         failing_text)
     println(io, "- Random and bandit cells are the median over 5 seeds within a path, then the median (or share) ",
-        "across paths. The other pickers run once per path.")
+        "across paths. Such cells with fewer than 5 finished seeds: ", n_short, " of ", n_seeded, ". The other ",
+        "pickers run once per path.")
+    println(io, "- Bold in the wealth tables: the cell beats that path's SPY on more than half of the paths. Bold ",
+        "compares each path with its own SPY, so a bold median can sit slightly below the SPY row's median.")
     println(io, "- Wealth is ending wealth ÷ starting wealth. Growth is the realized growth rate in yr⁻¹. Max ",
         "drawdown is the largest fall from a peak, as a fraction of the peak.")
     println(io, "- Utilities: CD Cobb-Douglas; CES on share counts; CESw CES on weights; SG Stone–Geary; MinVar ",
@@ -341,7 +381,7 @@ function main(args=ARGS)
     println(io, "- The market model reproduces the regimes of 2014–2024. Worse regimes come only from rare draws, ",
         "which the stress sets collect.")
     println(io, "- The universe is fixed, as in the real run: no names enter or leave.")
-    println(io, "- Synthetic paths have few names whose online β̂ goes to 0 or below (", nb_text, "), like ",
+    println(io, "- Synthetic paths have few names whose β goes to 0 or below in 2025–26 (", nb_text, "), like ",
         "the real 2014–2024 windows (0–20 names), while real 2025–26 had ", round(Int, real_nb), ". So the hedge ",
         "tables describe a 2014–2024-like world.")
     println(io, "- The results describe this generator plus these strategies, not a forecast.")
