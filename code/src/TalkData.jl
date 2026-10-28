@@ -264,3 +264,208 @@ function write_tex_macros(path::AbstractString, pairs::Vector{Pair{String,String
     end
     return nothing
 end
+
+# Index of `d` in `dates`, or 0 when it is not there.
+function _talk_index(dates::Vector{Date}, d::Date)::Int
+    for i in eachindex(dates)
+        if dates[i] == d
+            return i
+        end
+    end
+    return 0
+end
+
+"""
+    talk_mpc_episode(res::MyStudyResult, start::Date, stop::Date; W0::Real=100_000.0)::NamedTuple{(:path, :cones, :events)}
+
+The MPC trigger at work over the trading days `start`..`stop` of one run, for the MPC slide:
+- `path`: `day` (trading days since `start`), `date` and `w` (equity ÷ `W0`, dimensionless), one row per day;
+- `cones`: `cone` (1 for the forecast made on `start`), `day` (since `start`), `mean` and `sd` (the forecast's mean
+  and SD of the book's value ÷ `W0`). Each decision date in [`start`, `stop`) with a stored forecast starts a cone
+  at τ = 0 with `mean = w` and `sd = 0`; row τ ≥ 1 holds `μ[τ]` and `σ[τ]` of the forecast, as `check_trigger`
+  compares them with the value τ trading days after the decision. A cone runs to the next decision, to the end of
+  its forecast or to `stop`, whichever comes first;
+- `events`: `day`, `date`, `reason` (the trigger, as text) and `z = (w − mean)/sd` of the cone active that day
+  (NaN when there is none), one row per decision in (`start`, `stop`].
+Throws `ArgumentError` if `start` or `stop` is not a trading day of `res`, `stop` is before `start`, or no forecast
+was stored on `start`.
+"""
+function talk_mpc_episode(res::MyStudyResult, start::Date, stop::Date;
+        W0::Real=100_000.0)::NamedTuple{(:path, :cones, :events)}
+    i0 = _talk_index(res.dates, start)
+    i1 = _talk_index(res.dates, stop)
+    if i0 == 0 || i1 == 0 || i1 < i0
+        throw(ArgumentError("start $(start) and stop $(stop) must be trading days of the run, in order"))
+    end
+    if !haskey(res.projections, start)
+        throw(ArgumentError("no forecast was stored on $(start)"))
+    end
+    # the decisions inside the window, by trading day since start
+    dec_days = Int[]
+    dec_reasons = String[]
+    for i in 1:nrow(res.decisions)
+        k = _talk_index(res.dates, res.decisions.date[i])
+        if k >= i0 && k <= i1
+            push!(dec_days, k - i0)
+            push!(dec_reasons, string(res.decisions.reason[i]))
+        end
+    end
+    order = sortperm(dec_days)
+    dec_days = dec_days[order]
+    dec_reasons = dec_reasons[order]
+    w = res.equity[i0:i1] ./ W0
+    path = DataFrame(day=collect(0:(i1 - i0)), date=res.dates[i0:i1], w=w)
+    # one cone per decision with a stored forecast, cut at the next decision
+    cones = DataFrame(cone=Int[], day=Int[], mean=Float64[], sd=Float64[])
+    n_cones = 0
+    for j in eachindex(dec_days)
+        d0 = dec_days[j]
+        date0 = res.dates[i0 + d0]
+        if d0 >= i1 - i0 || !haskey(res.projections, date0)
+            continue
+        end
+        p = res.projections[date0]
+        last_day = min(d0 + length(p.μ), i1 - i0)
+        if j < length(dec_days)
+            last_day = min(last_day, dec_days[j + 1])
+        end
+        n_cones += 1
+        push!(cones, (n_cones, d0, w[d0 + 1], 0.0))
+        for τ in 1:(last_day - d0)
+            push!(cones, (n_cones, d0 + τ, p.μ[τ] / W0, p.σ[τ] / W0))
+        end
+    end
+    # each decision after start, with its distance from the cone that ends there
+    events = DataFrame(day=Int[], date=Date[], reason=String[], z=Float64[])
+    for j in eachindex(dec_days)
+        d = dec_days[j]
+        if d == 0
+            continue
+        end
+        z = NaN
+        for r in nrow(cones):-1:1
+            if cones.day[r] == d && cones.sd[r] > 0
+                z = (w[d + 1] - cones.mean[r]) / cones.sd[r]
+                break
+            end
+        end
+        push!(events, (d, res.dates[i0 + d], dec_reasons[j], z))
+    end
+    return (path=path, cones=cones, events=events)
+end
+
+# Autocorrelation (dimensionless) of `x` at lag `L` (days): cor(x[1:end-L], x[1+L:end]).
+function _talk_acf(x::AbstractVector, L::Int)::Float64
+    return cor(x[1:(end - L)], x[(1 + L):end])
+end
+
+# Kurtosis (dimensionless, non-excess: 3 for a normal) m₄/m₂² of `x`, from central moments.
+function _talk_kurtosis(x::AbstractVector)::Float64
+    m = mean(x)
+    m2 = 0.0
+    m4 = 0.0
+    for v in x
+        m2 += (v - m)^2
+        m4 += (v - m)^4
+    end
+    m2 /= length(x)
+    m4 /= length(x)
+    return m4 / m2^2
+end
+
+# Density (per SD) of the standardized `x` in the bins of `edges` (SDs): count/(n·width), NaN for an empty bin.
+function _talk_density(x::AbstractVector, edges::AbstractVector)::Vector{Float64}
+    z = (x .- mean(x)) ./ std(x)
+    nb = length(edges) - 1
+    counts = zeros(Int, nb)
+    for v in z
+        for b in 1:nb
+            if v >= edges[b] && v < edges[b + 1]
+                counts[b] += 1
+                break
+            end
+        end
+    end
+    out = Vector{Float64}(undef, nb)
+    for b in 1:nb
+        if counts[b] == 0
+            out[b] = NaN
+        else
+            out[b] = counts[b] / (length(z) * (edges[b + 1] - edges[b]))
+        end
+    end
+    return out
+end
+
+# The q-quantile of each row of `M`, ignoring NaN; NaN for a row with no number.
+function _talk_row_quantile(M::Matrix{Float64}, q::Real)::Vector{Float64}
+    out = Vector{Float64}(undef, size(M, 1))
+    for i in 1:size(M, 1)
+        v = Float64[]
+        for x in M[i, :]
+            if !isnan(x)
+                push!(v, x)
+            end
+        end
+        if isempty(v)
+            out[i] = NaN
+        else
+            out[i] = quantile(v, q)
+        end
+    end
+    return out
+end
+
+"""
+    talk_stylized_facts(g_real, g_syn; lags=1:20, edges=-8.0:0.25:8.0)::NamedTuple{(:density, :acf, :abs_acf, :summary)}
+
+The stylized facts of daily growth rates (yr⁻¹) for the JumpHMM slide: one real series `g_real` against the
+synthetic series `g_syn` (a vector of series), as the real value and the 10th, 50th and 90th percentiles across
+the synthetic series:
+- `density`: `x` (bin center, in SDs of the series), `real`, `syn_p10`, `syn_p50`, `syn_p90` and `normal` (the
+  N(0, 1) density), the density (per SD) of each standardized series in the bins of `edges`, NaN for an empty bin;
+- `acf`: `lag` (trading days), `real`, `syn_p10`, `syn_p50`, `syn_p90`, the autocorrelation of g;
+- `abs_acf`: the same for |g| (`abs_acf`);
+- `summary`: `series` (`"real"`, `"synthetic median"`), `kurtosis` (non-excess, 3 for a normal), `acf1` and
+  `abs_acf1` (lag 1); the synthetic row is the median across the synthetic series.
+"""
+function talk_stylized_facts(g_real::AbstractVector{<:Real}, g_syn::AbstractVector{<:AbstractVector{<:Real}};
+        lags=1:20, edges=-8.0:0.25:8.0)::NamedTuple{(:density, :acf, :abs_acf, :summary)}
+    e = collect(edges)
+    nb = length(e) - 1
+    nl = length(lags)
+    ns = length(g_syn)
+    D = Matrix{Float64}(undef, nb, ns)
+    A = Matrix{Float64}(undef, nl, ns)
+    B = Matrix{Float64}(undef, nl, ns)
+    kurt = Float64[]
+    for j in 1:ns
+        D[:, j] = _talk_density(g_syn[j], e)
+        for (k, L) in enumerate(lags)
+            A[k, j] = _talk_acf(g_syn[j], L)
+        end
+        B[:, j] = abs_acf(g_syn[j], lags)
+        push!(kurt, _talk_kurtosis(g_syn[j]))
+    end
+    centers = Float64[]
+    normal = Float64[]
+    for b in 1:nb
+        c = (e[b] + e[b + 1]) / 2
+        push!(centers, c)
+        push!(normal, exp(-c^2 / 2) / sqrt(2π))
+    end
+    real_acf = Float64[]
+    for L in lags
+        push!(real_acf, _talk_acf(g_real, L))
+    end
+    real_abs = abs_acf(g_real, lags)
+    density = DataFrame(x=centers, real=_talk_density(g_real, e), syn_p10=_talk_row_quantile(D, 0.1),
+        syn_p50=_talk_row_quantile(D, 0.5), syn_p90=_talk_row_quantile(D, 0.9), normal=normal)
+    acf = DataFrame(lag=collect(lags), real=real_acf, syn_p10=_talk_row_quantile(A, 0.1),
+        syn_p50=_talk_row_quantile(A, 0.5), syn_p90=_talk_row_quantile(A, 0.9))
+    absacf = DataFrame(lag=collect(lags), real=real_abs, syn_p10=_talk_row_quantile(B, 0.1),
+        syn_p50=_talk_row_quantile(B, 0.5), syn_p90=_talk_row_quantile(B, 0.9))
+    summary = DataFrame(series=["real", "synthetic median"], kurtosis=[_talk_kurtosis(g_real), median(kurt)],
+        acf1=[real_acf[1], median(A[1, :])], abs_acf1=[real_abs[1], median(B[1, :])])
+    return (density=density, acf=acf, abs_acf=absacf, summary=summary)
+end

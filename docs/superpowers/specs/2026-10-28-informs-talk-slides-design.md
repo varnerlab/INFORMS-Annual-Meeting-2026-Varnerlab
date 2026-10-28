@@ -180,7 +180,13 @@ episode. This replaces the earlier two-panel plan.
 
   **(my call)** Use 100 generator paths and show the real series as a line against the generator's 10th–90th
   percentile band.
-- The point to land: the generator reproduces fat tails, little autocorrelation, and volatility clustering.
+- The point to land: the generator reproduces fat tails and little autocorrelation, and shows some volatility
+  clustering.
+- **Revised during the build (my call, pending the user):** the data shows the generator's clustering lasts about a
+  day. Its autocorrelation of |g| is 0.22 at lag 1, 0.08 at lag 2 and about 0.01 from lag 3. Real SPY 2014–2024
+  stays between 0.16 and 0.43 through lag 20.
+  - The slide says this plainly: in the generator, clustering fades after a day; in real SPY it lasts weeks.
+  - The slide title makes no clustering claim.
 
 ### 5. Real run (dot plot, decided)
 

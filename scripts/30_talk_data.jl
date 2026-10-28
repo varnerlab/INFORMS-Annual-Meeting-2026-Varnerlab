@@ -13,6 +13,13 @@ const OUT = joinpath(REPO, "talk", "data")
 const MD_START, MD_STOP = Date(2014, 1, 3), Date(2026, 9, 4)
 const REAL_START, REAL_STOP = Date(2025, 1, 2), Date(2026, 9, 4)
 const REAL_SEEDS = 5660:5689
+const TRAIN_START, TRAIN_STOP = Date(2014, 1, 3), Date(2024, 12, 31)
+const MPC_LABEL = "CD|fixed:l8b_13|hedge=false|seed=5660"     # the MPC slide's run (spec, slide 3)
+const MPC_START, MPC_STOP = Date(2025, 10, 10), Date(2025, 12, 22)
+const MPC_REASONS = ["horizon_elapsed", "band_exit", "horizon_elapsed"]
+const MPC_Z = 1.96                                             # the trigger's band, SDs
+const N_SYN_PATHS = 100                                        # generator paths on the JumpHMM slide
+const CLAIM_KURTOSIS, CLAIM_ACF1, CLAIM_ABS_ACF = 4.0, 0.15, 0.10   # fat tails, little autocorrelation, clustering
 const ROW_COLUMNS = [:hash, :label, :status, :allocator, :screen, :seed, :hedge, :basket_K, :W0, :terminal, :n_decisions]
 
 """
@@ -32,6 +39,58 @@ Write `df` to talk/data/`name` and say so.
 function wrote(name::AbstractString, df::DataFrame)::Nothing
     CSV.write(joinpath(OUT, name), df)
     println("wrote talk/data/", name, " (", nrow(df), " rows)")
+    return nothing
+end
+
+"""
+    check_mpc(ep)::Nothing
+
+Throw an error unless the MPC episode shows what the slide says: the decisions `MPC_REASONS`, a band exit beyond
+`MPC_Z` SDs, and every day strictly inside each cone within `MPC_Z` SDs of its forecast.
+"""
+function check_mpc(ep)::Nothing
+    if ep.events.reason != MPC_REASONS
+        error("MPC episode decisions are ", ep.events.reason, ", expected ", MPC_REASONS)
+    end
+    k = findfirst(isequal("band_exit"), ep.events.reason)
+    if !(abs(ep.events.z[k]) > MPC_Z)
+        error("MPC band exit is only ", ep.events.z[k], " SDs from its forecast")
+    end
+    for c in unique(ep.cones.cone)
+        rows = ep.cones[ep.cones.cone .== c, :]
+        for r in 2:(nrow(rows) - 1)
+            z = (ep.path.w[rows.day[r] + 1] - rows.mean[r]) / rows.sd[r]
+            if abs(z) > MPC_Z
+                error("MPC cone ", c, " is left on day ", rows.day[r], " (z = ", z, ") without a re-plan")
+            end
+        end
+    end
+    return nothing
+end
+
+"""
+    check_claims(summary::DataFrame, abs_acf::DataFrame)::Nothing
+
+Throw an error unless the data supports what the JumpHMM slide says: both the real series and the synthetic median
+show fat tails (kurtosis above `CLAIM_KURTOSIS`) and little autocorrelation (|ACF at lag 1| below `CLAIM_ACF1`);
+real SPY shows lasting volatility clustering (ACF of |g| above `CLAIM_ABS_ACF` at lags 1–5); and the generator
+shows short-lived clustering (synthetic median ACF of |g| above `CLAIM_ABS_ACF` at lag 1, below it by lag 3). The
+slide says the generator's clustering fades after a day while real clustering lasts weeks.
+"""
+function check_claims(summary::DataFrame, abs_acf::DataFrame)::Nothing
+    for i in 1:nrow(summary)
+        if !(summary.kurtosis[i] > CLAIM_KURTOSIS) || !(abs(summary.acf1[i]) < CLAIM_ACF1)
+            error("stylized-fact claim fails for ", summary.series[i], ": ", summary[i, :])
+        end
+    end
+    for L in 1:5
+        if !(abs_acf.real[L] > CLAIM_ABS_ACF)
+            error("real volatility clustering claim fails at lag ", L, ": ", abs_acf[L, :])
+        end
+    end
+    if !(abs_acf.syn_p50[1] > CLAIM_ABS_ACF) || !(abs_acf.syn_p50[3] < CLAIM_ABS_ACF)
+        error("the generator's clustering is not short-lived as the slide says: ", abs_acf[1:3, :])
+    end
     return nothing
 end
 
@@ -75,6 +134,42 @@ function main()
     numbers = talk_numbers(grid, n_decisions, h2h)
     write_tex_macros(joinpath(OUT, "numbers.tex"), numbers)
     println("wrote talk/data/numbers.tex: ", join([string(k, "=", v) for (k, v) in numbers], ", "))
+
+    # the MPC slide: one real episode of the hand-picked 13, read from the run's cache file
+    k = findfirst(isequal(MPC_LABEL), string.(gs.label))
+    res = JLD2.load(joinpath(RESULTS, "gamma_seeds", "runs", string(gs.hash[k]) * ".jld2"), "result")
+    ep = talk_mpc_episode(res, MPC_START, MPC_STOP)
+    check_mpc(ep)
+    wrote("mpc_path.csv", ep.path)
+    wrote("mpc_events.csv", ep.events)
+    for c in unique(ep.cones.cone)
+        rows = ep.cones[ep.cones.cone .== c, :]
+        wrote("mpc_cone_$(c).csv", rows[:, [:day, :mean, :sd]])
+    end
+    println("MPC events: ", join([string(ep.events.date[i], " ", ep.events.reason[i], " z=", round(ep.events.z[i]; digits=2))
+        for i in 1:nrow(ep.events)], "; "))
+
+    # the JumpHMM slide: real SPY 2014–2024 against the first typical paths of this year's generator
+    rows = growth_window(md.dates, TRAIN_START, TRAIN_STOP)
+    g_real = Float64[]
+    for r in rows
+        push!(g_real, log(md.spy_close[r + 1] / md.spy_close[r]) * 252)
+    end
+    gen = JLD2.load(joinpath(RESULTS, "synthetic", "generator.jld2"), "generator")
+    paths = CSV.read(joinpath(RESULTS, "synthetic", "paths.csv"), DataFrame)
+    ids = sort(paths.path_id[paths.typical .== true])[1:N_SYN_PATHS]
+    window = growth_window(gen.dates, TRAIN_START, TRAIN_STOP)
+    g_syn = Vector{Float64}[]
+    for p in ids
+        push!(g_syn, synthetic_draws(gen, p).g_m[window])
+    end
+    sf = talk_stylized_facts(g_real, g_syn)
+    println(sf.summary)
+    check_claims(sf.summary, sf.abs_acf)
+    wrote("sf_density.csv", sf.density)
+    wrote("sf_acf.csv", sf.acf)
+    wrote("sf_abs_acf.csv", sf.abs_acf)
+    wrote("sf_summary.csv", sf.summary)
     return nothing
 end
 
