@@ -1,2 +1,14 @@
+% MPC slide (spec, slide 3): one real episode, three forecasts, the re-plan rule.
 \begin{frame}{When to rebalance: re-plan when the market leaves the forecast}
+  % a group, not braces: beamer would read a brace group after the title as a frame subtitle
+  \begingroup\footnotesize\color{vnslidebody}
+  Controller's model: multi-asset GBM, 1,000 paths, 21 trading days. Plant: real prices.\par
+  Re-plan when the value leaves the 95\% band, falls 8\% below its peak, or 21 trading days pass.\par
+  \endgroup
+  \vspace{2pt}
+  \vnmpcfigure{11.4cm}{2.85cm}\par
+  \vfill
+  {\scriptsize Real-data backtest: hand-picked 13 names, Cobb-Douglas, hedge off. Bands are the forecasts stored at
+    each rebalance. Over the full backtest: about \Rebalances{} rebalances after the first allocation in 419 trading
+    days.\par}
 \end{frame}
