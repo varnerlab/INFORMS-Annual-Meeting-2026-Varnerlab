@@ -6,3 +6,7 @@ results/smoke/
 results/synthetic/rows/
 results/synthetic/smoke/
 results/synthetic/*.jld2
+results/gamma_seeds/runs/
+results/large_k/runs/
+results/*/run.log
+!talk/data/

@@ -47,6 +47,7 @@ include("SyntheticRunner.jl")
 include("SyntheticCalibration.jl")
 include("SyntheticChecks.jl")
 include("SyntheticTables.jl")
+include("TalkData.jl")
 
 export MyMarketData, build, load_market_data, growth_rates, index_of, DATA_FILES, boundary_split_factor, split_adjustments,
     MySIMParameterEstimate, MyEWLSState, MyEWVarState, estimate_sim, fit_base_sim, ewls_init, ewls_update!,
@@ -91,3 +92,4 @@ export ew_rebalance_gap, abs_acf, mean_pairwise_corr, real_reference, path_diagn
     beta_le0_windows, alpha_correlation
 export PICKER_ROWS, picker_key, path_cells, bench_cells, grid_table, band_table, format_grid, head_to_head,
     head_to_head_grid, real_percentiles
+export TALK_REALRUN_ROWS, talk_realrun_grid, talk_row_ranges, talk_largek_shares, talk_numbers, write_tex_macros
