@@ -276,9 +276,12 @@ Each is titled with the question it answers.
 
 - **B1. "Was 2025 a lucky year?"** Where each real result falls among the 600 typical futures: rows and dots as on
   slide 5, with the x axis as the percentile from 0 to 100%, and a 50% line instead of the SPY and equal-weight lines.
-  SPY's own percentile (70th) is shown as a row. The committed tables
-  (`results/synthetic/tables/typical_real_percentile_hedge_{off,on}.csv`) used the single-seed real values for the γ
-  pickers and the hand-picked lists; recompute those rows with the 30-seed real medians.
+  SPY's own percentile (70th) is shown as the usual coral dashed SPY line (revised while planning, my call: the same
+  grammar as the other slides). **(my call, revised while planning)** Use the committed tables
+  (`results/synthetic/tables/typical_real_percentile_hedge_{off,on}.csv`) as they are. They compare each real result
+  with futures run on the same seeds: seeds 5660–5664 for random and bandit, and seed 5660 for the γ pickers and the
+  hand-picked lists. Recomputing with 30-seed real medians would compare a median that has no seed noise against
+  futures that do, and it would need the per-path rows, which are git-ignored. A footnote says which seeds were used.
 - **B2. "Does this work for a real-sized book?"** Global γ against random picks from the whole universe at 5, 8, 13,
   21, 34, 100 and 200 names, on real data, with 30 seeds on both sides.
   - Show it per utility, hedge off and on, as the share of seed pairs in which global γ ends higher, with a 50% line.
