@@ -58,6 +58,11 @@
   \let\vnmpcEndMean\pgfplotsretval
   \pgfplotstablegetelem{\vnmpcLastRow}{sd}\of\vnmpcLast
   \let\vnmpcEndSd\pgfplotsretval
+  % how far below its forecast the band exit was, in SDs, from the band_exit row (row 1; the data script checks the
+  % order of the re-plans): the exit is too close to the band edge to see, so the label states it
+  \pgfplotstablegetelem{1}{z}\of\vnmpcEvents
+  \pgfmathparse{abs(\pgfplotsretval)}%
+  \pgfmathprintnumberto[fixed, precision=1, assume math mode=true]{\pgfmathresult}{\vnmpcExitZ}%
   \begin{tikzpicture}
     \begin{axis}[
       width=#1, height=#2, scale only axis,
@@ -98,7 +103,7 @@
 
       % the re-plans
       \vnmpcevent{0}{anchor=south, yshift=7pt}{Nov 10: 21 days up $\rightarrow$ re-plan}%
-      \vnmpcevent{1}{anchor=north, yshift=-7pt}{Nov 20: below the 95\% band $\rightarrow$ re-plan}%
+      \vnmpcevent{1}{anchor=north, yshift=-7pt}{Nov 20: \vnmpcExitZ{} SD below, past the 95\% band $\rightarrow$ re-plan}%
       \vnmpcevent{2}{anchor=south east, xshift=-3pt, yshift=7pt}{Dec 22: 21 days up $\rightarrow$ re-plan}%
     \end{axis}
   \end{tikzpicture}%

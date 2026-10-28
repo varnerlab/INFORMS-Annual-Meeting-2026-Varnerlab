@@ -126,7 +126,7 @@ function main()
     gs = read_rows(joinpath(RESULTS, "gamma_seeds", "gamma_seeds_summary.csv"))
     un = read_rows(joinpath(RESULTS, "universe_summary.csv"))
     head = vcat(gs[string.(gs.screen) .== "global_gamma", :], un[string.(un.screen) .== "random_global", :], big)
-    shares = talk_largek_shares(head)
+    shares = talk_largek_shares(head; n_runs=length(REAL_SEEDS))
     wrote("largek_shares.csv", shares)
 
     # B2: the same head-to-heads as dots, one row per basket size

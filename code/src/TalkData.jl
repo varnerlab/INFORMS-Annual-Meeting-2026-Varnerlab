@@ -131,7 +131,7 @@ function talk_row_ranges(dots::DataFrame)::DataFrame
 end
 
 """
-    talk_largek_shares(rows::DataFrame; sg_max_K::Int=34)::DataFrame
+    talk_largek_shares(rows::DataFrame; sg_max_K::Int=34, n_runs::Union{Nothing,Int}=nothing)::DataFrame
 
 Global γ against random picks from the whole universe at each basket size: one row per (K, hedge setting,
 utility), ordered by K, then hedge (off first), then `TABLE_ALLOCATOR_ORDER`, with columns `K` (names), `allocator`,
@@ -141,9 +141,10 @@ and `share`, the fraction of (global, random) run pairs in which global γ ends 
 `rows` holds ok summary rows of screens `global_gamma` and `random_global` (other screens are ignored), with
 `allocator`, `screen`, `hedge`, `basket_K`, `W0` and `terminal` (USD). Stone–Geary rows with `basket_K > sg_max_K`
 are dropped: its 1%-per-name floor uses the whole budget at 100 names. Throws `ArgumentError` when a (K, utility,
-hedge setting) has runs of one screen but not the other.
+hedge setting) has runs of one screen but not the other, or, when `n_runs` is given, a screen with other than `n_runs`
+runs (the slide says "30 runs each").
 """
-function talk_largek_shares(rows::DataFrame; sg_max_K::Int=34)::DataFrame
+function talk_largek_shares(rows::DataFrame; sg_max_K::Int=34, n_runs::Union{Nothing,Int}=nothing)::DataFrame
     runs = Dict{Tuple{Int,String,Bool,String},Vector{Float64}}()
     for i in 1:nrow(rows)
         screen = string(rows.screen[i])
@@ -183,6 +184,10 @@ function talk_largek_shares(rows::DataFrame; sg_max_K::Int=34)::DataFrame
                 end
                 g = runs[(K, a, hedge, "global_gamma")]
                 r = runs[(K, a, hedge, "random_global")]
+                if n_runs !== nothing && (length(g) != n_runs || length(r) != n_runs)
+                    throw(ArgumentError("K = $(K), $(a), hedge = $(hedge) has $(length(g)) global γ and " *
+                        "$(length(r)) random runs, expected $(n_runs) each"))
+                end
                 n_higher = 0
                 for x in g
                     for y in r
@@ -492,7 +497,7 @@ function _talk_kurtosis(x::AbstractVector)::Float64
     return m4 / m2^2
 end
 
-# Density (per SD) of the standardized `x` in the bins of `edges` (SDs): count/(n·width), NaN for an empty bin.
+# Density (per SD) of the standardized `x` in the bins of `edges` (SDs): count/(n·width), so 0 for an empty bin.
 function _talk_density(x::AbstractVector, edges::AbstractVector)::Vector{Float64}
     z = (x .- mean(x)) ./ std(x)
     nb = length(edges) - 1
@@ -507,11 +512,7 @@ function _talk_density(x::AbstractVector, edges::AbstractVector)::Vector{Float64
     end
     out = Vector{Float64}(undef, nb)
     for b in 1:nb
-        if counts[b] == 0
-            out[b] = NaN
-        else
-            out[b] = counts[b] / (length(z) * (edges[b + 1] - edges[b]))
-        end
+        out[b] = counts[b] / (length(z) * (edges[b + 1] - edges[b]))
     end
     return out
 end
@@ -542,7 +543,8 @@ The stylized facts of daily growth rates (yr⁻¹) for the JumpHMM slide: one re
 synthetic series `g_syn` (a vector of series), as the real value and the 10th, 50th and 90th percentiles across
 the synthetic series:
 - `density`: `x` (bin center, in SDs of the series), `real`, `syn_p10`, `syn_p50`, `syn_p90` and `normal` (the
-  N(0, 1) density), the density (per SD) of each standardized series in the bins of `edges`, NaN for an empty bin;
+  N(0, 1) density), the density (per SD) of each standardized series in the bins of `edges`, 0 for an empty bin
+  (the percentiles count those zeros, so a tail bin that few synthetic series reach has a median of 0);
 - `acf`: `lag` (trading days), `real`, `syn_p10`, `syn_p50`, `syn_p90`, the autocorrelation of g;
 - `abs_acf`: the same for |g| (`abs_acf`);
 - `summary`: `series` (`"real"`, `"synthetic median"`), `kurtosis` (non-excess, 3 for a normal), `acf1` and

@@ -8,7 +8,8 @@
 %   (b) little autocorrelation: ACF of g at lags 1–20 (trading days);
 %   (c) volatility clustering: ACF of |g| at lags 1–20.
 % In each, the generator is a band from its 10th to 90th percentile with its median line, and real SPY is the red
-% line. Empty density bins of the real series are NaN and are skipped.
+% line. An empty density bin is 0: on the log scale the lines break there, the real series' isolated tail bins show
+% as small dots, and the band's edges stop at the bottom of the axis.
 
 % the look shared by the three panels
 \pgfplotsset{
@@ -43,8 +44,16 @@
       xmin=-8, xmax=8, xtick={-8,-4,0,4,8},
       ymode=log, ymin=1e-4, ymax=1, ytick={1e-4,1e-2,1},
       xlabel={SDs from the mean},
+      unbounded coords=jump,
     ]
-      \vnsfseries{data/sf_density.csv}{x}
+      \addplot[name path=vnsflo, draw=none, forget plot]
+        table[col sep=comma, x=x, y expr={max(\thisrow{syn_p10}, 1e-4)}] {data/sf_density.csv};
+      \addplot[name path=vnsfhi, draw=none, forget plot]
+        table[col sep=comma, x=x, y expr={max(\thisrow{syn_p90}, 1e-4)}] {data/sf_density.csv};
+      \addplot[fill=deepskyblue1, fill opacity=0.25, draw=none, forget plot] fill between[of=vnsflo and vnsfhi];
+      \addplot[draw=vnslidelink, line width=0.8pt, mark=none] table[col sep=comma, x=x, y=syn_p50] {data/sf_density.csv};
+      \addplot[draw=vnmpcred, line width=1.2pt, line join=round, mark=*, mark size=0.6pt]
+        table[col sep=comma, x=x, y=real] {data/sf_density.csv};
       \addplot[draw=vndottick, line width=0.7pt, dash pattern=on 2.5pt off 1.5pt, mark=none]
         table[col sep=comma, x=x, y=normal] {data/sf_density.csv};
     \end{axis}

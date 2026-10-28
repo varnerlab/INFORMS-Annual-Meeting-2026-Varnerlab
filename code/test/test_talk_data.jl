@@ -125,6 +125,10 @@ end
         @test s.global_median[(s.K .== 34) .& (s.allocator .== "CD")] == [1.25]
         @test !any((s.K .== 100) .& (s.allocator .== "SG")) && any((s.K .== 34) .& (s.allocator .== "SG"))
         @test_throws ArgumentError talk_largek_shares(lk[lk.screen .!= "random_global", :])
+        # with an expected run count, a cell with any other count is an error: 2 global runs pass, 3 random do not
+        @test_throws ArgumentError talk_largek_shares(lk; n_runs=2)
+        two = lk[.!((lk.screen .== "random_global") .& (lk.seed .== 5662)), :]
+        @test talk_largek_shares(two; n_runs=2).n_random == fill(2, 3)
     end
 
     @testset "text numbers" begin
@@ -214,5 +218,13 @@ end
         sy = talk_stylized_facts(y, [y])
         @test sy.abs_acf.real[1] > 0.15 && sy.summary.kurtosis[1] > 3.5
         @test sy.abs_acf.syn_p50[1] ≈ sy.abs_acf.real[1]
+        # an empty bin has density 0, and the generator's percentiles count it: a tail bin that only one of three
+        # paths reaches has a median of 0, not that one path's density
+        z = copy(x)
+        z[1] = mean(x) + 7 * std(x)
+        s3 = talk_stylized_facts(x, [x, x, z])
+        far = findall((s3.density.real .== 0) .& (s3.density.syn_p90 .> 0))
+        @test !isempty(far) && all(s3.density.syn_p50[far] .== 0)
+        @test !any(isnan.(s3.density.real)) && !any(isnan.(s3.density.syn_p10))
     end
 end

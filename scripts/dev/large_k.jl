@@ -1,7 +1,8 @@
 # Diagnostic (talk Q&A, 2026-10-28): does the global γ edge over random picks hold for large books? Runs the
 # universe-wide screens global γ and random (whole universe) at K = 100 and 200 names on the real 2025–26 window,
-# every allocator, hedge on and off, with the study's settings and seeds (random: the study's 30 seeds). The study's
-# own grid stops at K = 34. Writes results/large_k/large_k_summary.csv (run cache in results/large_k/runs/);
+# every allocator, hedge on and off, with the study's settings and the study's 30 seeds for both screens (global γ
+# runs 30 times, as in scripts/dev/gamma_seeds.jl, so that each B2 cell compares 30 runs with 30). The study's own
+# grid stops at K = 34. Writes results/large_k/large_k_summary.csv (run cache in results/large_k/runs/);
 # config/study.toml and the committed results are not touched.
 # Usage (from the repo root): OMP_NUM_THREADS=1 KMP_GTID_MODE=2 julia -t 30 scripts/dev/large_k.jl
 using Pkg
@@ -11,6 +12,24 @@ using VLINFORMS2026, Dates, Statistics, DataFrames, CSV
 const REPO = normpath(joinpath(@__DIR__, "..", ".."))
 const OUT_DIR = joinpath(REPO, "results", "large_k")
 const MD_START, MD_STOP = Date(2014, 1, 3), Date(2026, 9, 4)
+
+"""
+    with_seeds(runs, seeds)::Vector{MyStudyRun}
+
+One copy of each run per seed in `seeds`, with the seed and the label's `seed=` part replaced (as in
+scripts/dev/gamma_seeds.jl).
+"""
+function with_seeds(runs, seeds)::Vector{MyStudyRun}
+    out = MyStudyRun[]
+    for r in runs
+        for seed in seeds
+            label = replace(r.label, r"seed=\d+" => "seed=$(seed)")
+            push!(out, build(MyStudyRun, (settings=r.settings, allocator=r.allocator, screen=r.screen,
+                seed=seed, label=label)))
+        end
+    end
+    return out
+end
 
 function main()
     # SCS_jll's libomp needs these, as in script 22
@@ -23,10 +42,13 @@ function main()
     s, grid = load_study(joinpath(REPO, "config", "study.toml"))
     calib = load_calibration(joinpath(REPO, "results", "calibration.jld2"))
 
-    # the study grid with only the two large basket sizes and the two universe-wide screens
-    # screens as Symbols, as load_study gives them, so global γ runs once (seed base_seed) as in the study
-    big = merge(grid, (K=[100, 200], universe_screens=[:global_gamma, :random_global]))
-    runs = universe_runs(s, big)
+    # the study grid with only the two large basket sizes and the two universe-wide screens; the study builds random
+    # picks with its 30 seeds and global γ once (seed base_seed), so global γ gets the same 30 seeds here
+    seeds = collect(grid.base_seed .+ (0:grid.n_seeds-1))
+    big = merge(grid, (K=[100, 200],))
+    random_runs = universe_runs(s, merge(big, (universe_screens=[:random_global],)))
+    global_runs = with_seeds(universe_runs(s, merge(big, (universe_screens=[:global_gamma],))), seeds)
+    runs = vcat(global_runs, random_runs)
     println(length(runs), " runs, ", Threads.nthreads(), " threads")
 
     # run, then write one summary row per run
