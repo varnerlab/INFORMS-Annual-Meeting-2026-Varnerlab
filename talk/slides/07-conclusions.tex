@@ -1,2 +1,25 @@
+% Conclusions (spec, slide 7): the user-approved takeaways, with the numbers from talk/data/numbers.tex. The
+% large-book sentence stays off until the user approves it.
 \begin{frame}{Key takeaways}
+  % the template sets list text to \normalsize; the approved text fits at 9 pt on a slightly tighter leading
+  \setbeamerfont{itemize/enumerate body}{size=\fontsize{9}{10.5}\selectfont}%
+  \begin{itemize}
+    \setlength{\itemsep}{0.3em}
+    \item {\vnmedium Utility functions set the weights.} We compared seven weighting rules: four utility functions
+      (Cobb-Douglas, CES on shares, CES on weights, Stone–Geary), minimum variance, the tangency portfolio, and a
+      130/30 long-short Cobb-Douglas. Under a budget alone, the utility rules have a closed-form answer. With limits
+      on single names, sectors, volatility and turnover, the problem stays convex and a standard solver handles it.
+      In the real run, the stocks we picked mattered more than the rule: on one 33-stock basket the seven rules ended
+      between \SectorLo{} and \SectorHi{} times the starting wealth, while different baskets ranged from \BasketLo{}
+      to \BasketHi{}.
+    \item {\vnmedium The MPC trigger decides when to rebalance.} After each rebalance we simulate 1,000 paths of the
+      portfolio's value over the next 21 trading days. We rebalance early if the value leaves the 95\% band or falls
+      8\% below its peak, and otherwise wait out the 21 days. In the real run that came to about \Rebalances{}
+      rebalances in 419 trading days.
+    \item {\vnmedium We tested the method on simulated markets.} A JumpHMM fitted to 2014–2024 data reproduces fat
+      tails, weak autocorrelation and short-lived volatility clustering. We used it to simulate 978 markets: 600
+      typical, 200 with jump bursts and 200 deep bear markets. Picking 13 stocks by γ beat 13 random stocks in
+      \TypicalLo–\TypicalHi\% of typical markets. In bear markets, random picks did as well or better for most
+      weighting rules.
+  \end{itemize}
 \end{frame}
