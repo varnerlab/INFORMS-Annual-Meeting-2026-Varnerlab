@@ -155,31 +155,40 @@ end
 
 """
     beta_le0_windows(md::MyMarketData, calib::MyCalibration; train=SYNTH_TRAIN,
-        trade=(Date(2025, 1, 2), Date(2026, 9, 4)))::DataFrame
+        trade=(Date(2025, 1, 2), Date(2026, 9, 4)), step::Int=21)::DataFrame
 
-`count_beta_le0` of `online_sim(md, calib)` in each window of the training period `train` that is as long as the
+`count_beta_le0` of `online_sim(md, calib)` in every window of the training period `train` that is as long as the
 trading window `trade`. Each window's online pass starts from `calib`, as the count over `trade` does. The trading
-window holds L trading days (`trade[1]` through `trade[2]`). The windows hold L trading days each, follow one another
-without overlap, start on the trading day after `train[1]` (`online_sim` needs a previous day) and end on or before
-`train[2]`; days left over at the end are not used. Columns: `start` and `stop` (each window's first and last trading
-day) and `n_beta_le0` (names). Throws `ArgumentError` if a date of `train` or `trade` is not a trading day of `md`,
-or no window fits.
+window holds L trading days (`trade[1]` through `trade[2]`), and so does each window. The last window ends on
+`train[2]`; each earlier one ends `step` trading days before the next, and the first is the earliest that starts on or
+after the trading day after `train[1]` (`online_sim` needs a previous day). Rows run from the earliest window to the
+last. Columns: `start` and `stop` (each window's first and last trading day) and `n_beta_le0` (names). Throws
+`ArgumentError` if a date of `train` or `trade` is not a trading day of `md`, `step` is below 1, or no window fits.
 """
 function beta_le0_windows(md::MyMarketData, calib::MyCalibration; train::Tuple{Date,Date}=SYNTH_TRAIN,
-        trade::Tuple{Date,Date}=(Date(2025, 1, 2), Date(2026, 9, 4)))::DataFrame
+        trade::Tuple{Date,Date}=(Date(2025, 1, 2), Date(2026, 9, 4)), step::Int=21)::DataFrame
+    if step < 1
+        throw(ArgumentError("step must be at least 1 trading day; got $(step)"))
+    end
     L = index_of(md, trade[2]) - index_of(md, trade[1]) + 1
     first_row = index_of(md, train[1]) + 1
     last_row = index_of(md, train[2])
-    out = DataFrame(start=Date[], stop=Date[], n_beta_le0=Int[])
-    s = first_row
-    while s + L - 1 <= last_row
-        start = md.dates[s]
-        stop = md.dates[s + L - 1]
-        push!(out, (start, stop, count_beta_le0(online_sim(md, calib; start=start, stop=stop))))
-        s += L
+    # the last row of each window, from the last window back to the earliest that fits
+    stops = Int[]
+    e = last_row
+    while e - L + 1 >= first_row
+        push!(stops, e)
+        e -= step
     end
-    if nrow(out) == 0
+    if isempty(stops)
         throw(ArgumentError("no window of $(L) trading days fits in $(train[1]) → $(train[2])"))
+    end
+    # count the names in each window, earliest first
+    out = DataFrame(start=Date[], stop=Date[], n_beta_le0=Int[])
+    for e in reverse(stops)
+        start = md.dates[e - L + 1]
+        stop = md.dates[e]
+        push!(out, (start, stop, count_beta_le0(online_sim(md, calib; start=start, stop=stop))))
     end
     return out
 end

@@ -81,13 +81,18 @@ end
     @test_throws ArgumentError check_table(NamedTuple[], ref, v1)
 end
 
-# The toy market of `synthetic_md` with name T01 turned into a hedge (β = −1: its growth minus twice SPY's) and every
-# name given its own steady α_j = 0.5·j yr⁻¹, plus a calibration on its first 1,000 days.
+# The toy market of `synthetic_md` with name T01 turned into a hedge (β = −1: its growth minus twice SPY's), name T02
+# moving against SPY (β = −2: its growth minus three times SPY's) on days 900–1000 only, and every name given its own
+# steady α_j = 0.5·j yr⁻¹, plus a calibration on its first 1,000 days.
 function hedge_toy()
     md0 = synthetic_md(ρ=0.2)
     n = length(md0.dates)
     close = copy(md0.close)
     close[:, 1] = md0.close[:, 1] .* (md0.spy_close[1] ./ md0.spy_close) .^ 2
+    for t in 900:n
+        k = min(t, 1000)
+        close[t, 2] = md0.close[t, 2] * (md0.spy_close[899] / md0.spy_close[k])^3
+    end
     for j in 1:48
         close[:, j] = close[:, j] .* exp.(0.5 * j .* (0:(n - 1)) ./ 252)
     end
@@ -103,17 +108,27 @@ end
     toy = hedge_toy()
     md = toy.md
     c = toy.calib
-    # windows of the 200-day trading window inside days 1–1000: consecutive from day 2, ending by day 1000
+    # windows as long as the 200-day trading window inside days 1–1000: the last ends on day 1000, each earlier one
+    # 21 days before the next, back to the earliest that starts on or after day 2 (days 3–202)
     train = (md.dates[1], md.dates[1000])
     trade = (md.dates[1101], md.dates[1300])
     W = beta_le0_windows(md, c; train=train, trade=trade)
     @test names(W) == ["start", "stop", "n_beta_le0"]
-    @test W.start == md.dates[[2, 202, 402, 602]] && W.stop == md.dates[[201, 401, 601, 801]]
-    @test W.n_beta_le0 == [1, 1, 1, 1]                 # only T01, which moves against SPY
-    for k in 1:4                                        # each window's online pass starts from the calibration
+    @test nrow(W) == 39
+    @test W.stop == md.dates[202:21:1000] && W.start == md.dates[3:21:801]
+    @test W.stop[end] == train[2]                       # the last window ends on the last training day
+    for k in 1:nrow(W)                                  # each window's online pass starts from the calibration
         @test W.n_beta_le0[k] == VLINFORMS2026.count_beta_le0(online_sim(md, c; start=W.start[k], stop=W.stop[k]))
     end
+    # T01 moves against SPY throughout; T02 only on days 900–1000, so only the windows ending near day 1000 count it
+    @test W.n_beta_le0[1] == 1 && W.n_beta_le0[end] == 2
+    @test all(W.n_beta_le0[W.stop .<= md.dates[900]] .== 1)
+    # a step of 200 gives windows that do not overlap, still ending on day 1000; days 1–200 hold no window, since a
+    # window must start on day 2 or later
+    W200 = beta_le0_windows(md, c; train=train, trade=trade, step=200)
+    @test W200.stop == md.dates[[400, 600, 800, 1000]] && W200.start == md.dates[[201, 401, 601, 801]]
     @test_throws ArgumentError beta_le0_windows(md, c; train=(md.dates[1], md.dates[150]), trade=trade)
+    @test_throws ArgumentError beta_le0_windows(md, c; train=train, trade=trade, step=0)
     @test_throws ArgumentError beta_le0_windows(md, c; train=(md.dates[1], md.dates[1000]),
         trade=(Date(2014, 1, 4), md.dates[1300]))      # a Saturday is not a trading day
     # α carry-over: the correlation of each name's OLS α across two windows

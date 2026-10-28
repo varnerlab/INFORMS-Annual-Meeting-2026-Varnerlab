@@ -26,7 +26,8 @@ V6,SD of the online β̂ ÷ the real SD,0.9854114808131107,1.0,"in [0.9, 1.1]",t
 V6,lag-252 autocorrelation of the online β̂,0.18842727136923842,0.20621485720617153,report only,
 V6,"share of paths with a name whose online β̂ ≤ 0 on some day in 2025–26 (reference: the real market's own yes/no, 1 = yes)",1.0,1.0,report only,
 V6,"names whose online β̂ ≤ 0 on some day in 2025–26, median over paths (range 2–11)",7.0,120.0,report only,
-V6,"names whose online β̂ ≤ 0 on some day of a real 2014–2024 window as long as 2025–26, median over the 6 windows from 2014-01-06 (range 0–16); synthetic: 2025–26, median over paths",7.0,3.5,report only,
+V6,"names whose online β̂ ≤ 0 on some day of a real 2014–2024 window as long as 2025–26, median over the 112 windows that end on 2024-12-31 or a multiple of 21 trading days before it (range 0–53); synthetic: 2025–26, median over paths",7.0,5.0,report only,
+V6,"names whose online β̂ ≤ 0 on some day of the real window as long as 2025–26 that ends on 2024-12-31 (from 2023-05-02); synthetic: 2025–26, median over paths",7.0,53.0,report only,
 V9,"cross-name SD of OLS α, 2014–2024 (yr⁻¹)",0.08906743425565765,0.07640258507556169,within 0.01 of reference,false
 V9,"correlation of OLS α, 2014–2019 vs 2020–2024",0.13416621109525084,0.1747594697166383,within 0.05 of reference,true
 V9,"correlation of OLS α, 2014–2024 vs 2025–26",0.10026531941871057,-0.12095524995880447,report only,

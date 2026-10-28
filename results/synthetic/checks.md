@@ -1,9 +1,9 @@
 # Synthetic-market checks V1–V9
 
-Written by `scripts/24_synthetic_checks.jl` on 2026-10-28 (wall time 84.6 s on 4 threads).
+Written by `scripts/24_synthetic_checks.jl` on 2026-10-28 (wall time 83.6 s on 4 threads).
 
 - Check paths: the first 50 paths by `typical_rank` in `paths.csv` (ids 2594, 4726, 8301, 3884, 1811, 5068, 1799, 8958, 7053, 3716, 4977, 2730, 935, 1781, 5058, 709, 9269, 2849, 861, 264, 7058, 9202, 5512, 2341, 1121, 7949, 4025, 8304, 9530, 2837, 6053, 1373, 3770, 6765, 924, 1018, 2621, 6226, 9621, 3901, 3449, 7315, 91, 5026, 7453, 4268, 7946, 2273, 6221, 7127).
-- Each check path is recalibrated on 2014-01-03 → 2024-12-31 with the study's `calibrate`, then compared with the real market over that window. The rows on names whose online β̂ ≤ 0 use the trading window 2025-01-02 → 2026-09-04 instead, except that the third one's real count comes from 2014–2024 windows as long as the trading window, each started from the real calibration as the 2025–26 count is. The last V9 row correlates each name's α on 2014–2024 with its α on the trading window.
+- Each check path is recalibrated on 2014-01-03 → 2024-12-31 with the study's `calibrate`, then compared with the real market over that window. The rows on names whose online β̂ ≤ 0 use the trading window 2025-01-02 → 2026-09-04 instead, except for the real counts of the third and fourth. Those come from 2014–2024 windows as long as the trading window, each started from the real calibration as the 2025–26 count is: every window that ends on 2024-12-31 or a multiple of 21 trading days before it (third), and the one that ends on 2024-12-31 (fourth). The last V9 row correlates each name's α on 2014–2024 with its α on the trading window.
 - V1 uses all 10000 paths in `paths.csv`.
 - A number with one value per path is the median over the 50 paths. A number with one value per name is each name's median over the paths, then the median over the 373 names.
 - `pass` is `missing` for a row that is reported but not gated.
@@ -41,7 +41,8 @@ Written by `scripts/24_synthetic_checks.jl` on 2026-10-28 (wall time 84.6 s on 4
 | V6 | lag-252 autocorrelation of the online β̂ | 0.1884 | 0.2062 | report only | missing |
 | V6 | share of paths with a name whose online β̂ ≤ 0 on some day in 2025–26 (reference: the real market's own yes/no, 1 = yes) | 1.0 | 1.0 | report only | missing |
 | V6 | names whose online β̂ ≤ 0 on some day in 2025–26, median over paths (range 2–11) | 7.0 | 120.0 | report only | missing |
-| V6 | names whose online β̂ ≤ 0 on some day of a real 2014–2024 window as long as 2025–26, median over the 6 windows from 2014-01-06 (range 0–16); synthetic: 2025–26, median over paths | 7.0 | 3.5 | report only | missing |
+| V6 | names whose online β̂ ≤ 0 on some day of a real 2014–2024 window as long as 2025–26, median over the 112 windows that end on 2024-12-31 or a multiple of 21 trading days before it (range 0–53); synthetic: 2025–26, median over paths | 7.0 | 5.0 | report only | missing |
+| V6 | names whose online β̂ ≤ 0 on some day of the real window as long as 2025–26 that ends on 2024-12-31 (from 2023-05-02); synthetic: 2025–26, median over paths | 7.0 | 53.0 | report only | missing |
 | V9 | cross-name SD of OLS α, 2014–2024 (yr⁻¹) | 0.08907 | 0.0764 | within 0.01 of reference | false |
 | V9 | correlation of OLS α, 2014–2019 vs 2020–2024 | 0.1342 | 0.1748 | within 0.05 of reference | true |
 | V9 | correlation of OLS α, 2014–2024 vs 2025–26 | 0.1003 | -0.121 | report only | missing |
