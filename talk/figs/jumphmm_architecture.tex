@@ -1,0 +1,98 @@
+% The JumpHMM architecture (spec, slide 4), from fig:model_architecture in the JumpHMM paper
+% (HMM-w-jumps-paper/arxiv-paper/sections/main_figures.tex). Input once in the preamble, after vnslides.
+% Same structure and math labels as the paper; only the colors and fonts change: the bottom tail is coral, the top
+% tail link blue, the Poisson clock white with an ink border, and the arrows and notes body grey. The text is set
+% larger than in the paper because the figure is shrunk to half the slide; state labels stay one size smaller so
+% $N-1$ fits its circle.
+%
+% \vnjumphmmarchitecture draws it at the width of the current line.
+\newcommand{\vnjumphmmarchitecture}{%
+\resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[
+  state/.style    = {circle, draw=vnslideink, very thick, minimum size=1.1cm,
+                     inner sep=0pt, font=\Large},
+  tailbot/.style  = {state, fill=vnaccent!25, draw=vnaccent},
+  tailtop/.style  = {state, fill=vnslidelink!25, draw=vnslidelink},
+  midstate/.style = {state, fill=white, draw=vnslideink!70},
+  markov/.style   = {<->, >=Stealth, thin, vnslidebody},
+  trigger/.style  = {->, >=Stealth, thick, dashed, vnslideink},
+  jumparc/.style  = {->, >=Stealth, very thick},
+  note/.style     = {font=\LARGE, fill=white, inner sep=2pt},
+]
+  \node[tailbot]              (s1)   at ( 0.0, 0) {$1$};
+  \node[tailbot]              (s2)   at ( 2.0, 0) {$2$};
+  \node[font=\Large]          (ld)   at ( 4.0, 0) {$\cdots$};
+  \node[midstate]             (sk)   at ( 6.0, 0) {$k$};
+  \node[font=\Large]          (rd)   at ( 8.0, 0) {$\cdots$};
+  \node[tailtop]              (sNm1) at (10.0, 0) {$N\!-\!1$};
+  \node[tailtop]              (sN)   at (12.0, 0) {$N$};
+  \draw[markov] (s1)  -- (s2);
+  \draw[markov] (s2)  -- (ld);
+  \draw[markov] (ld)  -- (sk);
+  \draw[markov] (sk)  -- (rd);
+  \draw[markov] (rd)  -- (sNm1);
+  \draw[markov] (sNm1)-- (sN);
+  \draw[vnaccent, thick]
+    plot[domain=-0.42:0.42, samples=40, smooth, variable=\t]
+    ({ 0.0+\t}, {1.45 + 0.72*exp(-\t*\t/0.024)});
+  \draw[vnaccent!25, thin] (-0.42,1.45) -- (0.42,1.45);
+  \draw[vnaccent, thick]
+    plot[domain=-0.42:0.42, samples=40, smooth, variable=\t]
+    ({ 2.0+\t}, {1.45 + 0.72*exp(-\t*\t/0.024)});
+  \draw[vnaccent!25, thin] (1.58,1.45) -- (2.42,1.45);
+  \draw[vnslidebody, thick]
+    plot[domain=-0.42:0.42, samples=40, smooth, variable=\t]
+    ({ 6.0+\t}, {1.45 + 0.72*exp(-\t*\t/0.024)});
+  \draw[vnslidebody!40, thin] (5.58,1.45) -- (6.42,1.45);
+  \draw[vnslidelink, thick]
+    plot[domain=-0.42:0.42, samples=40, smooth, variable=\t]
+    ({10.0+\t}, {1.45 + 0.72*exp(-\t*\t/0.024)});
+  \draw[vnslidelink!25, thin] (9.58,1.45) -- (10.42,1.45);
+  \draw[vnslidelink, thick]
+    plot[domain=-0.42:0.42, samples=40, smooth, variable=\t]
+    ({12.0+\t}, {1.45 + 0.72*exp(-\t*\t/0.024)});
+  \draw[vnslidelink!25, thin] (11.58,1.45) -- (12.42,1.45);
+  \node[draw=vnslideink, rounded corners=5pt, fill=white, very thick,
+        minimum width=2.8cm, minimum height=1.1cm,
+        align=center, font=\LARGE] (clock) at (6.0, 5.0)
+        {Poisson clock\\[1pt]prob.~$\epsilon$};
+  \draw[trigger] (sk.north) -- (clock.south)
+    node[note, midway, right=5pt, anchor=west, text=vnslidebody] {jump triggered};
+  \draw[jumparc, vnaccent]
+    (clock.west)
+    to[out=180, in=100]
+    node[note, above, sloped, text=vnaccent,
+         pos=0.45, yshift=3pt]
+      {$K\!\sim\!\mathrm{Pois}(\lambda)$ forced steps}
+    (s1.north);
+  \draw[jumparc, vnslidelink]
+    (clock.east)
+    to[out=0, in=80]
+    node[note, above, sloped, text=vnslidelink,
+         pos=0.45, yshift=3pt]
+      {$K\!\sim\!\mathrm{Pois}(\lambda)$ forced steps}
+    (sN.north);
+  \draw[decorate,
+        decoration={brace, amplitude=6pt, mirror},
+        vnaccent, thick]
+    (-0.6, -0.65) -- (2.6, -0.65)
+    node[midway, below=7pt, vnaccent, font=\LARGE]
+      {$\mathcal{S}_{-}$\ (bottom tail)};
+  \draw[decorate,
+        decoration={brace, amplitude=6pt, mirror},
+        vnslidelink, thick]
+    (9.4, -0.65) -- (12.6, -0.65)
+    node[midway, below=7pt, vnslidelink, font=\LARGE]
+      {$\mathcal{S}_{+}$\ (top tail)};
+  \draw[->, >=Stealth, vnslidebody, thin]
+    (-1.0, -0.5) -- (13.2, -0.5)
+    node[right, font=\LARGE, text=vnslidebody] {state index};
+  \node[note, align=right, anchor=east, text=vnslidebody]
+    at (5.55, 2.72) {state emission\\[-1pt]
+      $\mu_k\!+\!\sigma_k\cdot t_5$};
+  \node[note, text=vnslidebody, anchor=west]
+    at (6.55, 0.72)
+    {prob.~$1\!-\!\epsilon$};
+\end{tikzpicture}%
+}%
+}
