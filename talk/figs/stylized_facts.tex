@@ -26,7 +26,7 @@
   },
 }
 
-% \vnsfband{<file>}: the generator's 10th–90th percentile band and median, then the real line, for x column #2
+% \vnsfseries{<file>}{<x column>}: the generator's 10th–90th percentile band and median, then the real line
 \newcommand{\vnsfseries}[2]{%
   \addplot[name path=vnsflo, draw=none, forget plot] table[col sep=comma, x=#2, y=syn_p10] {#1};
   \addplot[name path=vnsfhi, draw=none, forget plot] table[col sep=comma, x=#2, y=syn_p90] {#1};

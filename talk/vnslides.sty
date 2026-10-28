@@ -10,17 +10,13 @@
 % figures. The lecture house rules below still apply, except that the deck has no
 % disclaimer or objectives slide.
 %
-% CANONICAL SOURCE. Each lecture's slides/ directory holds a thin wrapper
-% vnslides.sty that \inputs this file, mirroring how docs/ wraps
-% templates/varnernotes.sty and figs/ wraps templates/vnfigure.sty.
-%
 % Design target: the Fall-2024 Keynote decks. White field, no chrome, one sans
 % face, two colours, generous whitespace. Built up from beamer's `default`
 % theme rather than down from Madrid/Warsaw -- those carry headline bars,
 % navigation dots and shaded blocks that all have to be removed anyway.
 %
-% Palette below the rule is shared with the notes and the standalone figures via
-% templates/vnflow.sty, so a TikZ figure drops into a slide unchanged.
+% Palette below the rule is shared with the course notes and figures via vnflow.sty
+% (a copy in this folder), so a TikZ figure drops into a slide unchanged.
 % ============================================================
 \NeedsTeXFormat{LaTeX2e}
 \ProvidesPackage{vnslides}[2026/08/11 CHEME 5660 lecture deck style]
