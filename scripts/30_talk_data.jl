@@ -34,10 +34,11 @@ end
 """
     wrote(name::AbstractString, df::DataFrame)::Nothing
 
-Write `df` to talk/data/`name` and say so.
+Write `df` to talk/data/`name` and say so. A text field that holds a comma is wrapped in braces, as in
+`{Random, liquid 100}`: pgfplotstable reads a braced cell as one cell, and it does not understand double quotes.
 """
 function wrote(name::AbstractString, df::DataFrame)::Nothing
-    CSV.write(joinpath(OUT, name), df)
+    CSV.write(joinpath(OUT, name), df; openquotechar='{', closequotechar='}')
     println("wrote talk/data/", name, " (", nrow(df), " rows)")
     return nothing
 end
@@ -108,7 +109,15 @@ function main()
     # the passive references over the real window
     md = load_market_data(joinpath(REPO, "data"); start=MD_START, stop=MD_STOP)
     refs = passive_references(md, REAL_START, REAL_STOP)
-    wrote("realrun_refs.csv", DataFrame(name=refs.name, value=refs.terminal ./ 100_000.0))
+    ref_table = DataFrame(name=refs.name, value=refs.terminal ./ 100_000.0)
+    wrote("realrun_refs.csv", ref_table)
+
+    # the backup number tables: one tabular body per hedge setting
+    for (hedge, tag) in ((false, "off"), (true, "on"))
+        lines = talk_table_rows(grid, ref_table; hedge=hedge)
+        write(joinpath(OUT, "b3_rows_hedge_$(tag).tex"), join(lines, "\n") * "\n")
+        println("wrote talk/data/b3_rows_hedge_", tag, ".tex (", length(lines), " rows)")
+    end
 
     # global γ against random picks: K = 5–34 from the rerun and the universe summary, K = 100 and 200 from the
     # large-book runs

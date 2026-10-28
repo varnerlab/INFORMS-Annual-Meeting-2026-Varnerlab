@@ -1,2 +1,13 @@
+% Real-run slide (spec, slide 5): picker × utility dot plot, median of 30 runs per cell, with SPY and equal weight.
 \begin{frame}{What you hold beats how you weight it}
+  % a group, not braces: beamer would read a brace group after the title as a frame subtitle
+  \begingroup\small\color{vnslidebody} Real-data backtest, Jan 2025 – Sep 2026\par\endgroup
+  \vspace{4pt}
+  \vndotreadrefs{data/realrun_refs.csv}%
+  \vndotplot[xmin=0.95, xmax=1.75, xstep=0.1, spy=\vndotSPY, ew=\vndotEW, width=9.1cm, height=3.58cm,
+    xlabel={ending wealth ÷ start, median of 30 runs}]{data/realrun_grid.csv}{data/realrun_bars.csv}\par
+  \vndotlegend\par
+  {\scriptsize hedge on: up to 5 names with negative β join the basket and the book's β is capped\par}
+  \vfill
+  {\scriptsize A paper-trading deployment of this system is running; it is not part of this talk.\par}
 \end{frame}

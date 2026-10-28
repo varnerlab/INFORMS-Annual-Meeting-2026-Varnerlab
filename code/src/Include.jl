@@ -93,4 +93,4 @@ export ew_rebalance_gap, abs_acf, mean_pairwise_corr, real_reference, path_diagn
 export PICKER_ROWS, picker_key, path_cells, bench_cells, grid_table, band_table, format_grid, head_to_head,
     head_to_head_grid, real_percentiles
 export TALK_REALRUN_ROWS, talk_realrun_grid, talk_row_ranges, talk_largek_shares, talk_numbers, write_tex_macros,
-    talk_mpc_episode, talk_stylized_facts
+    talk_mpc_episode, talk_stylized_facts, talk_table_rows

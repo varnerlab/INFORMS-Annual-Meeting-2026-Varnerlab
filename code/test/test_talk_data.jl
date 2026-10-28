@@ -100,6 +100,8 @@ end
         # bars: lowest and highest dot per row and hedge setting
         r = talk_row_ranges(g)
         @test nrow(r) == 20 && all(r.lo .<= r.hi)
+        # the group name rides along so the deck can label each group above its first row
+        @test r.group[1] == "33 names · 3 per sector" && r.group[end] == "Hand-picked"
     end
 
     @testset "large-book shares" begin
@@ -127,6 +129,25 @@ end
         path = tempname()
         write_tex_macros(path, ["SectorLo" => "1.09", "Rebalances" => "27"])
         @test readlines(path) == ["\\newcommand{\\SectorLo}{1.09}", "\\newcommand{\\Rebalances}{27}"]
+    end
+
+    @testset "number tables" begin
+        g = copy(talk_realrun_grid(full_rows()))
+        g.value .= 1.2
+        g.value[(g.row .== 1) .& (g.hedge .== false) .& (g.allocator .== "CD")] .= 1.5204
+        g.value[(g.row .== 1) .& (g.hedge .== true) .& (g.allocator .== "LS")] .= 1.1
+        refs = DataFrame(name=["SPY buy-and-hold", "equal-weight universe"], value=[1.3174, 1.2962])
+        off = talk_table_rows(g, refs; hedge=false)
+        @test length(off) == 12
+        # utility columns in TABLE_ALLOCATOR_ORDER, 3 decimals with trailing zeros kept
+        @test off[1] == "γ per sector & 1.520 & 1.200 & 1.200 & 1.200 & 1.200 & 1.200 & 1.200 \\\\"
+        @test off[10] == "Hand-picked 13 + WMT, PG & 1.200 & 1.200 & 1.200 & 1.200 & 1.200 & 1.200 & 1.200 \\\\"
+        # the references: one value repeated in every column
+        @test off[11] == "SPY buy-and-hold & 1.317 & 1.317 & 1.317 & 1.317 & 1.317 & 1.317 & 1.317 \\\\"
+        @test talk_table_rows(g, refs; hedge=true)[1] ==
+            "γ per sector & 1.200 & 1.200 & 1.200 & 1.200 & 1.200 & 1.200 & 1.100 \\\\"
+        # a missing cell is an error
+        @test_throws ArgumentError talk_table_rows(g[2:end, :], refs; hedge=false)
     end
 
     @testset "MPC episode" begin

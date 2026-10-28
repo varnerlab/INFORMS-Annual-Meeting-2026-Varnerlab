@@ -1,2 +1,16 @@
+% Backup (spec, B3): the real-run numbers behind slide 5, hedge on.
 \begin{frame}{Show me the numbers: hedge on}
+  % the table body is read into a macro first: \input cannot sit inside a tabular
+  \CatchFileDef{\vntablerows}{data/b3_rows_hedge_on.tex}{}%
+  \centering
+  {\footnotesize
+  \begin{tabular}{l*{7}{r}}
+    \toprule
+    Picker & CD & CES & CESw & SG & MinVar & Tangent & LS \\
+    \midrule
+    \vntablerows
+    \bottomrule
+  \end{tabular}\par}
+  \vspace{0.6em}
+  {\scriptsize Ending wealth ÷ start, median of 30 runs. Real-data backtest, Jan 2025 – Sep 2026.\par}
 \end{frame}

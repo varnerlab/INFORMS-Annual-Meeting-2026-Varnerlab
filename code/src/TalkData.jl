@@ -107,12 +107,13 @@ end
 """
     talk_row_ranges(dots::DataFrame)::DataFrame
 
-The bar table of a dot table (columns `row`, `group_index`, `label`, `hedge`, `value`): one row per dot row and
-hedge setting, in order of first appearance, with columns `row`, `group_index`, `label`, `hedge`, `lo` and `hi`
-(the lowest and highest `value`, in the units of `value`).
+The bar table of a dot table (columns `row`, `group_index`, `label`, `group`, `hedge`, `value`): one row per dot
+row and hedge setting, in order of first appearance, with columns `row`, `group_index`, `label`, `group`, `hedge`,
+`lo` and `hi` (the lowest and highest `value`, in the units of `value`).
 """
 function talk_row_ranges(dots::DataFrame)::DataFrame
-    out = DataFrame(row=Int[], group_index=Int[], label=String[], hedge=Bool[], lo=Float64[], hi=Float64[])
+    out = DataFrame(row=Int[], group_index=Int[], label=String[], group=String[], hedge=Bool[], lo=Float64[],
+        hi=Float64[])
     where_ = Dict{Tuple{Int,Bool},Int}()
     for i in 1:nrow(dots)
         k = (dots.row[i], Bool(dots.hedge[i]))
@@ -122,7 +123,7 @@ function talk_row_ranges(dots::DataFrame)::DataFrame
             out.lo[j] = min(out.lo[j], v)
             out.hi[j] = max(out.hi[j], v)
         else
-            push!(out, (dots.row[i], dots.group_index[i], dots.label[i], Bool(dots.hedge[i]), v, v))
+            push!(out, (dots.row[i], dots.group_index[i], dots.label[i], dots.group[i], Bool(dots.hedge[i]), v, v))
             where_[k] = nrow(out)
         end
     end
@@ -263,6 +264,49 @@ function write_tex_macros(path::AbstractString, pairs::Vector{Pair{String,String
         close(io)
     end
     return nothing
+end
+
+"""
+    talk_table_rows(grid::DataFrame, refs::DataFrame; hedge::Bool)::Vector{String}
+
+The body lines of a backup number table for one hedge setting: one `label & v_CD & … & v_LS \\\\` line per row of
+`grid` (the `talk_realrun_grid` output), in row order, with the utilities in `TABLE_ALLOCATOR_ORDER`, then one line per
+row of `refs` (columns `name`, `value`) with its value in every column. Values are ending wealth ÷ start at 3
+decimals. Throws `ArgumentError` when a row lacks a utility.
+"""
+function talk_table_rows(grid::DataFrame, refs::DataFrame; hedge::Bool)::Vector{String}
+    # the cells of this hedge setting, keyed by (row, utility)
+    labels = Dict{Int,String}()
+    cells = Dict{Tuple{Int,String},Float64}()
+    for i in 1:nrow(grid)
+        if Bool(grid.hedge[i]) == hedge
+            labels[grid.row[i]] = string(grid.label[i])
+            cells[(grid.row[i], string(grid.allocator[i]))] = grid.value[i]
+        end
+    end
+
+    # one line per row, utilities in table order
+    lines = String[]
+    for r in sort(collect(keys(labels)))
+        parts = [labels[r]]
+        for a in TABLE_ALLOCATOR_ORDER
+            if !haskey(cells, (r, a))
+                throw(ArgumentError("talk_table_rows: row $(labels[r]) has no $(a) value"))
+            end
+            push!(parts, _talk_decimals(cells[(r, a)], 3))
+        end
+        push!(lines, join(parts, " & ") * " \\\\")
+    end
+
+    # the references, the same value in every column
+    for i in 1:nrow(refs)
+        parts = [string(refs.name[i])]
+        for a in TABLE_ALLOCATOR_ORDER
+            push!(parts, _talk_decimals(refs.value[i], 3))
+        end
+        push!(lines, join(parts, " & ") * " \\\\")
+    end
+    return lines
 end
 
 # Index of `d` in `dates`, or 0 when it is not there.
