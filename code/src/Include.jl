@@ -87,6 +87,7 @@ export path_seed, growth_window, ema_rate, drift_path, drift_variance, sim_resid
 export SYNTH_HMM, SYNTH_TRAIN, SYNTH_ALPHA_WINDOWS, fit_name_model, model_sd_ratio, ewls_beta_path, beta_path_stats,
     real_drift_targets, bank_beta_stats, fit_beta_drift, alpha_parts, fit_alpha_drift
 export market_path_stats, path_sets, synthetic_runs, run_synthetic_path, path_done, write_path_files
-export ew_rebalance_gap, abs_acf, mean_pairwise_corr, real_reference, path_diagnostics, check_table
+export ew_rebalance_gap, abs_acf, mean_pairwise_corr, real_reference, path_diagnostics, check_table,
+    beta_le0_windows, alpha_correlation
 export PICKER_ROWS, picker_key, path_cells, bench_cells, grid_table, format_grid, head_to_head, head_to_head_grid,
     real_percentiles

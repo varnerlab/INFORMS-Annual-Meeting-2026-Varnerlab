@@ -37,17 +37,39 @@ function main()
     order = sortperm(paths.typical_rank)
     ids = paths.path_id[order[1:N_CHECK]]
     diags = Vector{NamedTuple}(undef, N_CHECK)
+    carry = zeros(Float64, N_CHECK)   # each path's OLS α correlation, 2014–2024 vs the trading window
     t_paths = time()
     Threads.@threads for k in 1:N_CHECK
         sm = synthetic_market(gen, ids[k])
         c = calibrate(sm.md; train_start=s.train_start, train_stop=s.train_stop, window=s.omega_window)
         diags[k] = path_diagnostics(gen, sm, c, ref; trade=TRADE)
+        carry[k] = alpha_correlation(sm.md, SYNTH_TRAIN, TRADE)
     end
     println(N_CHECK, " check paths: ", round(time() - t_paths; digits=1), " s")
 
     # Step 4: V1 over every path in paths.csv, then the table of V1–V6 and V9
     v1 = (median_growth=median(paths.train_growth), n_paths=nrow(paths))
     table = check_table(diags, ref, v1)
+
+    # Step 4b: two report-only rows that give the tables their real references.
+    # V6: names whose online β̂ ≤ 0, counted in real 2014–2024 windows as long as the trading window, each started from
+    # the real calibration as the 2025–26 count is; next to the synthetic 2025–26 count (median over the check paths).
+    W = beta_le0_windows(md, calib; trade=TRADE)
+    n_syn = Int[]
+    for d in diags
+        push!(n_syn, d.n_beta_le0)
+    end
+    row_v6 = ("V6", "names whose online β̂ ≤ 0 on some day of a real 2014–2024 window as long as 2025–26, median over " *
+        "the $(nrow(W)) windows from $(W.start[1]) (range $(minimum(W.n_beta_le0))–$(maximum(W.n_beta_le0))); " *
+        "synthetic: 2025–26, median over paths", Float64(median(n_syn)), Float64(median(W.n_beta_le0)), "report only",
+        missing)
+    insert!(table, findlast(==("V6"), table.check) + 1, row_v6)
+    # V9: how much each name's α carries from 2014–2024 into the trading window, real against the check paths' median
+    row_v9 = ("V9", "correlation of OLS α, 2014–2024 vs 2025–26", median(carry), alpha_correlation(md, SYNTH_TRAIN, TRADE),
+        "report only", missing)
+    insert!(table, findlast(==("V9"), table.check) + 1, row_v9)
+    println("real 2014–2024 windows for the hedge-name count: ", join(string.(W.start, " → ", W.stop, ": ",
+        W.n_beta_le0), "; "))
 
     # Step 5: V7, the first check path built twice, every market-data field compared with ==
     a = synthetic_market(gen, first(ids)).md
@@ -87,8 +109,11 @@ function main()
     println(io)
     println(io, "- Check paths: the first ", N_CHECK, " paths by `typical_rank` in `paths.csv` (ids ", join(ids, ", "), ").")
     println(io, "- Each check path is recalibrated on ", SYNTH_TRAIN[1], " → ", SYNTH_TRAIN[2],
-        " with the study's `calibrate`, then compared with the real market over that window. The two rows on names",
-        " whose online β̂ ≤ 0 use the trading window ", TRADE[1], " → ", TRADE[2], " instead.")
+        " with the study's `calibrate`, then compared with the real market over that window. The rows on names",
+        " whose online β̂ ≤ 0 use the trading window ", TRADE[1], " → ", TRADE[2], " instead, except that the third",
+        " one's real count comes from 2014–2024 windows as long as the trading window, each started from the real",
+        " calibration as the 2025–26 count is. The last V9 row correlates each name's α on 2014–2024 with its α on",
+        " the trading window.")
     println(io, "- V1 uses all ", nrow(paths), " paths in `paths.csv`.")
     println(io, "- A number with one value per path is the median over the ", N_CHECK, " paths. A number with one value",
         " per name is each name's median over the paths, then the median over the ", length(gen.tickers), " names.")
