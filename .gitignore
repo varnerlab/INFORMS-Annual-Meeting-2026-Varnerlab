@@ -8,6 +8,7 @@ results/synthetic/smoke/
 results/synthetic/*.jld2
 results/gamma_seeds/runs/
 results/large_k/runs/
+results/calendar_baseline/runs/
 results/*/run.log
 !talk/data/
 talk/*.aux
