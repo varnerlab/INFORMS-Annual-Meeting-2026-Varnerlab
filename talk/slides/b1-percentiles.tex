@@ -1,13 +1,16 @@
 % Backup (spec, B1): where each real result falls among the 600 typical futures, from the committed percentile
 % tables; SPY's own percentile is the coral line.
-\begin{frame}{Was 2025 a lucky year?}
-  \vspace{2pt}
+% the seed note sits at the lower left, on the page number's line, so the plot has its line
+{\renewcommand{\vnfootleft}{Real results use the simulated runs' seeds: 5660–5664 for random and bandit pickers,
+  5660 for the rest.}
+\begin{frame}{Real results as percentiles of typical futures}
+  % a group, not braces: beamer would read a brace group after the title as a frame subtitle
+  \begingroup\small Each real result among 600 typical JumpHMM futures. Right of 50 beats the median
+  future.\par\endgroup
+  \vspace{8pt}
   \vndotreadrefs{data/b1_refs.csv}%
-  \vndotplot[xmin=0, xmax=100, xstep=25, xprecision=0, midline=50, spy=\vndotSPY, width=9.1cm, height=3.7cm,
+  \vndotplot[xmin=0, xmax=100, xstep=25, xprecision=0, midline=50, spy=\vndotSPY, width=10.1cm, height=4.25cm,
     xlabel={percentile of the real result among 600 typical futures}]{data/b1_dots.csv}{data/b1_bars.csv}\par
   \vspace{4pt}
   \vndotlegend[legend ew=false]\par
-  \vfill
-  {\scriptsize Real results use the same seeds as the simulated runs: 5660–5664 for random and bandit pickers, 5660
-    for the others.\par}
-\end{frame}
+\end{frame}}

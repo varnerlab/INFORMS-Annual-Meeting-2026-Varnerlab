@@ -8,23 +8,41 @@
 \input{figs/dotplot.tex}
 \input{figs/mpc.tex}
 \input{figs/jumphmm_architecture.tex}
+\input{figs/multiasset.tex}
 \input{figs/stylized_facts.tex}
+\input{figs/market_state.tex}
 
-\title{Coupling Interpretable Allocation, Model-Predictive Control, and Tail-Aware Forecasting for Live Portfolio Management}
+% the title page breaks the title by phrase; the PDF title keeps it on one line
+\title[Coupling Interpretable Allocation, Model-Predictive Control, and Tail-Aware Forecasting for Live Portfolio
+  Management]{Coupling Interpretable Allocation,\\Model-Predictive Control, and\\Tail-Aware Forecasting for\\Live
+  Portfolio Management}
 \subtitle{Jeffrey D. Varner · Cornell University}
 \author{INFORMS Annual Meeting 2026 · San Francisco · Session TD47 · November 3, 2026}
+
+% the agenda's three parts, in order, as the strip names them; each part's test follows it (the backtest after
+% rebalancing, the simulated futures after the market generator), so it carries that part's mark
+\vnsections{ALLOCATION,REBALANCING,MARKET GENERATOR}
 
 \begin{document}
 
 \vntitlepage
 
-\input{slides/02-utility.tex}
-\input{slides/03-mpc.tex}
-\input{slides/04-jumphmm.tex}
-\input{slides/05-realrun.tex}
-\input{slides/06-synthetic.tex}
-\input{slides/07-conclusions.tex}
-\input{slides/08-acknowledgements.tex}
+\input{slides/02-agenda.tex}
+
+% each slide's section in the agenda, which the strip at the top of the slide marks; 0 turns the strip off
+\renewcommand{\vnsection}{1}
+\input{slides/03-utility.tex}
+\input{slides/04-gamma.tex}
+\renewcommand{\vnsection}{2}
+\input{slides/05-mpc.tex}
+\input{slides/06-realrun.tex}
+\renewcommand{\vnsection}{3}
+\input{slides/07-jumphmm.tex}
+\input{slides/08-multiasset.tex}
+\input{slides/09-synthetic.tex}
+\renewcommand{\vnsection}{0}
+\input{slides/10-conclusions.tex}
+\input{slides/11-acknowledgements.tex}
 
 \appendix
 \input{slides/b1-percentiles.tex}

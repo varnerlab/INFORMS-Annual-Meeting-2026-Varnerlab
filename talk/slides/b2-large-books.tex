@@ -1,8 +1,11 @@
 % Backup (spec, B2): global γ against random picks from the whole universe, by basket size, as the share of seed
 % pairs in which global γ ends higher.
-\begin{frame}{Does this work for a real-sized book?}
-  \vspace{2pt}
-  \vndotplot[xmin=0, xmax=100, xstep=25, xprecision=0, midline=50, width=9.1cm, height=2.6cm,
+\begin{frame}{Global γ against random picks, 5 to 200 names}
+  % a group, not braces: beamer would read a brace group after the title as a frame subtitle
+  \begingroup\small The K highest γ in the universe against K random names, from 5 to 200 names. At 50\%, the two
+  picks end higher equally often.\par\endgroup
+  \vspace{9pt}
+  \vndotplot[xmin=0, xmax=100, xstep=25, xprecision=0, midline=50, width=9.1cm, height=3.2cm,
     xlabel={share of seed pairs in which global γ ends higher than random picks (\%)}]%
     {data/b2_dots.csv}{data/b2_bars.csv}\par
   \vspace{4pt}

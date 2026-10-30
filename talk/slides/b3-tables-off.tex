@@ -1,9 +1,10 @@
-% Backup (spec, B3): the real-run numbers behind slide 5, hedge off.
-\begin{frame}{Show me the numbers: hedge off}
+% Backup (spec, B3): the real-run numbers behind slide 6, hedge off.
+\begin{frame}{Terminal wealth by picker and utility: hedge off}
   % the table body is read into a macro first: \input cannot sit inside a tabular
   \CatchFileDef{\vntablerows}{data/b3_rows_hedge_off.tex}{}%
   \centering
   {\footnotesize
+  \renewcommand{\arraystretch}{0.95}%
   \begin{tabular}{l*{7}{r}}
     \toprule
     Picker & CD & CES & CESw & SG & MinVar & Tangent & LS \\
@@ -11,6 +12,8 @@
     \vntablerows
     \bottomrule
   \end{tabular}\par}
-  \vspace{0.6em}
-  {\scriptsize Ending wealth ÷ start, median of 30 runs. Real-data backtest, Jan 2025 – Sep 2026.\par}
+  \vspace{0.4em}
+  {\scriptsize Terminal wealth ÷ initial wealth, median of 30 runs. Real-data backtest, Jan 2025 – Sep 2026.\par
+    CD Cobb–Douglas · CES on shares · CESw CES on weights · SG Stone–Geary · MinVar minimum variance · Tangent the
+    tangency portfolio · LS 130/30 long-short Cobb–Douglas.\par}
 \end{frame}

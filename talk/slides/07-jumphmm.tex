@@ -1,0 +1,22 @@
+% JumpHMM slide (spec, slide 4): the generator's architecture across the slide (user, 2026-10-29: no caption text),
+% and the stylized facts against real SPY as three panels side by side, after Fig. 3 of the JumpHMM paper. The data
+% (talk/data/sf_*.csv): the generator's density sits on SPY's; its tail quantiles are as far out as SPY's or further;
+% its clustering (ACF of |g|) falls from 0.22 at lag 1 to 0.03 by lag 3, while SPY's is still 0.13 at lag 26.
+% the paper reference sits at the lower left, on the page number's line, after the generator's role (review round,
+% 2026-10-30: the title's tail-aware forecasting is the test market, while the controller forecasts with GBM)
+{\renewcommand{\vnfootleft}{The controller forecasts with GBM; JumpHMM generates the test markets. Alswaidan and
+  Varner, arXiv:2603.10202.}
+\begin{frame}{JumpHMM: a market generator with fat tails}
+  \vnjumphmmarchitecture\par
+  \vspace{0pt}
+  % legend for the three panels, in their own line, band and dash styles
+  {\centering\fontsize{7.5}{9}\selectfont\color{vnslidebody}%
+    \tikz[baseline=-0.6ex]\draw[draw=vnaccent, line width=1.2pt] (0,0) -- (0.45,0);~real SPY, 2014–2024\hspace{1.5em}%
+    \tikz[baseline=-0.6ex]{\fill[vnband, fill opacity=0.3] (0,-0.08) rectangle (0.45,0.08);
+      \draw[draw=vnslidelink, line width=0.9pt] (0,0) -- (0.45,0);}~generator, 100 paths: median, 10–90\%\hspace{1.5em}%
+    \tikz[baseline=-0.6ex]\draw[draw=vndottick, line width=0.8pt, dash pattern=on 2.5pt off 1.5pt] (0,0) --
+      (0.45,0);~normal, SPY's mean and SD\par}
+  % half a point more than before: the footer's descenders deepen the page number's line
+  \vspace{-2.5pt}
+  \vnstylizedfacts{3.35cm}{1.47cm}
+\end{frame}}

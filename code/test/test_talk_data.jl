@@ -218,13 +218,13 @@ end
         sy = talk_stylized_facts(y, [y])
         @test sy.abs_acf.real[1] > 0.15 && sy.summary.kurtosis[1] > 3.5
         @test sy.abs_acf.syn_p50[1] ≈ sy.abs_acf.real[1]
-        # an empty bin has density 0, and the generator's percentiles count it: a tail bin that only one of three
-        # paths reaches has a median of 0, not that one path's density
-        z = copy(x)
-        z[1] = mean(x) + 7 * std(x)
-        s3 = talk_stylized_facts(x, [x, x, z])
-        far = findall((s3.density.real .== 0) .& (s3.density.syn_p90 .> 0))
-        @test !isempty(far) && all(s3.density.syn_p50[far] .== 0)
-        @test !any(isnan.(s3.density.real)) && !any(isnan.(s3.density.syn_p10))
+        # the quantiles: a generator equal to the real series has the real quantiles; the median of a normal is ~0
+        @test sf.qq.p == VLINFORMS2026.TALK_QQ_PROBS && sf.qq.syn_p50 ≈ sf.qq.real
+        @test abs(sf.qq.real[findfirst(isequal(0.5), sf.qq.p)]) < 0.03
+        @test isapprox(sf.qq.real[findfirst(isequal(0.975), sf.qq.p)], 1.96; atol=0.05)
+        # |g| autocorrelation runs to a year of lags; the kernel density has no gaps and the normal follows the data
+        @test nrow(sf.abs_acf) == 252 && !any(isnan.(sf.density.real)) && !any(isnan.(sf.density.syn_p10))
+        s3 = talk_stylized_facts(3 .* x .+ 1, [x])
+        @test isapprox(s3.density.normal[findmin(abs.(s3.density.x .- 1))[2]], 1 / (3 * sqrt(2π)); atol=0.005)
     end
 end

@@ -1,0 +1,19 @@
+% Real-run slide (spec, slide 5): picker × utility dot plot, median of 30 runs per cell, with SPY and equal weight.
+% The hedge is defined on the utility slide, so the legend only names it. The paper-trading note is on the takeaways
+% slide (user, 2026-10-30). The plot is as wide as the text area allows and its x range is trimmed to the dots, so
+% close dots spread out. The legend is stacked in the plot's upper right, where the 33-name rows leave it empty, so the
+% plot has the legend's line in height (user, 2026-10-30: mock-up 1, the axis keeps its title). The footer line is
+% empty, so the space above it is cut and the plot runs down toward the page number.
+% Review round (user, 2026-10-30): an academic title in place of "What you hold beats how you weight it"; each row is
+% named a selection rule, as the legend names each dot a weighting rule.
+{\renewcommand{\vnfootskip}{0.2em}
+\begin{frame}{Stock selection matters more than the weighting rule}
+  % a group, not braces: beamer would read a brace group after the title as a frame subtitle
+  \begingroup\small Real-data backtest, Jan 2025 – Sep 2026, 373 names. Each row is a selection rule.\par
+  \endgroup
+  \vspace{7pt}
+  \vndotreadrefs{data/realrun_refs.csv}%
+  \pgfplotsset{vndot extra/.style={extra description/.code={\vndotlegendstacked}}}%
+  \vndotplot[xmin=0.97, xmax=1.72, xstep=0.1, spy=\vndotSPY, ew=\vndotEW, width=10.1cm, height=4.77cm,
+    xlabel={terminal wealth ÷ initial wealth, median of 30 runs}]{data/realrun_grid.csv}{data/realrun_bars.csv}\par
+\end{frame}}

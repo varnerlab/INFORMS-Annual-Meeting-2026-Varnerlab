@@ -1,0 +1,24 @@
+% Conclusions (spec, slide 7), rewritten in the review round (user, 2026-10-30): each takeaway opens with the outline's
+% part and its answer, then one or two sentences of evidence, so the slide answers what slide 2 sets up. Numbers from
+% talk/data/numbers.tex: the wealth ranges and the typical-futures shares are hedge off (talk_numbers in
+% code/src/TalkData.jl). "A third before the horizon": over the real-data runs (seeds 5660–5689 in the tier1,
+% universe and fixed summaries), the median share of re-plans from a band exit or the drawdown stop is 0.33. The
+% sell-off sentence follows slide 9 (every median right of SPY in both stress sets). Sector limits are not named:
+% the study ran with the sector cap off. The paper-trading note sits on the page number's line.
+{\renewcommand{\vnfootleft}{A paper-trading version of this system is running now; its results are not part of this
+  talk.}
+\begin{frame}{Key takeaways}
+  \setbeamerfont{itemize/enumerate body}{size=\small}%
+  \begin{itemize}
+    \setlength{\itemsep}{0.9em}
+    \item {\vnmedium\color{vnslideink} Allocation: stock selection mattered more than the weighting rule.} With the
+      hedge off, seven weighting rules on one 33-name basket ended at \SectorLo–\SectorHi{} times initial wealth;
+      different baskets ended at \BasketLo–\BasketHi.
+    \item {\vnmedium\color{vnslideink} Rebalancing: re-plans came at the horizon, a band exit, or a drawdown stop.}
+      About \Rebalances{} re-plans in 419 trading days, a third of them before the 21-day horizon.
+    \item {\vnmedium\color{vnslideink} Evaluation: in both sell-off sets, every median ended above SPY.} JumpHMM
+      reproduces fat tails, but its volatility clustering fades after a day. With the hedge off, 13 names picked by
+      γ beat 13 random names in \TypicalLo–\TypicalHi\% of typical futures; in bear futures, random picks did as well
+      or better for most rules.
+  \end{itemize}
+\end{frame}}

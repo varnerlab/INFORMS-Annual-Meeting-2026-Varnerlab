@@ -1,0 +1,48 @@
+% Utility slide (user, 2026-10-29): one slide with the problem, max U(n; γ) subject to the study's limits, and the
+% four utilities with their closed forms under the budget alone. γ itself is the next slide.
+% Limits from config/study.toml and _study_problem (code/src/StudyBacktest.jl): the per-name cap is
+% max(w_max, w_max_scale/K) = max(10%, 1.5/K); the sector cap is off (s_max = 1), so it is not shown; the β cap is
+% max(0, 1 − ξ) when the hedge is on. Utilities from code/src/Allocators.jl: CES η = 0.5, Stone–Geary b_i S_i = 1% of W
+% (b_i is in shares: baseline_frac·W/S_i).
+% Pared down (user, 2026-10-29, mock-up option 2): no symbol key. Each line of the program is labelled by name, then
+% its own symbol, then any other symbol it uses with its meaning in parentheses (user: name the symbols that are not
+% obvious), e.g. "turnover budget B (c̄: half spread per share)". The closed form under the budget alone against the convex cone program under the limits is
+% the table's last two rows, the second in the heading color, because that contrast is the slide's point for this
+% audience. ρ, η, b_i and the benchmarks sit at the lower left, on the page number's line.
+{\renewcommand{\vnfootleft}{$\rho = 1 - 1/\eta$, $\eta = 0.5$; $b_i S_i = 1\%$ of $W$. Benchmarks under the same limits:
+  minimum variance, tangency, 130/30.}
+\begin{frame}{Allocation: maximize utility subject to trading limits}
+  Each rebalance chooses $n_i$ shares of each name $i$ to solve:\par
+  \vspace{2pt}
+  % an inline display, so it adds no display skips above and below
+  {\centering
+  $\displaystyle
+    \begin{array}{@{}r@{\;\;}l@{\qquad}l@{}}
+      \max\limits_{n \,\ge\, 0} & U(n;\gamma) & \text{\small utility $U$ ($\gamma_i$: score of name $i$, next slide)}
+        \\[2pt]
+      \text{s.t.} & \sum_i n_i S_i \le W & \text{\small budget $W$ ($S_i$: price of name $i$)} \\[1pt]
+      & w_i \le \bar w & \text{\small single-name cap $\bar w$ ($w_i$: weight of name $i$)} \\[1pt]
+      & \sqrt{w^{\top} \Sigma_g\, w} \le \sigma_{\text{SPY}} & \text{\small volatility cap $\sigma_{\text{SPY}}$
+        ($\Sigma_g$: growth-rate covariance)} \\[1pt]
+      & \bar c\, \lVert n - n^{\text{prev}} \rVert_1 \le B & \text{\small turnover budget $B$ ($\bar c$: half spread
+        per share)} \\[1pt]
+      & \beta^{\top} w \le \bar\beta & \text{\small β cap $\bar\beta$, hedge on (β: beta to SPY)}
+    \end{array}$\par}
+  \vspace{4pt}
+  % the four utilities side by side: U on the first row, the closed form under the budget alone on the second, and on
+  % the third what the limits make of each (the row labels stay short, so the four columns keep their room)
+  {\small
+  \renewcommand{\arraystretch}{1.2}%
+  \setlength{\tabcolsep}{0pt}%
+  \begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}l c c c c@{}}
+    & {\vnmedium\color{vnslideink} Cobb–Douglas} & {\vnmedium\color{vnslideink} CES on shares}
+      & {\vnmedium\color{vnslideink} CES on weights} & {\vnmedium\color{vnslideink} Stone–Geary} \\
+    \hline
+    $U(n;\gamma)$, over $\gamma_i > 0$ & $\sum \gamma_i \ln n_i$ & $(\sum \gamma_i n_i^{\rho})^{1/\rho}$
+      & $(\sum \gamma_i w_i^{\rho})^{1/\rho}$ & $\sum \gamma_i \ln (n_i - b_i)$ \\
+    budget alone & $w_i \propto \gamma_i$ & $n_i \propto (\gamma_i / S_i)^{\eta}$ & $w_i \propto \gamma_i^{\eta}$
+      & $(n_i - b_i)\, S_i \propto \gamma_i$ \\
+    with the limits & \multicolumn{4}{c}{\color{vnslideink} a convex cone program for each utility, solved
+      numerically} \\
+  \end{tabular*}\par}
+\end{frame}}

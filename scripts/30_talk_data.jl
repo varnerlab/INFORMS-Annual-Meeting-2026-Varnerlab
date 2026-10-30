@@ -21,6 +21,8 @@ const MPC_Z = 1.96                                             # the trigger's b
 const SYN_SETS = ["typical", "burst_stress", "bear_stress"]   # the synthetic slide's panels, left to right
 const N_SYN_PATHS = 100                                        # generator paths on the JumpHMM slide
 const CLAIM_KURTOSIS, CLAIM_ACF1, CLAIM_ABS_ACF = 4.0, 0.15, 0.10   # fat tails, little autocorrelation, clustering
+const XI_LIMIT = 1.0                                           # the γ slide's ξ strip runs from −1 to 1
+const SPY_LIMITS = (0.8, 1.4)                                  # its SPY strip, prices ÷ the first day's close
 const ROW_COLUMNS = [:hash, :label, :status, :allocator, :screen, :seed, :hedge, :basket_K, :W0, :terminal, :n_decisions]
 
 """
@@ -92,6 +94,56 @@ function check_claims(summary::DataFrame, abs_acf::DataFrame)::Nothing
     end
     if !(abs_acf.syn_p50[1] > CLAIM_ABS_ACF) || !(abs_acf.syn_p50[3] < CLAIM_ABS_ACF)
         error("the generator's clustering is not short-lived as the slide says: ", abs_acf[1:3, :])
+    end
+    return nothing
+end
+
+"""
+    check_market_state(ms::DataFrame, G::Real)::Nothing
+
+Throw an error unless the γ slide's two strips hold the whole series and show what ξ is made of, on every day of
+the real window: |ξ| ≤ `XI_LIMIT`; SPY and its two EMAs, each ÷ SPY's first close, inside `SPY_LIMITS`; and the
+plotted EMAs give back ξ = −G·(EMA_short/EMA_long − 1).
+"""
+function check_market_state(ms::DataFrame, G::Real)::Nothing
+    for i in 1:nrow(ms)
+        if abs(ms.xi[i]) > XI_LIMIT
+            error("ξ is ", ms.xi[i], " on ", ms.date[i], ", outside the strip's ±", XI_LIMIT)
+        end
+        for col in (:spy, :ema_short, :ema_long)
+            if ms[i, col] < SPY_LIMITS[1] || ms[i, col] > SPY_LIMITS[2]
+                error(col, " is ", ms[i, col], " of SPY's first close on ", ms.date[i], ", outside the strip's ",
+                    SPY_LIMITS)
+            end
+        end
+        if !isapprox(-G * (ms.ema_short[i] / ms.ema_long[i] - 1), ms.xi[i]; atol=1e-9)
+            error("the plotted EMAs do not give back ξ on ", ms.date[i])
+        end
+    end
+    return nothing
+end
+
+"""
+    check_crossings(ms::DataFrame, crossings::DataFrame)::Nothing
+
+Throw an error unless the γ slide has at least one crossing to ring (its figure loops over the rows of `crossings`)
+and, on each crossing's date, the EMAs have changed order since the day before, so each ring sits where the two
+lines cross.
+"""
+function check_crossings(ms::DataFrame, crossings::DataFrame)::Nothing
+    if nrow(crossings) == 0
+        error("the real window has no EMA crossing for the γ slide to ring")
+    end
+    for c in 1:nrow(crossings)
+        k = findfirst(isequal(crossings.date[c]), ms.date)
+        if k === nothing || k == 1
+            error("crossing ", crossings.date[c], " has no day before it in the real window")
+        end
+        before = sign(ms.ema_short[k - 1] - ms.ema_long[k - 1])
+        after = sign(ms.ema_short[k] - ms.ema_long[k])
+        if before == after
+            error("the EMAs do not change order on ", crossings.date[c])
+        end
     end
     return nothing
 end
@@ -209,9 +261,46 @@ function main()
     println(sf.summary)
     check_claims(sf.summary, sf.abs_acf)
     wrote("sf_density.csv", sf.density)
+    wrote("sf_qq.csv", sf.qq)
     wrote("sf_acf.csv", sf.acf)
     wrote("sf_abs_acf.csv", sf.abs_acf)
     wrote("sf_summary.csv", sf.summary)
+
+    # the γ slide: SPY, its two EMAs and the market state ξ over the real window, ξ as the backtest computes it
+    # (build_context in code/src/Context.jl): the gain G from the training closes, both EMAs from the first close of
+    # the market data
+    s, _ = load_study(joinpath(REPO, "config", "study.toml"))
+    tr = index_of(md, s.train_start):searchsortedlast(md.dates, s.train_stop)
+    G = xi_gain(md.spy_close[tr]; short=s.xi_short, long=s.xi_long, q=s.xi_quantile)
+    ξ = xi_series(md.spy_close; short=s.xi_short, long=s.xi_long, G=G)
+    ema_short = VLINFORMS2026.ema_series(md.spy_close; span=s.xi_short)
+    ema_long = VLINFORMS2026.ema_series(md.spy_close; span=s.xi_long)
+    i0 = index_of(md, REAL_START)
+    i1 = index_of(md, REAL_STOP)
+    ms = DataFrame(date=Date[], spy=Float64[], ema_short=Float64[], ema_long=Float64[], xi=Float64[], falling=Int[])
+    for i in i0:i1
+        # falling is 1 on the days the slide shades, those with ξ > 0
+        falling = 0
+        if ξ[i] > 0
+            falling = 1
+        end
+        S0 = md.spy_close[i0]
+        push!(ms, (md.dates[i], md.spy_close[i] / S0, ema_short[i] / S0, ema_long[i] / S0, ξ[i], falling))
+    end
+    check_market_state(ms, G)
+    wrote("market_state.csv", ms)
+    println("market state: G = ", round(G; digits=2), ", ξ > 0 on ", sum(ms.falling), " of ", nrow(ms), " days")
+
+    # the crossings: the first day of each new sign of ξ, where the slide rings the EMAs at their mean
+    crossings = DataFrame(date=Date[], level=Float64[])
+    for i in 2:nrow(ms)
+        if ms.falling[i] != ms.falling[i - 1]
+            push!(crossings, (ms.date[i], (ms.ema_short[i] + ms.ema_long[i]) / 2))
+        end
+    end
+    check_crossings(ms, crossings)
+    wrote("market_state_crossings.csv", crossings)
+    println("EMA crossings: ", join(string.(crossings.date), ", "))
     return nothing
 end
 

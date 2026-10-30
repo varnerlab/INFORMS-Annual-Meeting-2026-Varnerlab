@@ -1,82 +1,91 @@
-% The stylized facts on the JumpHMM slide (spec, slide 4): real SPY daily growth 2014–2024 against 100 paths of this
-% year's generator. Input once in the preamble, after vnslides and mpc.tex (for the colors deepskyblue1, gray95 and
-% vnmpcred).
+% The stylized facts on the JumpHMM slide (spec, slide 4), after Fig. 3 of the JumpHMM paper
+% (HMM-w-jumps-paper/arxiv-paper/figs/main/Fig03-Model-Comparison.pdf): real SPY daily growth 2014–2024 against 100
+% generator paths of the same length. Input once in the preamble, after vnslides (for vnplotpanel and vnplotgrid)
+% and mpc.tex (for vnband).
 %
-% \vnstylizedfacts{<width>} draws three stacked panels with plot areas <width> wide, from talk/data/sf_density.csv,
-% sf_acf.csv and sf_abs_acf.csv (scripts/30_talk_data.jl):
-%   (a) fat tails: density of the standardized growth (per SD) on a log scale, x in SDs from the mean, with N(0,1);
-%   (b) little autocorrelation: ACF of g at lags 1–20 (trading days);
-%   (c) volatility clustering: ACF of |g| at lags 1–20.
-% In each, the generator is a band from its 10th to 90th percentile with its median line, and real SPY is the red
-% line. An empty density bin is 0: on the log scale the lines break there, the real series' isolated tail bins show
-% as small dots, and the band's edges stop at the bottom of the axis.
+% \vnstylizedfacts{<width>}{<height>} draws three panels side by side, each with a plot area <width> by <height>,
+% from talk/data/sf_density.csv, sf_qq.csv and sf_abs_acf.csv (scripts/30_talk_data.jl):
+%   (a) fat tails: kernel density of g (per 1/yr), with the normal of SPY's mean and SD dashed;
+%   (b) tail quantiles: the generator's quantiles against SPY's, 0.1st to 99.9th percentile, on the 45° line;
+%   (c) volatility clustering: ACF of |g| at lags 1–252 (trading days).
+% The generator is its median with a 10th–90th percentile band (whiskers in (b)), and real SPY is the gold line, as SPY is on the
+% dot plots.
+% Plot areas share their bottom edge; each panel sits a fixed gap right of the last, room for its own y labels.
+% Negative tick labels are written out with a true minus sign, and every tick label is in the text font.
 
 % the look shared by the three panels
 \pgfplotsset{
   vnsf/.style={
-    scale only axis, height=0.8cm,
-    axis background/.style={fill=gray95},
+    scale only axis,
+    axis background/.style={fill=vnplotpanel},
     axis line style={draw=none},
-    grid=major, major grid style={draw=white, line width=0.6pt},
+    grid=major, major grid style={draw=vnplotgrid, line width=0.6pt},
     tick style={draw=none},
-    tick label style={font=\fontsize{6.5}{7.8}\selectfont, color=vndottick},
-    xlabel style={font=\fontsize{7}{8.4}\selectfont, color=vnslidebody, yshift=4pt},
-    title style={font=\fontsize{7.5}{9}\vnmedium, text=vnslideink, anchor=south west, at={(0,1)}, yshift=-3pt,
-      inner sep=1pt},
-    unbounded coords=discard,
+    tick label style={font=\fontsize{7}{8.4}\selectfont, color=vndottick},
+    xticklabel style={/pgf/number format/assume math mode=true},
+    yticklabel style={/pgf/number format/assume math mode=true, /pgf/number format/fixed},
+    label style={font=\fontsize{7.5}{9}\selectfont, color=vnslidebody},
+    xlabel style={yshift=3pt},
+    ylabel style={yshift=-3pt},
+    % one box height for every title, so titles with and without descenders share a baseline
+    title style={font=\fontsize{8.5}{10}\vnmedium, text=vnslideink, yshift=-3pt, text height=1.6ex,
+      text depth=0.45ex},
   },
 }
 
-% \vnsfseries{<file>}{<x column>}: the generator's 10th–90th percentile band and median, then the real line
-\newcommand{\vnsfseries}[2]{%
-  \addplot[name path=vnsflo, draw=none, forget plot] table[col sep=comma, x=#2, y=syn_p10] {#1};
-  \addplot[name path=vnsfhi, draw=none, forget plot] table[col sep=comma, x=#2, y=syn_p90] {#1};
-  \addplot[fill=deepskyblue1, fill opacity=0.25, draw=none, forget plot] fill between[of=vnsflo and vnsfhi];
-  \addplot[draw=vnslidelink, line width=0.8pt, mark=none] table[col sep=comma, x=#2, y=syn_p50] {#1};
-  \addplot[draw=vnmpcred, line width=1.2pt, line join=round, mark=none] table[col sep=comma, x=#2, y=real] {#1};
+% \vnsfband[<median line width>]{<file>}{<x column>}: the generator's 10th–90th percentile band and its median line
+\newcommand{\vnsfband}[3][0.9pt]{%
+  \addplot[name path=vnsflo, draw=none, forget plot] table[col sep=comma, x=#3, y=syn_p10] {#2};
+  \addplot[name path=vnsfhi, draw=none, forget plot] table[col sep=comma, x=#3, y=syn_p90] {#2};
+  \addplot[fill=vnband, fill opacity=0.3, draw=none, forget plot] fill between[of=vnsflo and vnsfhi];
+  \addplot[draw=vnslidelink, line width=#1, mark=none] table[col sep=comma, x=#3, y=syn_p50] {#2};
 }
 
-\newcommand{\vnstylizedfacts}[1]{%
+\newcommand{\vnstylizedfacts}[2]{%
   \begin{tikzpicture}
-    % (a) the density, log scale, with the normal curve dashed
-    \begin{axis}[vnsf, name=vnsfa, width=#1,
+    % (a) the density, with the normal of SPY's mean and SD dashed; the generator's median sits on SPY's line, so it
+    % is drawn wide underneath and SPY thin on top, and both show
+    \begin{axis}[vnsf, name=vnsfa, width=#1, height=#2,
       title={fat tails},
-      xmin=-8, xmax=8, xtick={-8,-4,0,4,8},
-      ymode=log, ymin=1e-4, ymax=1, ytick={1e-4,1e-2,1},
-      xlabel={SDs from the mean},
-      unbounded coords=jump,
+      xmin=-10, xmax=10, xtick={-10,-5,0,5,10}, xticklabels={−10,−5,0,5,10},
+      % no label at the bottom edge, 0, so the first x label has the corner to itself
+      ymin=0, ymax=0.3, ytick={0.1,0.2,0.3},
+      xlabel={daily growth, 1/yr}, ylabel={density},
     ]
-      \addplot[name path=vnsflo, draw=none, forget plot]
-        table[col sep=comma, x=x, y expr={max(\thisrow{syn_p10}, 1e-4)}] {data/sf_density.csv};
-      \addplot[name path=vnsfhi, draw=none, forget plot]
-        table[col sep=comma, x=x, y expr={max(\thisrow{syn_p90}, 1e-4)}] {data/sf_density.csv};
-      \addplot[fill=deepskyblue1, fill opacity=0.25, draw=none, forget plot] fill between[of=vnsflo and vnsfhi];
-      \addplot[draw=vnslidelink, line width=0.8pt, mark=none] table[col sep=comma, x=x, y=syn_p50] {data/sf_density.csv};
-      \addplot[draw=vnmpcred, line width=1.2pt, line join=round, mark=*, mark size=0.6pt]
-        table[col sep=comma, x=x, y=real] {data/sf_density.csv};
-      \addplot[draw=vndottick, line width=0.7pt, dash pattern=on 2.5pt off 1.5pt, mark=none]
+      \vnsfband[2.4pt]{data/sf_density.csv}{x}
+      \addplot[draw=vndottick, line width=0.8pt, dash pattern=on 2.5pt off 1.5pt, mark=none]
         table[col sep=comma, x=x, y=normal] {data/sf_density.csv};
+      \addplot[draw=vnaccent, line width=0.9pt, line join=round, mark=none]
+        table[col sep=comma, x=x, y=real] {data/sf_density.csv};
     \end{axis}
-    % (b) the ACF of g
-    \begin{axis}[vnsf, name=vnsfb, width=#1,
-      at={(vnsfa.outer south west)}, anchor=outer north west, yshift=-2pt,
-      title={little autocorrelation},
-      xmin=1, xmax=20, xtick={1,5,10,15,20},
-      ymin=-0.2, ymax=0.2, ytick={-0.2,0,0.2},
-      yticklabel style={/pgf/number format/assume math mode=true, /pgf/number format/fixed},
+    % (b) the generator's quantiles against SPY's, on the 45° line
+    \begin{axis}[vnsf, name=vnsfb, width=#1, height=#2,
+      at={(vnsfa.south east)}, anchor=south west, xshift=1.25cm,
+      title={tail quantiles},
+      % labels inside the corners only, so the x and y labels never meet
+      xmin=-20, xmax=20, xtick={-10,0,10}, xticklabels={−10,0,10},
+      ymin=-20, ymax=20, ytick={-10,0,10}, yticklabels={−10,0,10},
+      xlabel={SPY, 1/yr}, ylabel={generator, 1/yr},
     ]
-      \vnsfseries{data/sf_acf.csv}{lag}
+      \addplot[draw=vndottick, line width=0.6pt, mark=none] coordinates {(-20,-20) (20,20)};
+      \addplot[draw=vnslidelink, line width=0.7pt, mark=*, mark size=1.3pt, only marks,
+        mark options={fill=vnslidelink, draw=vnslidelink},
+        error bars/.cd, y dir=both, y explicit, error bar style={line width=0.7pt, draw=vnslidelink},
+        error mark options={draw=none}]
+        table[col sep=comma, x=real, y=syn_p50, y error plus expr={\thisrow{syn_p90} - \thisrow{syn_p50}},
+          y error minus expr={\thisrow{syn_p50} - \thisrow{syn_p10}}] {data/sf_qq.csv};
     \end{axis}
-    % (c) the ACF of |g|
-    \begin{axis}[vnsf, name=vnsfc, width=#1,
-      at={(vnsfb.outer south west)}, anchor=outer north west, yshift=-2pt,
+    % (c) the ACF of |g| out to a year of lags
+    \begin{axis}[vnsf, name=vnsfc, width=#1, height=#2,
+      at={(vnsfb.south east)}, anchor=south west, xshift=1.25cm,
       title={volatility clustering},
-      xmin=1, xmax=20, xtick={1,5,10,15,20},
-      ymin=0, ymax=0.5, ytick={0,0.25,0.5},
-      yticklabel style={/pgf/number format/assume math mode=true, /pgf/number format/fixed},
-      xlabel={lag, trading days},
+      xmin=1, xmax=252, xtick={1,63,126,189,252},
+      ymin=-0.05, ymax=0.45, ytick={0,0.2,0.4},
+      xlabel={lag, trading days}, ylabel={ACF of $|g|$},
     ]
-      \vnsfseries{data/sf_abs_acf.csv}{lag}
+      \vnsfband{data/sf_abs_acf.csv}{lag}
+      \addplot[draw=vnaccent, line width=1.0pt, line join=round, mark=none]
+        table[col sep=comma, x=lag, y=real] {data/sf_abs_acf.csv};
     \end{axis}
   \end{tikzpicture}%
 }

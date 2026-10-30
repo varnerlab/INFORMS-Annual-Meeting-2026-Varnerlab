@@ -1,0 +1,44 @@
+% γ slide (user, 2026-10-29, mock-up option C, with less text): the score as one equation, its two parts named on the
+% right level with each part, as the limits are named on the utility slide; SPY with its two EMAs (user: show the
+% EMAs that make ξ; each crossing ringed and linked to ξ's zero line) and the market state ξ over the backtest,
+% shaded where ξ > 0; the score's two jobs, one row each. Formulas from code/src/MarketInputs.jl (gamma_weights,
+% xi_series, xi_gain, gtilde_series) and config/study.toml: β floor 0.1, G = 1/(99th percentile of |EMA21/EMA63 − 1|
+% over 2014–2024), g̃_M the 252-day EMA of SPY's growth rate. The γ pickers are the γ rows of the real-run plot; the
+% slide names the two simplest (global top 13, top 3 per sector).
+% The labels are placed on the second run: each part of the fraction is a node the overlay finds by name.
+% Review round (user, 2026-10-30): the two jobs are named Weighting and Selection. Every rule holds the names with
+% γ_i > 0 long; the 130/30 rule also shorts the names with γ_i < 0, weighted by |γ_i| (code/src/AllocatorsLongShort.jl),
+% while the long-only utilities leave γ_i ≤ 0 out of the sum (code/src/Allocators.jl; Stone–Geary still holds those
+% names at b_i). ξ is positive exactly when the 21-day EMA is below the 63-day EMA.
+{\renewcommand{\vnfootleft}{$\xi = -G \left( \text{EMA}_{21} / \text{EMA}_{63} - 1 \right)$ from SPY's 21- and
+  63-day exponential averages; $|\xi| \le 1$ on 99\% of 2014–2024 days.}
+\begin{frame}{The score γ: expected growth, tilted by the market}
+  \hspace*{0.3cm}{\large
+  $\displaystyle \gamma_i = \tanh\!\left(
+    \frac{\tikz[remember picture, baseline=(vngnum.base)]
+            \node[inner sep=0pt, outer sep=0pt] (vngnum) {$\alpha_i + \beta_i\, \tilde g_M$};}
+         {\tikz[remember picture, baseline=(vngden.base)]
+            \node[inner sep=0pt, outer sep=0pt] (vngden) {$\max(|\beta_i|,\, 0.1)^{\xi}$};}
+    \right)$}\tikz[remember picture] \coordinate (vngend);%
+  % the labels start 0.7cm right of the equation: the first ends level with the numerator, the second sits level
+  % with the denominator
+  \begin{tikzpicture}[remember picture, overlay]
+    \path (vngend) ++(0.7cm, 0) coordinate (vngx);
+    \node[anchor=base west, inner sep=0pt, font=\small] (vngn2) at (vngnum.base -| vngx)
+      {$\tilde g_M$: SPY's growth rate, 252-day EMA)};
+    \node[anchor=base west, inner sep=0pt, font=\small] at ([yshift=12.5pt]vngn2.base west)
+      {expected growth ($\alpha_i, \beta_i$: fit of name $i$ to SPY;};
+    \node[anchor=base west, inner sep=0pt, font=\small] at (vngden.base -| vngx)
+      {β penalty ($\xi$: market state, >\,0 when EMA$_{21}$ < EMA$_{63}$)};
+  \end{tikzpicture}\par
+  \vspace{10pt}
+  \vnmarketstate{12.9cm}{1.35cm}{1.2cm}\par
+  \vspace{10pt}
+  % the two jobs, named on the left like the parts of the agenda
+  {\small
+  \noindent\makebox[2.4cm][l]{\vnmedium\color{vnslideink}Weighting}%
+    γ enters $U(n;\gamma)$: names with $\gamma_i > 0$ are held long, and 130/30 shorts $\gamma_i < 0$.\par
+  \vspace{3pt}
+  \noindent\makebox[2.4cm][l]{\vnmedium\color{vnslideink}Selection}%
+    the 13 highest γ overall, or the 3 highest in each sector.\par}
+\end{frame}}

@@ -4,14 +4,15 @@
 %
 % INFORMS 2026 TALK COPY. Adapted from the CHEME 5660 template
 % (CHEME-5660-CourseRepository-Fall-2026/lectures/templates/vnslides.sty) for the
-% talk deck in this folder: local paths for the palette and the seal, a coral rule
-% under every frame title, the slide number bottom right in place of the Cornell
-% lockup, a plain title page, and pgfplots / pgfplotstable / qrcode for the
-% figures. The lecture house rules below still apply, except that the deck has no
-% disclaimer or objectives slide.
+% talk deck in this folder: local paths for the palette and the seal, a short accent
+% rule under every frame title, the slide number bottom right in place of the Cornell
+% lockup, a plain title page, a section strip, and pgfplots / pgfplotstable / qrcode
+% for the figures. The lecture house rules below still apply, except that the deck
+% has no disclaimer or objectives slide.
 %
-% Design target: the Fall-2024 Keynote decks. White field, no chrome, one sans
-% face, two colours, generous whitespace. Built up from beamer's `default`
+% Design target: the Fall-2024 Keynote decks, on a navy field for the talk (user,
+% 2026-10-29: navy and gold, chosen from mock-ups). No chrome, one sans face, two
+% colours, generous whitespace. Built up from beamer's `default`
 % theme rather than down from Madrid/Warsaw -- those carry headline bars,
 % navigation dots and shaded blocks that all have to be removed anyway.
 %
@@ -27,7 +28,6 @@
 \setbeamertemplate{navigation symbols}{}
 \setbeamertemplate{headline}{}
 \setbeamertemplate{blocks}[default]
-\setbeamercolor{background canvas}{bg=white}
 \beamertemplatenavigationsymbolsempty
 
 % ---------- type ---------------------------------------------
@@ -69,12 +69,19 @@
 \input{vnflow.sty}
 
 % ---------- deck palette -------------------------------------
-% Sampled from the Fall-2024 decks rather than guessed. Note vnaccent is a
-% coral, NOT vncarnelian (#B31B1B): the decks have always used the lighter hue.
-\definecolor{vnslideink}{HTML}{333333}   % headings, emphatic body
-\definecolor{vnslidebody}{HTML}{5E5E5E}  % ordinary body copy
-\definecolor{vnaccent}{HTML}{FF644E}     % the coral
-\definecolor{vnslidelink}{HTML}{579ACA}  % hyperlinks
+% The talk runs navy and gold (user, 2026-10-29), in place of the lecture decks'
+% white field with a coral accent: warm white headings, cool light grey body copy,
+% gold for emphasis and steel blue for links and data.
+\definecolor{vnbg}{HTML}{0D1B2A}         % the slide field
+\definecolor{vnslideink}{HTML}{F4F1EA}   % headings, emphatic body
+\definecolor{vnslidebody}{HTML}{B9C3CE}  % ordinary body copy
+\definecolor{vnaccent}{HTML}{E3B23C}     % the gold
+\definecolor{vnslidelink}{HTML}{8DB4DD}  % hyperlinks
+% the plot panels of the forecast and stylized-fact figures, a step lighter than the field, and their grid lines
+\definecolor{vnplotpanel}{HTML}{14283C}
+\definecolor{vnplotgrid}{HTML}{1F3852}
+
+\setbeamercolor{background canvas}{bg=vnbg}
 
 \setbeamercolor{normal text}{fg=vnslidebody}
 \setbeamercolor{frametitle}{fg=vnslideink}
@@ -124,12 +131,19 @@
 \setbeamertemplate{itemize subitem}{--}
 % beamer already insets the frametitle box by the text margin, so adding another
 % \hspace here double-indents the title relative to the body copy.
-% The talk deck sets a short coral rule under every frame title.
+% The talk deck sets a short gold rule under every frame title. \nointerlineskip hangs the rule a fixed distance
+% under the title's descenders; without it the \Large baselineskip leaves the rule floating a full line below.
+% Under the section strip (below) the title sits higher, so the strip takes less of the slide's height.
 \setbeamertemplate{frametitle}{%
-  \vskip0.9em%
+  \ifnum\vnsection>0
+    \vskip0.2em%
+  \else
+    \vskip0.9em%
+  \fi
   \usebeamerfont{frametitle}\usebeamercolor[fg]{frametitle}\insertframetitle\par
-  \vskip0.35em%
-  {\color{vnaccent}\rule{0.072\paperwidth}{1.4pt}}\par}
+  \nointerlineskip\vskip0.5em%
+  {\color{vnaccent}\rule{0.072\paperwidth}{1.4pt}}\par
+  \vskip0.25em}
 
 \RequirePackage{hyperref}
 \hypersetup{colorlinks=true,urlcolor=vnslidelink,linkcolor=vnslidelink,
@@ -147,14 +161,55 @@
 % The template's height is what reserves the bottom band, so give it a real strut
 % above and below -- otherwise body copy runs underneath the lockup. \vnmargin
 % keeps it flush with the body text and the frame title.
-% The talk deck's footer is the slide number alone, bottom right, small and grey.
+% The talk deck's footer is "Varnerlab" and the slide number, bottom right, small and grey, 0.01 of the page width in
+% from the right edge (user, 2026-10-30: further right), which leaves the longest footer notes about 11 pt of space.
 % The title page is a plain frame, so it carries no number.
+% \vnfootleft is empty unless a slide sets it, inside a group around its frame, to put a short reference at the
+% lower left, on the page number's baseline
+% \vnfootskip is the space above the footer line. A slide with nothing in \vnfootleft can lower it, inside a group
+% around its frame, so its body runs down toward the page number
+\newcommand{\vnfootleft}{}
+\newcommand{\vnfootskip}{0.9em}
 \setbeamertemplate{footline}{%
-  \vskip0.9em%
-  \leavevmode\hbox to \paperwidth{\hfill
-    {\fontsize{7}{8}\selectfont\color{vnslidebody}\insertframenumber}%
-    \hspace*{0.075\paperwidth}}%
+  \vskip\vnfootskip%
+  \leavevmode\hbox to \paperwidth{\hspace*{\vnmargin}%
+    {\fontsize{7.5}{9}\selectfont\color{vnslidebody}\vnfootleft}\hfill
+    {\fontsize{7.5}{9}\selectfont\color{vnslidebody}Varnerlab\ \insertframenumber}%
+    \hspace*{0.01\paperwidth}}%
   \vskip0.9em}
+
+% ---------- section strip ------------------------------------
+% The agenda's sections, in small letterspaced capitals across the top of a slide, with the slide's own section dark
+% and underlined in gold and the others grey. \vnsections{<name>,<name>,...} in the preamble names them, in order;
+% \vnsection is the number of the current slide's section, set in the deck file before the slide is input. At 0, the
+% default, the slide has no strip and its title keeps its usual place.
+\definecolor{vnstripoff}{HTML}{8696A8}
+\newcommand{\vnsection}{0}
+\newcommand{\vnsectionnames}{}
+\newcommand{\vnsections}[1]{\renewcommand{\vnsectionnames}{#1}}
+\newcommand{\vnstripfont}{\fontsize{6}{7.2}\selectfont\addfontfeatures{LetterSpace=10}}
+% one name in the strip: #1 its number, #2 the name
+\newcommand{\vnstripname}[2]{%
+  \ifnum#1=\vnsection
+    \tikz[baseline=(name.base)]{%
+      \node[inner sep=0pt, text=vnslideink, font=\vnmedium\vnstripfont] (name) {#2};
+      \draw[draw=vnaccent, line width=1pt] ([yshift=-2.5pt]name.south west) -- ([yshift=-2.5pt]name.south east);}%
+  \else
+    {\vnstripfont\color{vnstripoff}#2}%
+  \fi}
+\setbeamertemplate{headline}{%
+  \ifnum\vnsection>0
+    \vskip8pt%
+    \leavevmode\hbox to \paperwidth{\hspace*{\vnmargin}%
+      \foreach \vnStripName [count=\vnStripI] in \vnsectionnames {%
+        % a gap before every name but the first
+        \ifnum\vnStripI>1
+          \hspace{1.8em}%
+        \fi
+        \vnstripname{\vnStripI}{\vnStripName}%
+      }%
+      \hfill}%
+  \fi}
 
 % ---------- content conventions (house rules) -----------------
 % These are editorial, not typographic, but they belong next to the style because
@@ -213,7 +268,7 @@
 % rewording them, so the deck and the notebook agree.
 
 % ---------- author-facing commands ---------------------------
-% \hilite{...}  coral emphasis inside running text (\accent is a TeX primitive)
+% \hilite{...}  accent (gold) emphasis inside running text (\accent is a TeX primitive)
 % \dim{...}      recede a clause to the body grey
 \newcommand{\hilite}[1]{\textcolor{vnaccent}{#1}}
 \newcommand{\dimmed}[1]{\textcolor{vnslidebody}{#1}}
@@ -248,8 +303,10 @@
 % is the official #B31B1B variant -- note that is exactly vncarnelian, i.e. the
 % notes already use the official Cornell red while the decks run a lighter coral.
 % Override per deck with \vnseal{...} if a lecture needs something else.
+% The talk's navy field takes the seal in warm white (vnslideink), recolored from
+% cornell-seal.pdf, whose single fill is a near-black.
 \newcommand{\vnseal}[1]{\def\@vnseal{#1}}
-\vnseal{cornell-seal.pdf}
+\vnseal{cornell-seal-white.pdf}
 % Widths are relative to \textwidth, not \paperwidth: the text area is already
 % inset by the margins, and paperwidth-relative boxes overflow and wrap the seal
 % onto its own line.
@@ -283,11 +340,11 @@
     \begin{minipage}[c]{0.72\textwidth}
       \raggedright
       {\fontsize{17}{20.5}\selectfont\usebeamercolor[fg]{title}\inserttitle\par}
-      \vspace{3pt}
-      {\fontsize{8}{10}\selectfont\dimmed{\insertsubtitle}\par}
-      \vspace{3pt}
-      % talk deck: the third line is the meeting, not a copyright line, so it is set larger
-      {\fontsize{6}{7.2}\selectfont\dimmed{\insertauthor}\par}
+      % talk deck: the speaker line sits clear of the title, and the meeting line is set large enough to read
+      \vspace{9pt}
+      {\fontsize{9}{11}\selectfont\dimmed{\insertsubtitle}\par}
+      \vspace{2pt}
+      {\fontsize{7}{8.4}\selectfont\dimmed{\insertauthor}\par}
     \end{minipage}
     \vfill
   \end{frame}}

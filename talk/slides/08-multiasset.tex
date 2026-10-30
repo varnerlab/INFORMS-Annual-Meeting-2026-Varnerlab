@@ -1,0 +1,14 @@
+% From one market to 373 names (user, 2026-10-30): the JumpHMM slide shows the market model on SPY but not how the
+% other names are made, so this slide shows it, as a flow (mock-up B, chosen over the equation with each part named
+% and the equation with the sector co-movement check). The figure and its sources are in figs/multiasset.tex. The
+% line under it says why the residuals are not reordered: a copula reorder would break their clustering and jumps
+% (design §3). Each future's protocol, recalibrate on the synthetic 2014–2024 and trade the synthetic 2025–26 (design
+% §5), sits at the lower left, on the page number's line.
+{\renewcommand{\vnfootleft}{Each future: recalibrated on synthetic 2014–2024, traded on synthetic 2025–26.}
+\begin{frame}{From one market to 373 names}
+  \begingroup\small Three kinds of JumpHMM, composed into each name’s daily growth rate.\par\endgroup
+  \vspace{6pt}
+  {\centering\vnmultiasset\par}
+  \vspace{8pt}
+  {\small Residuals are not reordered: each keeps its own clustering and jump timing.\par}
+\end{frame}}

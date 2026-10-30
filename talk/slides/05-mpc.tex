@@ -1,0 +1,16 @@
+% MPC slide (spec, slide 3): one real episode, three forecasts; the labels show two of the re-plan triggers, and the
+% title names all three (review round, 2026-10-30: the portfolio, not the market, leaves the band). The run and its
+% whole-backtest counts sit on the page number's line, apart from the episode shown, so the titled date axis has the
+% caption's old height. The counts are this run's (the hand-picked 13, Cobb–Douglas, hedge off, seed 5660 row of
+% results/universe_summary.csv: n_decisions 28, so 27 re-plans after the first allocation; n_horizon 17,
+% n_band_exit 7, n_drawdown 3, so 10 before the horizon).
+{\renewcommand{\vnfootleft}{Hand-picked 13, Cobb–Douglas, hedge off; over Jan 2025 – Sep 2026, 27 re-plans, 10 before
+  the horizon.}
+\begin{frame}{Rebalancing triggers: horizon, forecast band, drawdown}
+  % a group, not braces: beamer would read a brace group after the title as a frame subtitle
+  \begingroup\small
+  {\vnmedium Forecast:} multi-asset GBM, 1,000 paths, 21 trading days ahead. {\vnmedium Plant:} real prices.\par
+  \endgroup
+  \vspace{6pt}
+  \vnmpcfigure{11.5cm}{3.55cm}\par
+\end{frame}}

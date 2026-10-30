@@ -1,98 +1,113 @@
 % The JumpHMM architecture (spec, slide 4), from fig:model_architecture in the JumpHMM paper
 % (HMM-w-jumps-paper/arxiv-paper/sections/main_figures.tex). Input once in the preamble, after vnslides.
-% Same structure and math labels as the paper; only the colors and fonts change: the bottom tail is coral, the top
-% tail link blue, the Poisson clock white with an ink border, and the arrows and notes body grey. The text is set
-% larger than in the paper because the figure is shrunk to half the slide; state labels stay one size smaller so
-% $N-1$ fits its circle.
+% Same structure and math labels as the paper; only the colors and fonts change: the bottom tail is gold, the top
+% tail link blue, the Poisson clock the color of the field with an ink border, and the arrows and notes body grey.
+% Every state is outlined, with no fill: tinted fills turn muddy on the navy field. The thin lines under the bells mix
+% toward the field (vnbg), not toward white.
+% The figure runs the width of the slide (user, 2026-10-29), so it is flatter than the paper's: the states sit 4.6
+% apart instead of 2, the clock sits lower (y = 3.35, not 5) with its text on one line, the emission note moves
+% beside the k-th emission, and the trigger's note sits high on its arrow, above that emission.
+% The row of states (user, 2026-10-29: the row was poor): circles large enough that N−1 fits with room, labels at
+% the size of the notes, bold dots, arrows with visible heads, and no axis line through the circles; the tail
+% braces sit right under their states, and the state-index arrow runs between the two braces.
 %
 % \vnjumphmmarchitecture draws it at the width of the current line.
 \newcommand{\vnjumphmmarchitecture}{%
 \resizebox{\linewidth}{!}{%
 \begin{tikzpicture}[
-  state/.style    = {circle, draw=vnslideink, very thick, minimum size=1.1cm,
-                     inner sep=0pt, font=\Large},
-  tailbot/.style  = {state, fill=vnaccent!25, draw=vnaccent},
-  tailtop/.style  = {state, fill=vnslidelink!25, draw=vnslidelink},
-  midstate/.style = {state, fill=white, draw=vnslideink!70},
-  markov/.style   = {<->, >=Stealth, thin, vnslidebody},
+  state/.style    = {circle, draw=vnslideink, line width=1.4pt, minimum size=1.8cm,
+                     inner sep=0pt, font=\LARGE, text=vnslideink},
+  tailbot/.style  = {state, fill=vnbg, draw=vnaccent},
+  tailtop/.style  = {state, fill=vnbg, draw=vnslidelink},
+  midstate/.style = {state, fill=vnbg, draw=vnslideink!70!vnbg},
+  dots/.style     = {font=\Huge, text=vnslidebody, yshift=-2pt},
+  markov/.style   = {<->, >={Stealth[length=7pt, width=6pt]}, line width=0.9pt, vnslidebody,
+                     shorten <=3pt, shorten >=3pt},
   trigger/.style  = {->, >=Stealth, thick, dashed, vnslideink},
   jumparc/.style  = {->, >=Stealth, very thick},
-  note/.style     = {font=\LARGE, fill=white, inner sep=2pt},
+  note/.style     = {font=\LARGE, fill=vnbg, inner sep=2pt},
 ]
-  \node[tailbot]              (s1)   at ( 0.0, 0) {$1$};
-  \node[tailbot]              (s2)   at ( 2.0, 0) {$2$};
-  \node[font=\Large]          (ld)   at ( 4.0, 0) {$\cdots$};
-  \node[midstate]             (sk)   at ( 6.0, 0) {$k$};
-  \node[font=\Large]          (rd)   at ( 8.0, 0) {$\cdots$};
-  \node[tailtop]              (sNm1) at (10.0, 0) {$N\!-\!1$};
-  \node[tailtop]              (sN)   at (12.0, 0) {$N$};
+  % the chain: tail states, the k-th state, and dots for the states between
+  \node[tailbot]  (s1)   at ( 0.0, 0) {$1$};
+  \node[tailbot]  (s2)   at ( 4.6, 0) {$2$};
+  \node[dots]     (ld)   at ( 9.2, 0) {$\cdots$};
+  \node[midstate] (sk)   at (13.8, 0) {$k$};
+  \node[dots]     (rd)   at (18.4, 0) {$\cdots$};
+  \node[tailtop]  (sNm1) at (23.0, 0) {$N\!-\!1$};
+  \node[tailtop]  (sN)   at (27.6, 0) {$N$};
   \draw[markov] (s1)  -- (s2);
-  \draw[markov] (s2)  -- (ld);
-  \draw[markov] (ld)  -- (sk);
-  \draw[markov] (sk)  -- (rd);
-  \draw[markov] (rd)  -- (sNm1);
+  % the dots sit 2pt low so they look centered on the arrows; the arrows stay on the line through the centers
+  \draw[markov] (s2)  -- (ld.west |- s2);
+  \draw[markov] (ld.east |- sk) -- (sk);
+  \draw[markov] (sk)  -- (rd.west |- sk);
+  \draw[markov] (rd.east |- sNm1) -- (sNm1);
   \draw[markov] (sNm1)-- (sN);
+  % each state's emission, a bell above it
   \draw[vnaccent, thick]
-    plot[domain=-0.42:0.42, samples=40, smooth, variable=\t]
-    ({ 0.0+\t}, {1.45 + 0.72*exp(-\t*\t/0.024)});
-  \draw[vnaccent!25, thin] (-0.42,1.45) -- (0.42,1.45);
+    plot[domain=-0.55:0.55, samples=40, smooth, variable=\t]
+    ({ 0.0+\t}, {1.3 + 0.85*exp(-\t*\t/0.04)});
+  \draw[vnaccent!40!vnbg, thin] (-0.55,1.3) -- (0.55,1.3);
   \draw[vnaccent, thick]
-    plot[domain=-0.42:0.42, samples=40, smooth, variable=\t]
-    ({ 2.0+\t}, {1.45 + 0.72*exp(-\t*\t/0.024)});
-  \draw[vnaccent!25, thin] (1.58,1.45) -- (2.42,1.45);
+    plot[domain=-0.55:0.55, samples=40, smooth, variable=\t]
+    ({ 4.6+\t}, {1.3 + 0.85*exp(-\t*\t/0.04)});
+  \draw[vnaccent!40!vnbg, thin] (4.05,1.3) -- (5.15,1.3);
   \draw[vnslidebody, thick]
-    plot[domain=-0.42:0.42, samples=40, smooth, variable=\t]
-    ({ 6.0+\t}, {1.45 + 0.72*exp(-\t*\t/0.024)});
-  \draw[vnslidebody!40, thin] (5.58,1.45) -- (6.42,1.45);
+    plot[domain=-0.55:0.55, samples=40, smooth, variable=\t]
+    ({13.8+\t}, {1.3 + 0.85*exp(-\t*\t/0.04)});
+  \draw[vnslidebody!40!vnbg, thin] (13.25,1.3) -- (14.35,1.3);
   \draw[vnslidelink, thick]
-    plot[domain=-0.42:0.42, samples=40, smooth, variable=\t]
-    ({10.0+\t}, {1.45 + 0.72*exp(-\t*\t/0.024)});
-  \draw[vnslidelink!25, thin] (9.58,1.45) -- (10.42,1.45);
+    plot[domain=-0.55:0.55, samples=40, smooth, variable=\t]
+    ({23.0+\t}, {1.3 + 0.85*exp(-\t*\t/0.04)});
+  \draw[vnslidelink!40!vnbg, thin] (22.45,1.3) -- (23.55,1.3);
   \draw[vnslidelink, thick]
-    plot[domain=-0.42:0.42, samples=40, smooth, variable=\t]
-    ({12.0+\t}, {1.45 + 0.72*exp(-\t*\t/0.024)});
-  \draw[vnslidelink!25, thin] (11.58,1.45) -- (12.42,1.45);
-  \node[draw=vnslideink, rounded corners=5pt, fill=white, very thick,
+    plot[domain=-0.55:0.55, samples=40, smooth, variable=\t]
+    ({27.6+\t}, {1.3 + 0.85*exp(-\t*\t/0.04)});
+  \draw[vnslidelink!40!vnbg, thin] (27.05,1.3) -- (28.15,1.3);
+  % the Poisson clock, its trigger from the k-th state, and the forced runs into each tail
+  \node[draw=vnslideink, rounded corners=5pt, fill=vnbg, very thick,
         minimum width=2.8cm, minimum height=1.1cm,
-        align=center, font=\LARGE] (clock) at (6.0, 5.0)
-        {Poisson clock\\[1pt]prob.~$\epsilon$};
+        align=center, font=\LARGE] (clock) at (13.8, 3.35)
+        {Poisson clock, prob.~$\epsilon$};
   \draw[trigger] (sk.north) -- (clock.south)
-    node[note, midway, right=5pt, anchor=west, text=vnslidebody] {jump triggered};
-  \draw[jumparc, vnaccent]
-    (clock.west)
-    to[out=180, in=100]
-    node[note, above, sloped, text=vnaccent,
-         pos=0.45, yshift=3pt]
+    node[note, pos=0.82, right=5pt, anchor=west, text=vnslidebody] {jump triggered};
+  % each forced run: straight out of the clock, straight down outside the tail state, and into it from the side, so
+  % the arrow crosses no emission bell
+  \draw[jumparc, vnaccent, rounded corners=10pt]
+    (clock.west) --
+    node[note, above, text=vnaccent, pos=0.5, yshift=1pt]
       {$K\!\sim\!\mathrm{Pois}(\lambda)$ forced steps}
-    (s1.north);
-  \draw[jumparc, vnslidelink]
-    (clock.east)
-    to[out=0, in=80]
-    node[note, above, sloped, text=vnslidelink,
-         pos=0.45, yshift=3pt]
+    (-1.6, 3.35) -- (-1.6, 0) -- (s1.west);
+  \draw[jumparc, vnslidelink, rounded corners=10pt]
+    (clock.east) --
+    node[note, above, text=vnslidelink, pos=0.5, yshift=1pt]
       {$K\!\sim\!\mathrm{Pois}(\lambda)$ forced steps}
-    (sN.north);
+    (29.2, 3.35) -- (29.2, 0) -- (sN.east);
+  % the tails, braced right under their states, and the state index between them
   \draw[decorate,
         decoration={brace, amplitude=6pt, mirror},
         vnaccent, thick]
-    (-0.6, -0.65) -- (2.6, -0.65)
-    node[midway, below=7pt, vnaccent, font=\LARGE]
+    (-0.8, -1.0) -- (5.4, -1.0)
+    node[midway, below=5pt, vnaccent, font=\LARGE]
       {$\mathcal{S}_{-}$\ (bottom tail)};
   \draw[decorate,
         decoration={brace, amplitude=6pt, mirror},
         vnslidelink, thick]
-    (9.4, -0.65) -- (12.6, -0.65)
-    node[midway, below=7pt, vnslidelink, font=\LARGE]
+    (22.2, -1.0) -- (28.4, -1.0)
+    node[midway, below=5pt, vnslidelink, font=\LARGE]
       {$\mathcal{S}_{+}$\ (top tail)};
-  \draw[->, >=Stealth, vnslidebody, thin]
-    (-1.0, -0.5) -- (13.2, -0.5)
-    node[right, font=\LARGE, text=vnslidebody] {state index};
+  \draw[->, >={Stealth[length=7pt, width=6pt]}, vnslidebody, line width=0.9pt]
+    (8.0, -1.5) -- (19.6, -1.5)
+    node[midway, fill=vnbg, inner sep=4pt, font=\LARGE, text=vnslidebody] {state index};
+  % notes: what the k-th state emits, and the ordinary step
   \node[note, align=right, anchor=east, text=vnslidebody]
-    at (5.55, 2.72) {state emission\\[-1pt]
+    at (13.1, 1.75) {state emission\\[-1pt]
       $\mu_k\!+\!\sigma_k\cdot t_5$};
-  \node[note, text=vnslidebody, anchor=west]
-    at (6.55, 0.72)
+  \node[note, text=vnslidebody, anchor=south west]
+    at (14.75, 0.25)
     {prob.~$1\!-\!\epsilon$};
+  % the box around what is drawn, so the slide places the figure by what shows
+  \pgfresetboundingbox
+  \path[use as bounding box] (-1.75,-2.1) rectangle (29.35,4.3);
 \end{tikzpicture}%
 }%
 }

@@ -1,0 +1,29 @@
+% Outline (user, 2026-10-30: frame the talk's arc, not only list its parts; mock-up A, with Evaluation as the third
+% lead). The lead sentence names the three problems, with the title's word, couples. Each row is a number, the part's
+% name as the section strip shows it, and one sentence that opens with the problem the part takes on, as each
+% takeaway opens with its answer. The sentences follow the slides: utility of γ within trading limits (slides 3–4),
+% the three re-plan triggers (slide 5) and the real-data backtest (slide 6), and the JumpHMM futures, typical and
+% stressed (slides 7–9).
+% \parbox[t] sets the first lines of the three boxes on one baseline; \leavevmode starts each box's line before its
+% color, which would otherwise sit above the line in the box and push the text down. The text width is 13.9 cm, so
+% 0.7 + 4.2 + 8.9 cm leaves 0.1 cm.
+\begin{frame}{Outline}
+  \begingroup\raggedright Live portfolio management couples three problems:\\
+    allocation, the timing of rebalancing, and evaluation beyond the historical record.\par\endgroup
+  \vspace{20pt}
+  \noindent\makebox[0.7cm][l]{\vnmedium\fontsize{13}{15.6}\selectfont\color{vnaccent}1}%
+  \parbox[t]{4.2cm}{\raggedright\vnmedium\fontsize{13}{15.6}\selectfont\leavevmode\color{vnslideink}Allocation}%
+  \parbox[t]{8.9cm}{\raggedright\small\leavevmode{\vnmedium\color{vnslideink}What to hold.} Maximize utility of a
+    score γ for each stock, within trading limits.}\par
+  \vspace{14pt}
+  \noindent\makebox[0.7cm][l]{\vnmedium\fontsize{13}{15.6}\selectfont\color{vnaccent}2}%
+  \parbox[t]{4.2cm}{\raggedright\vnmedium\fontsize{13}{15.6}\selectfont\leavevmode\color{vnslideink}Rebalancing}%
+  \parbox[t]{8.9cm}{\raggedright\small\leavevmode{\vnmedium\color{vnslideink}When to trade.} Re-plan at the 21-day
+    horizon, a band~exit, or a drawdown stop; real-data backtest, 2025–26.}\par
+  \vspace{14pt}
+  \noindent\makebox[0.7cm][l]{\vnmedium\fontsize{13}{15.6}\selectfont\color{vnaccent}3}%
+  \parbox[t]{4.2cm}{\raggedright\vnmedium\fontsize{13}{15.6}\selectfont\leavevmode\color{vnslideink}Market
+    generator}%
+  \parbox[t]{8.9cm}{\raggedright\small\leavevmode{\vnmedium\color{vnslideink}Evaluation.} A backtest is one
+    historical path; JumpHMM generates typical and stressed futures.}\par
+\end{frame}

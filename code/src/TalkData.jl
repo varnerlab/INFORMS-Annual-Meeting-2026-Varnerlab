@@ -497,22 +497,19 @@ function _talk_kurtosis(x::AbstractVector)::Float64
     return m4 / m2^2
 end
 
-# Density (per SD) of the standardized `x` in the bins of `edges` (SDs): count/(n·width), so 0 for an empty bin.
-function _talk_density(x::AbstractVector, edges::AbstractVector)::Vector{Float64}
-    z = (x .- mean(x)) ./ std(x)
-    nb = length(edges) - 1
-    counts = zeros(Int, nb)
-    for v in z
-        for b in 1:nb
-            if v >= edges[b] && v < edges[b + 1]
-                counts[b] += 1
-                break
-            end
+# Gaussian kernel density of `x` at each point of `grid` (per unit of `x`), with Silverman's bandwidth
+# h = 0.9·min(SD, IQR/1.34)·n^(−1/5).
+function _talk_kde(x::AbstractVector, grid::AbstractVector)::Vector{Float64}
+    n = length(x)
+    spread = min(std(x), (quantile(x, 0.75) - quantile(x, 0.25)) / 1.34)
+    h = 0.9 * spread * n^(-1 / 5)
+    out = Vector{Float64}(undef, length(grid))
+    for (k, u) in enumerate(grid)
+        acc = 0.0
+        for v in x
+            acc += exp(-0.5 * ((u - v) / h)^2)
         end
-    end
-    out = Vector{Float64}(undef, nb)
-    for b in 1:nb
-        out[b] = counts[b] / (length(z) * (edges[b + 1] - edges[b]))
+        out[k] = acc / (n * h * sqrt(2π))
     end
     return out
 end
@@ -537,56 +534,69 @@ function _talk_row_quantile(M::Matrix{Float64}, q::Real)::Vector{Float64}
 end
 
 """
-    talk_stylized_facts(g_real, g_syn; lags=1:20, edges=-8.0:0.25:8.0)::NamedTuple{(:density, :acf, :abs_acf, :summary)}
+    TALK_QQ_PROBS
 
-The stylized facts of daily growth rates (yr⁻¹) for the JumpHMM slide: one real series `g_real` against the
-synthetic series `g_syn` (a vector of series), as the real value and the 10th, 50th and 90th percentiles across
-the synthetic series:
-- `density`: `x` (bin center, in SDs of the series), `real`, `syn_p10`, `syn_p50`, `syn_p90` and `normal` (the
-  N(0, 1) density), the density (per SD) of each standardized series in the bins of `edges`, 0 for an empty bin
-  (the percentiles count those zeros, so a tail bin that few synthetic series reach has a median of 0);
-- `acf`: `lag` (trading days), `real`, `syn_p10`, `syn_p50`, `syn_p90`, the autocorrelation of g;
-- `abs_acf`: the same for |g| (`abs_acf`);
+The probabilities of the JumpHMM slide's quantile panel: the 0.1st to 99.9th percentile, dense in the tails.
+"""
+const TALK_QQ_PROBS = [0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.975, 0.99, 0.995,
+    0.9975, 0.999]
+
+"""
+    talk_stylized_facts(g_real, g_syn; lags=1:20, abs_lags=1:252, grid=-10.0:0.1:10.0, probs=TALK_QQ_PROBS)
+        ::NamedTuple{(:density, :qq, :acf, :abs_acf, :summary)}
+
+The stylized facts of daily growth rates (yr⁻¹) for the JumpHMM slide, after Fig. 3 of the JumpHMM paper: one
+real series `g_real` against the synthetic series `g_syn` (a vector of series), as the real value and the 10th,
+50th and 90th percentiles across the synthetic series:
+- `density`: `x` (yr⁻¹, the points of `grid`), `real`, `syn_p10`, `syn_p50`, `syn_p90`, the Gaussian kernel
+  density (per yr⁻¹) of each series, and `normal`, the normal density with the real series' mean and SD;
+- `qq`: `p` (the probabilities `probs`), `real`, `syn_p10`, `syn_p50`, `syn_p90`, the p-quantile (yr⁻¹) of each
+  series;
+- `acf`: `lag` (trading days, `lags`), `real`, `syn_p10`, `syn_p50`, `syn_p90`, the autocorrelation of g;
+- `abs_acf`: the same for |g| at the lags `abs_lags`;
 - `summary`: `series` (`"real"`, `"synthetic median"`), `kurtosis` (non-excess, 3 for a normal), `acf1` and
   `abs_acf1` (lag 1); the synthetic row is the median across the synthetic series.
 """
 function talk_stylized_facts(g_real::AbstractVector{<:Real}, g_syn::AbstractVector{<:AbstractVector{<:Real}};
-        lags=1:20, edges=-8.0:0.25:8.0)::NamedTuple{(:density, :acf, :abs_acf, :summary)}
-    e = collect(edges)
-    nb = length(e) - 1
-    nl = length(lags)
+        lags=1:20, abs_lags=1:252, grid=-10.0:0.1:10.0,
+        probs=TALK_QQ_PROBS)::NamedTuple{(:density, :qq, :acf, :abs_acf, :summary)}
+    x = collect(grid)
     ns = length(g_syn)
-    D = Matrix{Float64}(undef, nb, ns)
-    A = Matrix{Float64}(undef, nl, ns)
-    B = Matrix{Float64}(undef, nl, ns)
+    D = Matrix{Float64}(undef, length(x), ns)
+    Q = Matrix{Float64}(undef, length(probs), ns)
+    A = Matrix{Float64}(undef, length(lags), ns)
+    B = Matrix{Float64}(undef, length(abs_lags), ns)
     kurt = Float64[]
     for j in 1:ns
-        D[:, j] = _talk_density(g_syn[j], e)
+        D[:, j] = _talk_kde(g_syn[j], x)
+        Q[:, j] = quantile(g_syn[j], probs)
         for (k, L) in enumerate(lags)
             A[k, j] = _talk_acf(g_syn[j], L)
         end
-        B[:, j] = abs_acf(g_syn[j], lags)
+        B[:, j] = abs_acf(g_syn[j], abs_lags)
         push!(kurt, _talk_kurtosis(g_syn[j]))
     end
-    centers = Float64[]
+    # the normal reference has the real series' mean and SD
+    m = mean(g_real)
+    sd = std(g_real)
     normal = Float64[]
-    for b in 1:nb
-        c = (e[b] + e[b + 1]) / 2
-        push!(centers, c)
-        push!(normal, exp(-c^2 / 2) / sqrt(2π))
+    for u in x
+        push!(normal, exp(-0.5 * ((u - m) / sd)^2) / (sd * sqrt(2π)))
     end
     real_acf = Float64[]
     for L in lags
         push!(real_acf, _talk_acf(g_real, L))
     end
-    real_abs = abs_acf(g_real, lags)
-    density = DataFrame(x=centers, real=_talk_density(g_real, e), syn_p10=_talk_row_quantile(D, 0.1),
+    real_abs = abs_acf(g_real, abs_lags)
+    density = DataFrame(x=x, real=_talk_kde(g_real, x), syn_p10=_talk_row_quantile(D, 0.1),
         syn_p50=_talk_row_quantile(D, 0.5), syn_p90=_talk_row_quantile(D, 0.9), normal=normal)
+    qq = DataFrame(p=collect(probs), real=quantile(g_real, probs), syn_p10=_talk_row_quantile(Q, 0.1),
+        syn_p50=_talk_row_quantile(Q, 0.5), syn_p90=_talk_row_quantile(Q, 0.9))
     acf = DataFrame(lag=collect(lags), real=real_acf, syn_p10=_talk_row_quantile(A, 0.1),
         syn_p50=_talk_row_quantile(A, 0.5), syn_p90=_talk_row_quantile(A, 0.9))
-    absacf = DataFrame(lag=collect(lags), real=real_abs, syn_p10=_talk_row_quantile(B, 0.1),
+    absacf = DataFrame(lag=collect(abs_lags), real=real_abs, syn_p10=_talk_row_quantile(B, 0.1),
         syn_p50=_talk_row_quantile(B, 0.5), syn_p90=_talk_row_quantile(B, 0.9))
     summary = DataFrame(series=["real", "synthetic median"], kurtosis=[_talk_kurtosis(g_real), median(kurt)],
         acf1=[real_acf[1], median(A[1, :])], abs_acf1=[real_abs[1], median(B[1, :])])
-    return (density=density, acf=acf, abs_acf=absacf, summary=summary)
+    return (density=density, qq=qq, acf=acf, abs_acf=absacf, summary=summary)
 end
