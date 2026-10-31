@@ -1,0 +1,100 @@
+The clearest result of the study concerned allocation. On real prices without the market hedge (when on, the hedge
+capped the portfolio's beta at a level that fell as the market weakened and let up to five stocks with zero or
+negative beta enter), the seven weighting rules applied to one selection of $33$ stocks (three in each of the $11$
+sectors) ended within $0.15$ of one another, and all seven ended below SPY. The selections themselves ended further
+apart, from $1.03$ to $1.70$ times initial wealth across all combinations, and the wide spread came from the
+$13$-stock selections, made across the whole universe of $373$ stocks without a sector quota, and from the two lists the author picked in
+advance ($13$ stocks, and the same $13$ plus two). One explanation, consistent with these runs but not tested by them,
+is that the shared limits left the weighting rules little room. Every rule, including the three benchmark portfolios (minimum variance, tangency and $130/30$ long-short), faced the
+same cap on each stock's weight and the same cap on portfolio volatility, so the rules differed mainly in how they
+spread the invested wealth among the selected stocks within those caps. The results do not show that any one
+selection rule is reliably better on real data. The hand-picked $13$-stock list ended highest, but it is one list chosen by one
+person, and its result cannot be separated from chance. The three score-based $13$-stock rules, which took the $13$
+highest scores (the expected growth rate from a single-index fit divided by a power of the stock's market beta that
+depended on the market's recent direction) with no screen, a correlation screen or a liquidity screen, ended above
+the two random $13$-stock controls, drawn from the whole universe or from its $100$ most liquid stocks, under every
+weighting rule, while the three $33$-stock rules (ranked by score, chosen by a
+bandit, or drawn at random within each sector) ended in overlapping ranges. The $13$-stock rules were added after the
+backtests of the $33$-stock rules on the same trading window had been seen, so their comparison with random
+selections is exploratory, and one historical path cannot show whether the difference would
+persist~\cite{baileyEtAl2014, harveyLiu2015}.
+
+The rebalancing controller re-planned, re-solving the allocation from the current holdings, on a schedule set partly
+by its own forecast errors. Across combinations of selection and weighting rule, the median of each combination's
+$30$ runs brought a fifth to three fifths of its re-plans forward of the $21$-day
+horizon, through a band exit (the realized portfolio value leaving the range the forecast considered likely) or a
+drawdown stop (wealth falling $8\%$ below its peak), and early re-plans were more frequent for stocks selected by
+score than for random stocks, a difference the study did not examine. The forecast, a geometric Brownian motion,
+represents neither the heavy tails nor the volatility clustering of daily growth rates~\cite{mandelbrot1963,
+cont2001}, so band exits are expected to occur more often than they would if the forecast model were correct, and
+the band served both as a trigger and as a running check on the forecast. A forecast model that represents
+volatility clustering~\cite{engle1982, bollerslev1986} would widen the band after volatile days and narrow it after
+calm ones, so its effect on the number of early re-plans cannot be signed in advance, and this was not tested.
+Against re-planning every $21$ trading days alone, the early re-plans made the median worst drawdown smaller in most
+combinations of selection and weighting rule, with the hedge on or off, and raised trading cost in all of them.
+Median terminal wealth, by contrast, rose with the early re-plans in about half of the combinations with the hedge
+off and in fewer than half with it on. The same pattern held in the two stress sets of synthetic futures, whose
+declines were deeper than the real one: the early re-plans made the median worst drawdown smaller in nearly every
+combination, by about as much as on real prices, and raised median terminal wealth in fewer than half of the
+combinations in the set with jump bursts and in most of those in the set without (Tables~\ref{tab:S-calendar-burst} and~\ref{tab:S-calendar-bear}).
+The triggers therefore limited losses more than they added growth, and the protection they gave did not grow with
+the depth of the decline.
+
+% results/synthetic/tables/{burst,bear}_stress_hedge_{off,on}_wealth_median.csv (lowest cells 0.92412 and 0.77386
+% against equal-weight 0.91555 and 0.75313, margins 0.0086 and 0.0207); results/synthetic/rows/path_*.csv mean_portfolio_beta, ten main selection rules, hedge
+% off, median over seeds within a path, then over the 200 paths of each stress set (burst 0.322--0.764, bear
+% 0.229--0.850); real-price range from results/*_summary.csv as in results.tex
+Results on the simulated markets describe how this system behaved in one generator's markets and are not forecasts.
+In both stress sets, the futures with the deepest declines of simulated SPY, one drawn from futures whose market path
+contained a jump episode (a sustained burst of large daily moves) and one from futures without, every combination of
+selection and weighting rule ended above simulated SPY bought and held in the median, with the hedge on or off.
+Random selections did so as well, so choosing stocks by score or by bandit was not needed for this result, and every
+combination also did so with the band exit and the drawdown stop switched off, so the early re-plans were not needed
+either (Tables~\ref{tab:S-calendar-burst} and~\ref{tab:S-calendar-bear}). The equal-weight universe,
+which has neither limits nor triggers, also ended above simulated SPY in both stress sets, so part of the margin over
+SPY belonged to the simulated market itself, and every combination's median exceeded the equal-weight median by as
+little as $0.009$ in the set with jump episodes and $0.021$ in the set without. A likely cause of the margin over SPY is
+that the portfolios carried less market exposure than the index. With the hedge off, the average market beta of the
+portfolios was below one in every combination, at $0.32$ to $0.76$ in the stress set with jump episodes and $0.23$ to
+$0.85$ in the set without (medians over futures), as on real prices ($0.39$ to $0.90$), and the market term of a
+portfolio with a beta below one falls less than the market when the market factor falls, whatever stocks it holds.
+The volatility cap, set at SPY's historical level, is one reason the beta stays below one, but the study did not run
+the system without it.
+
+The synthetic market also lacked two features of real sell-offs. Each stock's own simulated residual was generated
+independently of the others, so co-movement among stocks came only from the simulated SPY and the sector factors.
+Real residual co-movement tends to rise in sell-offs~\cite{longinSolnik2001, angChen2002}, and its absence may
+understate how much a portfolio of a few stocks loses relative to the index. The generator's volatility clustering
+also decayed within about a day, faster than in the data, so turbulent stretches in the synthetic futures were
+shorter than in real markets, which may affect both the depth of drawdowns and how often the triggers fired. The
+effect of the market hedge also changed sign across markets. The hedge lowered
+market exposure in every combination on real prices but reduced terminal wealth in most of them, and it reduced
+terminal wealth in most combinations of the $600$ typical futures, which were drawn at random from $10{,}000$
+simulated paths. In the stress set without jump episodes it raised terminal wealth in most combinations, and in the
+stress set with jump episodes it raised terminal wealth in about half of them. Since the hedge's beta cap tightens after
+the market has started to fall, it pays only when the decline continues.
+
+The comparison of score-based and random selections on synthetic futures needs a further qualification. The
+generator gave each synthetic stock a constant intercept, its 2014--2024 single-index intercept shrunk toward the
+average across stocks. In the synthetic market, a stock's intercept on the calibration years was therefore positively
+correlated with its intercept on the trading window: across stocks, the two correlated at $0.10$, against $-0.12$ in the real market.
+The score's trend term is a daily updated estimate of this intercept, so in the synthetic futures it carried
+information about future growth by construction, and the share of typical futures in which score-based selections
+beat random ones is partly a consequence of that design. The spread of estimated intercepts across stocks was also
+wider in the synthetic market than in the real one ($0.089$ against $0.076$ per year), and a wider spread of
+persistent intercepts gives a score-based selection more to find. The intercept spread was the one check the
+generator failed among the $22$ that had a pass criterion, whereas the intercept correlation and the clustering
+shortfall were reported without one. On real prices, the score-based $13$-stock rules still ended above random
+selections even though intercepts did not persist from 2014--2024 into 2025--2026. The study does not separate
+whether that came from the score's market term, from shorter-lived trends picked up by the daily updated estimate,
+or from chance.
+
+The study has further limits. The trading window covered $420$ trading days with one broad sell-off, in the spring
+of 2025. The universe held only stocks that were members of the S\&P~500 index at the date of the constituent
+snapshot and traded on every day from 2014 to 2026, so it carries survivorship bias~\cite{brownEtAl1992}. Neither
+the portfolios nor SPY earned dividends, so every comparison is in prices alone. The simulated fills charged half the
+bid-ask spread and a linear market-impact term, the turnover limit, a cap on the half-spread cost of the trades at each re-plan, used the half spread alone, and taxes were not
+modeled. A paper-trading deployment of the system is running, but its results are not part of this study. Natural
+extensions are a forecast model with heavy tails and volatility clustering for the controller, runs without the volatility cap to measure its share of the stress-set results, residual
+co-movement across stocks and less persistent intercepts in the synthetic market, and evaluation of selection rules
+over many historical windows.

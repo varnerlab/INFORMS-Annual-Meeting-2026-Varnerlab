@@ -1,0 +1,55 @@
+% Source: results/synthetic/tables/{typical,burst_stress,bear_stress}_head_to_head.csv, metric wealth,
+% column share_above_0 (x 100).
+\begin{table}[H]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\caption{\textbf{Selection by $\gamma$ against random picks on synthetic futures.} Share of futures (\%) in which
+the rule that selected by $\gamma$ ended with a higher terminal wealth ratio $W_T/W_0$ than random picks of the
+same size, by weighting rule (column), stress set and hedge setting. With the market hedge on, a cap on portfolio $\beta$ tightened as the market weakened and up to five names with zero or negative $\beta$ could be held. Global $\gamma$ held the $K$ highest-$\gamma$
+names in the universe and was compared with $K$ names drawn at random from the whole universe; $\gamma$ per sector
+was compared with three random names per sector. Each random rule contributed the median of five seeds in each
+future. A value of 50 means that each rule ended higher in half of the futures.}
+\label{tab:S-head-to-head}
+\begin{tabular}{l*{7}{r}}
+\toprule
+Comparison & CD & CES & CESw & SG & MinVar & Tangent & LS \\
+\midrule
+\multicolumn{8}{l}{\emph{Typical futures (600), hedge off}} \\
+Global $\gamma$ vs.\ random, 5 names & 62.3 & 62.3 & 64.8 & 64.5 & 62.5 & 61.3 & 64.2 \\
+Global $\gamma$ vs.\ random, 13 names & 70.7 & 71.2 & 70.5 & 69.7 & 64.5 & 62.3 & 70.0 \\
+Global $\gamma$ vs.\ random, 34 names & 70.2 & 68.2 & 71.0 & 70.8 & 67.2 & 58.0 & 69.0 \\
+$\gamma$ per sector vs.\ random per sector & 73.2 & 72.7 & 73.2 & 73.3 & 64.8 & 60.0 & 73.7 \\
+\addlinespace
+\multicolumn{8}{l}{\emph{Typical futures (600), hedge on}} \\
+Global $\gamma$ vs.\ random, 5 names & 63.2 & 62.7 & 64.2 & 64.5 & 62.0 & 60.2 & 63.2 \\
+Global $\gamma$ vs.\ random, 13 names & 68.8 & 69.8 & 68.7 & 68.8 & 65.7 & 63.2 & 71.5 \\
+Global $\gamma$ vs.\ random, 34 names & 67.7 & 68.3 & 70.3 & 71.2 & 65.3 & 60.7 & 68.0 \\
+$\gamma$ per sector vs.\ random per sector & 72.3 & 71.7 & 73.7 & 71.5 & 66.7 & 63.5 & 73.2 \\
+\addlinespace
+\multicolumn{8}{l}{\emph{Burst stress (200), hedge off}} \\
+Global $\gamma$ vs.\ random, 5 names & 53.0 & 53.0 & 52.5 & 53.5 & 66.5 & 62.5 & 57.5 \\
+Global $\gamma$ vs.\ random, 13 names & 52.5 & 53.0 & 55.0 & 57.5 & 67.0 & 67.5 & 53.5 \\
+Global $\gamma$ vs.\ random, 34 names & 58.5 & 63.5 & 61.0 & 65.0 & 60.5 & 55.0 & 56.5 \\
+$\gamma$ per sector vs.\ random per sector & 66.0 & 63.0 & 64.5 & 70.0 & 72.0 & 64.5 & 63.0 \\
+\addlinespace
+\multicolumn{8}{l}{\emph{Burst stress (200), hedge on}} \\
+Global $\gamma$ vs.\ random, 5 names & 54.0 & 54.5 & 58.0 & 58.5 & 60.0 & 64.0 & 54.0 \\
+Global $\gamma$ vs.\ random, 13 names & 56.0 & 59.0 & 59.0 & 61.0 & 64.5 & 64.0 & 48.5 \\
+Global $\gamma$ vs.\ random, 34 names & 53.0 & 60.0 & 66.0 & 69.0 & 61.0 & 54.0 & 57.5 \\
+$\gamma$ per sector vs.\ random per sector & 61.5 & 60.0 & 60.0 & 70.0 & 60.5 & 60.0 & 61.0 \\
+\addlinespace
+\multicolumn{8}{l}{\emph{Bear stress (200), hedge off}} \\
+Global $\gamma$ vs.\ random, 5 names & 40.0 & 38.5 & 41.5 & 45.0 & 72.0 & 63.0 & 43.0 \\
+Global $\gamma$ vs.\ random, 13 names & 29.0 & 28.5 & 28.0 & 38.0 & 70.0 & 71.0 & 29.5 \\
+Global $\gamma$ vs.\ random, 34 names & 53.5 & 46.0 & 47.0 & 65.5 & 69.0 & 72.0 & 35.5 \\
+$\gamma$ per sector vs.\ random per sector & 54.0 & 44.0 & 50.5 & 67.0 & 68.5 & 74.5 & 42.5 \\
+\addlinespace
+\multicolumn{8}{l}{\emph{Bear stress (200), hedge on}} \\
+Global $\gamma$ vs.\ random, 5 names & 43.0 & 41.5 & 44.0 & 46.5 & 63.0 & 60.0 & 37.5 \\
+Global $\gamma$ vs.\ random, 13 names & 33.5 & 34.0 & 34.5 & 45.0 & 66.5 & 61.0 & 30.5 \\
+Global $\gamma$ vs.\ random, 34 names & 48.5 & 50.0 & 49.0 & 61.0 & 59.5 & 63.0 & 40.5 \\
+$\gamma$ per sector vs.\ random per sector & 53.5 & 53.5 & 53.0 & 63.5 & 61.0 & 63.0 & 40.0 \\
+\bottomrule
+\end{tabular}
+\end{table}

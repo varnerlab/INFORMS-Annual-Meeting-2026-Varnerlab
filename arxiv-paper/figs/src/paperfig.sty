@@ -1,0 +1,53 @@
+% Paper versions of the talk's figures: the same TikZ / pgfplots code as talk/figs/*.tex, on a white page.
+% Each figure source in this folder is compiled with XeLaTeX from the talk/ folder, so the figure code and its data
+% (talk/figs/*.tex, talk/data/*.csv) are the deck's own; build_figs.sh does that and copies the PDFs to figs/main and
+% figs/supplement. Only the colors and the text weight change: Helvetica Neue Regular (the deck's Light is too thin
+% at paper size on white), dark ink, a light grey plot panel, and a darker gold for SPY.
+\ProvidesPackage{paperfig}
+\RequirePackage{fontspec}
+\IfFontExistsTF{Helvetica Neue}
+  {\setsansfont{Helvetica Neue}[BoldFont={Helvetica Neue Medium}]
+   \newfontfamily\vnlight{Helvetica Neue}
+   \newfontfamily\vnmedium{Helvetica Neue Medium}
+   \newfontfamily\vnheavy{Helvetica Neue Bold}}
+  {\setsansfont{TeX Gyre Heros}
+   \newcommand{\vnlight}{\normalfont}
+   \newcommand{\vnmedium}{\bfseries}
+   \newcommand{\vnheavy}{\bfseries}}
+\renewcommand{\familydefault}{\sfdefault}
+\RequirePackage{amsmath,amssymb,mathtools}
+\RequirePackage{unicode-math}
+\setmathfont{latinmodern-math.otf}
+\RequirePackage{xcolor}
+\RequirePackage{tikz}
+\usetikzlibrary{arrows.meta,calc,decorations.pathreplacing,positioning}
+\RequirePackage{graphicx}
+\RequirePackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepgfplotslibrary{fillbetween}
+\RequirePackage{pgfplotstable}
+
+% the deck's color names, for a white page
+\definecolor{vnbg}{HTML}{FFFFFF}
+\definecolor{vnslideink}{HTML}{1A1A1A}
+\definecolor{vnslidebody}{HTML}{3D4752}
+\definecolor{vnaccent}{HTML}{C28A12}
+\definecolor{vnslidelink}{HTML}{2E6DA4}
+\definecolor{vnplotpanel}{HTML}{F2F4F7}
+\definecolor{vnplotgrid}{HTML}{DCE2E9}
+
+% the figure files define their own colors when input; \paperfigcolors resets them for the white page
+\newcommand{\paperfigcolors}{%
+  \definecolor{vndotoff}{HTML}{3F7FBF}%
+  \definecolor{vndoton}{HTML}{1B3F66}%
+  \definecolor{vndotbar}{HTML}{E2E8EF}%
+  \definecolor{vndotew}{HTML}{6F7C89}%
+  \definecolor{vndotgrid}{HTML}{E9EDF2}%
+  \definecolor{vndotaxis}{HTML}{9AA6B2}%
+  \definecolor{vndottick}{HTML}{3D4752}%
+  \definecolor{vnband}{HTML}{3E8ED0}%
+  \definecolor{vnmpcred}{HTML}{D9432F}%
+}
+% the deck's footer macros, unused on paper
+\newcommand{\vnfootleft}{}
+\newcommand{\vnfootskip}{0.9em}

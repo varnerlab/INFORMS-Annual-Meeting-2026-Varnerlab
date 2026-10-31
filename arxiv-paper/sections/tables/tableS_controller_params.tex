@@ -1,0 +1,56 @@
+% tableS_controller_params.tex
+% Settings of the real-data runs. Sources: config/study.toml (settings), results/calibration_summary.toml
+% (calibrated values), code/src/Backtest.jl (_BT_ADV_DAYS, _BT_HELD_W), trading-day counts from
+% code/src/Data.jl on data/ and talk/data/market_state.csv.
+\begin{table}[H]
+\centering
+\small
+\caption{\textbf{Controller and backtest settings.} Settings of every real-data run, from the study
+configuration, with the values fitted on the calibration window. Windows, horizons and intervals are in trading
+days, and growth rates are in $\mathrm{yr}^{-1}$.}
+\label{tab:S-controller-params}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Setting} & \textbf{Symbol} & \textbf{Value} \\
+\midrule
+\multicolumn{3}{@{}l}{\textit{Windows and wealth}} \\[2pt]
+% config/study.toml [window]; 2,767 and 420 trading days counted with code/src/Data.jl
+Calibration window & & 2014-01-03 to 2024-12-31 ($2{,}767$ days) \\
+Trading window & & 2025-01-02 to 2026-09-04 ($420$ days) \\
+Length of a trading day & $\Delta t$ & $1/252$~yr \\
+Initial wealth & $W_0$ & $100{,}000$~USD \\[4pt]
+\multicolumn{3}{@{}l}{\textit{Estimation}} \\[2pt]
+% config/study.toml [sim], [market], [covariance]; results/calibration_summary.toml
+Half-life of the online single-index fit & $h$ & $63$ days \\
+Prior weight of the online fit & $N_0$ & $63$ pseudo-observations \\
+SPY growth mean, 2014--2024 & $m_M$ & $0.1061$~$\mathrm{yr}^{-1}$ \\
+SPY growth variance, 2014--2024 & $v_M$ & $7.511$~$\mathrm{yr}^{-2}$ \\
+SPY growth SD, 2014--2024 & $\sigma_{\mathrm{SPY}}$ & $2.741$~$\mathrm{yr}^{-1}$ ($0.1727$ annualized) \\
+Span of SPY's average growth rate & & $252$ days \\
+Residual covariance window & $L_\Omega$ & $126$ days \\
+Residual shrinkage weight & $\lambda$ & $0$ (chosen from $0, 0.1, \dots, 1$) \\[4pt]
+\multicolumn{3}{@{}l}{\textit{Forecast, triggers and picks}} \\[2pt]
+% config/study.toml [triggers], [screens]; code/src/Backtest.jl (_BT_HELD_W = 1e-3)
+Forecast horizon & $T$ & $21$ days \\
+Forecast paths & $N_p$ & $1{,}000$ \\
+Band half-width & $z$ & $1.96$ standard deviations \\
+Drawdown limit & $D_{\max}$ & $0.08$, peak reset at each drawdown \\
+Cash revisit & & $21$ days \\
+Pick interval & & $21$ days, and at band exits \\
+Smallest position traded & & $0.001\,W$ \\[4pt]
+\multicolumn{3}{@{}l}{\textit{Costs and cash}} \\[2pt]
+% config/study.toml [costs], [allocators] borrow_rate; code/src/Backtest.jl (_BT_ADV_DAYS = 63)
+Half spread & $\bar c$ & $5$~bps \\
+Impact coefficient & $\kappa$ & $0.001$ \\
+Window of the average daily volume & & $63$ days \\
+Borrow fee on short positions & $b$ & $0.0075$~$\mathrm{yr}^{-1}$ \\
+Commission & & $0$ \\
+Cash growth & $g_f$ & DTB3, Eq.~\eqref{eq:riskfree} \\[4pt]
+\multicolumn{3}{@{}l}{\textit{Experiment grids}} \\[2pt]
+% config/study.toml [grid], [screens]; results/large_k/large_k_summary.csv (K = 100, 200)
+Seeds & & $5660$ to $5689$ ($30$ per cell) \\
+Names per sector (per-sector rules) & & $3$ ($33$ names) \\
+Basket sizes (universe-wide rules) & $K$ & $5, 8, 13, 21, 34$, and $100$, $200$ \\
+\bottomrule
+\end{tabular}
+\end{table}

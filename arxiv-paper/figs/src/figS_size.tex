@@ -1,0 +1,12 @@
+% Fig. S-size: global gamma against random picks from K = 5 to 200 names, real data (backup slide B2).
+\documentclass[border=2pt, varwidth=18cm]{standalone}
+\usepackage{paperfig}
+\input{figs/dotplot.tex}
+\paperfigcolors
+\begin{document}
+\vndotplot[xmin=0, xmax=100, xstep=25, xprecision=0, midline=50, width=9.6cm, height=3.4cm,
+  xlabel={share of seed pairs in which global γ ends higher than random picks (\%)}]%
+  {data/b2_dots.csv}{data/b2_bars.csv}\par
+\vspace{4pt}
+\vndotlegend[legend spy=false, legend ew=false]\par
+\end{document}

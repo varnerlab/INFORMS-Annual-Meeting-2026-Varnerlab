@@ -1,0 +1,136 @@
+\documentclass{article}
+\PassOptionsToPackage{numbers, compress}{natbib}
+\usepackage[preprint]{neurips_2026}
+
+% --- standard packages ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[colorlinks=true,linkcolor=blue!70!black,citecolor=blue!70!black,urlcolor=blue!70!black]{hyperref}
+\hypersetup{
+  pdftitle={Interpretable Allocation and Model-Predictive Rebalancing of Equity Portfolios, Tested on Real and
+    Synthetic Markets},
+  pdfauthor={Jeffrey D. Varner}
+}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{nicefrac}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{bm}
+\usepackage{multirow}
+\usepackage{lineno}
+\usepackage{needspace}
+
+% Main tables and figures are collected after the references, before the SI.
+% Algorithms stay in the body; SI floats retain their local placement.
+\setcounter{topnumber}{2}
+\setcounter{bottomnumber}{1}
+\setcounter{totalnumber}{3}
+\renewcommand{\topfraction}{0.85}
+\renewcommand{\bottomfraction}{0.5}
+\renewcommand{\textfraction}{0.10}
+\renewcommand{\floatpagefraction}{0.75}
+\usepackage[section]{placeins} % keep arXiv floats within their source section
+\usepackage{flafter} % never place a float before its source location
+
+% --- custom commands ---
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Var}{\operatorname{Var}}
+\newcommand{\Cov}{\operatorname{Cov}}
+\newcommand{\eps}{\varepsilon}
+\newcommand{\tg}{\tilde{g}}
+
+\title{Interpretable Allocation and Model-Predictive Rebalancing of Equity Portfolios, Tested on Real and
+  Synthetic Markets}
+
+\author{%
+  Jeffrey D.~Varner\thanks{Corresponding author.} \\
+  Robert Frederick Smith School of Chemical and Biomolecular Engineering \\
+  Cornell University, Ithaca, NY 14850 \\
+  \texttt{jdv27@cornell.edu} \\
+}
+
+\begin{document}
+\raggedbottom
+\clubpenalty=10000
+\widowpenalty=10000
+\displaywidowpenalty=10000
+
+\maketitle
+
+\begin{abstract}
+\input{sections/abstract}
+\end{abstract}
+
+\vspace{0.5em}
+\noindent\textbf{Keywords:} portfolio allocation; utility maximization; model-predictive control; rebalancing;
+backtesting; synthetic financial data; hidden Markov model; stress testing.
+
+\section{Introduction}\label{sec:introduction}
+\input{sections/introduction}
+
+\section{Related Work}\label{sec:related-work}
+\input{sections/related}
+
+\section{Methods}\label{sec:method}
+\input{sections/methods_data}
+\input{sections/method_allocation}
+\input{sections/method_mpc}
+\input{sections/method_synthetic}
+
+\section{Results}\label{sec:results}
+\input{sections/results}
+
+\section{Discussion}\label{sec:discussion}
+\input{sections/discussion}
+
+\section{Conclusion}\label{sec:conclusion}
+\input{sections/conclusion}
+
+\input{sections/endmatter}
+
+\clearpage
+\bibliographystyle{unsrtnat}
+\bibliography{References_v1}
+
+\clearpage
+\section*{Tables}
+\input{sections/main_tables}
+
+\clearpage
+\section*{Figures}
+\input{sections/main_figures}
+
+\clearpage
+\appendix
+\section*{Online Appendix}
+\renewcommand{\thesection}{S\arabic{section}}
+\renewcommand{\thesubsection}{S\arabic{section}.\arabic{subsection}}
+\renewcommand{\thefigure}{S\arabic{figure}}
+\renewcommand{\thetable}{S\arabic{table}}
+\renewcommand{\theequation}{S\arabic{equation}}
+\renewcommand{\thealgorithm}{S\arabic{algorithm}}
+\renewcommand{\theHsection}{supp.\arabic{section}}
+\renewcommand{\theHsubsection}{supp.\arabic{section}.\arabic{subsection}}
+\renewcommand{\theHfigure}{supp.\arabic{figure}}
+\renewcommand{\theHtable}{supp.\arabic{table}}
+\renewcommand{\theHequation}{supp.\arabic{equation}}
+\renewcommand{\theHalgorithm}{supp.\arabic{algorithm}}
+\setcounter{section}{0}
+\setcounter{figure}{0}
+\setcounter{table}{0}
+\setcounter{equation}{0}
+\setcounter{algorithm}{0}
+
+\input{sections/appendix}
+
+\end{document}

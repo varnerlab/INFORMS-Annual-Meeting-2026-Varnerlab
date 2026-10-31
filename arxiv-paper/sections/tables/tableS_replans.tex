@@ -1,0 +1,81 @@
+% Source: results/tier1_summary.csv, results/universe_summary.csv and results/gamma_seeds/gamma_seeds_summary.csv
+% (ok rows, seeds 5660--5689, each run label once, the rows of talk_realrun_grid in code/src/TalkData.jl); each entry
+% is a median over the 30 runs of one selection rule, weighting rule and hedge setting.
+% Share: (n_band_exit + n_drawdown) / (n_decisions - 1), the first allocation excluded. Cost: 100 x (median
+% total_cost of the triggered runs / median total_cost of the calendar-only runs - 1), the calendar-only runs being
+% the rows of results/calendar_baseline/calendar_baseline_summary.csv with the same label plus "|calendar".
+\begin{table}[H]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\caption{\textbf{Early re-plans and trading cost on real prices.} For each selection rule (row) and weighting rule
+(column), the median over the $30$ runs (seeds $5660$--$5689$) of the share of re-plans after the first allocation
+that came before the $21$-day horizon, because the portfolio value left the $95\%$ band of the forecast or fell
+$8\%$ below its peak, and the percentage by which the median trading cost of these runs exceeded that of their $30$
+calendar-only twins (Table~\ref{tab:S-calendar}). The other re-plans came at the horizon or on a basket change. The
+first three rows of each block hold $33$ names ($3$ per sector), the next five hold $13$, and the last two are the
+hand-picked lists. With the market hedge on, a cap on portfolio $\beta$ tightened as the market weakened and up to
+five names with zero or negative $\beta$ could be held.}
+\label{tab:S-replans}
+\begin{tabular}{l*{7}{r}}
+\toprule
+Selection rule & CD & CES & CESw & SG & MinVar & Tangent & LS \\
+\midrule
+\multicolumn{8}{l}{\emph{Hedge off, share of re-plans brought forward by the band or the drawdown stop}} \\
+$\gamma$ per sector & 0.42 & 0.32 & 0.42 & 0.42 & 0.40 & 0.56 & 0.50 \\
+Bandit per sector & 0.33 & 0.36 & 0.31 & 0.31 & 0.29 & 0.37 & 0.46 \\
+Random per sector & 0.25 & 0.24 & 0.20 & 0.24 & 0.30 & 0.25 & 0.31 \\
+\addlinespace[2pt]
+Global $\gamma$ & 0.48 & 0.36 & 0.41 & 0.43 & 0.41 & 0.45 & 0.55 \\
+Correlation-aware $\gamma$ & 0.50 & 0.38 & 0.41 & 0.47 & 0.50 & 0.52 & 0.61 \\
+Liquid then $\gamma$ & 0.29 & 0.29 & 0.28 & 0.29 & 0.38 & 0.53 & 0.52 \\
+Random liquid 100 & 0.31 & 0.33 & 0.29 & 0.33 & 0.27 & 0.32 & 0.40 \\
+Random whole universe & 0.26 & 0.26 & 0.25 & 0.26 & 0.28 & 0.29 & 0.37 \\
+\addlinespace[2pt]
+Hand-picked 13 & 0.37 & 0.40 & 0.40 & 0.43 & 0.35 & 0.44 & 0.39 \\
+Hand-picked 13 + WMT, PG & 0.41 & 0.37 & 0.37 & 0.37 & 0.37 & 0.40 & 0.39 \\
+\addlinespace
+\multicolumn{8}{l}{\emph{Hedge on, share of re-plans brought forward by the band or the drawdown stop}} \\
+$\gamma$ per sector & 0.42 & 0.35 & 0.42 & 0.42 & 0.39 & 0.52 & 0.46 \\
+Bandit per sector & 0.37 & 0.33 & 0.35 & 0.38 & 0.36 & 0.44 & 0.51 \\
+Random per sector & 0.27 & 0.29 & 0.25 & 0.25 & 0.39 & 0.35 & 0.35 \\
+\addlinespace[2pt]
+Global $\gamma$ & 0.47 & 0.41 & 0.50 & 0.48 & 0.45 & 0.47 & 0.56 \\
+Correlation-aware $\gamma$ & 0.45 & 0.43 & 0.47 & 0.45 & 0.45 & 0.50 & 0.61 \\
+Liquid then $\gamma$ & 0.37 & 0.38 & 0.37 & 0.37 & 0.41 & 0.47 & 0.53 \\
+Random liquid 100 & 0.33 & 0.33 & 0.34 & 0.31 & 0.33 & 0.36 & 0.45 \\
+Random whole universe & 0.33 & 0.31 & 0.31 & 0.31 & 0.37 & 0.35 & 0.42 \\
+\addlinespace[2pt]
+Hand-picked 13 & 0.43 & 0.38 & 0.38 & 0.42 & 0.28 & 0.36 & 0.41 \\
+Hand-picked 13 + WMT, PG & 0.44 & 0.37 & 0.37 & 0.39 & 0.33 & 0.48 & 0.40 \\
+\addlinespace
+\multicolumn{8}{l}{\emph{Hedge off, trading cost, \% above the calendar-only twin}} \\
+$\gamma$ per sector & 11 & 7 & 9 & 10 & 23 & 21 & 22 \\
+Bandit per sector & 26 & 25 & 22 & 24 & 27 & 29 & 31 \\
+Random per sector & 13 & 15 & 12 & 14 & 31 & 20 & 21 \\
+\addlinespace[2pt]
+Global $\gamma$ & 28 & 19 & 18 & 19 & 18 & 24 & 29 \\
+Correlation-aware $\gamma$ & 30 & 17 & 15 & 20 & 28 & 22 & 32 \\
+Liquid then $\gamma$ & 5 & 3 & 6 & 5 & 10 & 20 & 17 \\
+Random liquid 100 & 20 & 22 & 20 & 19 & 17 & 21 & 32 \\
+Random whole universe & 18 & 16 & 18 & 16 & 20 & 15 & 33 \\
+\addlinespace[2pt]
+Hand-picked 13 & 8 & 3 & 6 & 10 & 5 & 9 & 17 \\
+Hand-picked 13 + WMT, PG & 10 & 10 & 10 & 10 & 8 & 12 & 22 \\
+\addlinespace
+\multicolumn{8}{l}{\emph{Hedge on, trading cost, \% above the calendar-only twin}} \\
+$\gamma$ per sector & 11 & 6 & 12 & 12 & 26 & 16 & 18 \\
+Bandit per sector & 23 & 18 & 21 & 23 & 34 & 29 & 35 \\
+Random per sector & 15 & 13 & 13 & 9 & 45 & 24 & 21 \\
+\addlinespace[2pt]
+Global $\gamma$ & 21 & 24 & 26 & 25 & 21 & 17 & 31 \\
+Correlation-aware $\gamma$ & 21 & 17 & 24 & 22 & 25 & 20 & 35 \\
+Liquid then $\gamma$ & 24 & 15 & 24 & 25 & 20 & 25 & 22 \\
+Random liquid 100 & 21 & 22 & 19 & 18 & 28 & 22 & 27 \\
+Random whole universe & 23 & 22 & 21 & 22 & 35 & 23 & 30 \\
+\addlinespace[2pt]
+Hand-picked 13 & 20 & 4 & 4 & 5 & 19 & 8 & 15 \\
+Hand-picked 13 + WMT, PG & 12 & 10 & 10 & 6 & 19 & 7 & 18 \\
+\bottomrule
+\end{tabular}
+\end{table}

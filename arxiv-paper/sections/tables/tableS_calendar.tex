@@ -1,0 +1,81 @@
+% Source: results/calendar_baseline/calendar_baseline_summary.csv (4,200 calendar-only runs, z = Inf, D_max = Inf),
+% each paired with its triggered twin in results/tier1_summary.csv, results/universe_summary.csv or
+% results/gamma_seeds/gamma_seeds_summary.csv (same label without "|calendar" and the same settings apart from z and
+% D_max); entries are median over the 30 seeds of the triggered runs minus median of the calendar-only runs, of
+% terminal / W0 and of max_drawdown, as in results/calendar_baseline/calendar_vs_triggers.csv.
+\begin{table}[H]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\caption{\textbf{Re-plan triggers against calendar-only re-planning on real prices.} Each entry is the median of the
+$30$ runs (seeds $5660$--$5689$) with the band exit and the drawdown stop, minus the median of the $30$ runs with
+both switched off, for each selection rule (row) and weighting rule (column). Without the two triggers a run
+re-planned only at the $21$-day horizon, $19$ times over the window. A positive terminal wealth entry means the
+triggered runs ended higher, and a negative maximum drawdown entry means their worst drawdown was smaller. The
+first three rows of each block hold $33$ names ($3$ per sector), the next five hold $13$, and the last two are the
+hand-picked lists. With the market hedge on, a cap on portfolio $\beta$ tightened as the market weakened and up to
+five names with zero or negative $\beta$ could be held. The triggered medians are those of Tables~\ref{tab:realrun}
+and~\ref{tab:S-realrun-on}.}
+\label{tab:S-calendar}
+\begin{tabular}{l*{7}{r}}
+\toprule
+Selection rule & CD & CES & CESw & SG & MinVar & Tangent & LS \\
+\midrule
+\multicolumn{8}{l}{\emph{Hedge off, terminal wealth ratio}} \\
+$\gamma$ per sector & $0.003$ & $-0.016$ & $-0.002$ & $0.007$ & $-0.019$ & $-0.075$ & $-0.062$ \\
+Bandit per sector & $0.013$ & $0.031$ & $0.004$ & $0.010$ & $-0.016$ & $0.003$ & $0.007$ \\
+Random per sector & $0.000$ & $-0.006$ & $0.005$ & $-0.014$ & $-0.015$ & $-0.067$ & $-0.058$ \\
+\addlinespace[2pt]
+Global $\gamma$ & $0.191$ & $0.084$ & $0.104$ & $0.099$ & $0.120$ & $0.002$ & $-0.017$ \\
+Correlation-aware $\gamma$ & $-0.006$ & $0.071$ & $0.043$ & $0.013$ & $0.069$ & $0.055$ & $-0.093$ \\
+Liquid then $\gamma$ & $-0.063$ & $-0.057$ & $-0.063$ & $-0.064$ & $-0.046$ & $-0.005$ & $-0.022$ \\
+Random liquid 100 & $0.013$ & $0.007$ & $0.017$ & $0.008$ & $0.026$ & $0.021$ & $0.004$ \\
+Random whole universe & $-0.037$ & $-0.008$ & $-0.006$ & $-0.039$ & $-0.014$ & $-0.054$ & $-0.050$ \\
+\addlinespace[2pt]
+Hand-picked 13 & $-0.001$ & $0.004$ & $0.034$ & $0.037$ & $0.003$ & $0.009$ & $-0.019$ \\
+Hand-picked 13 + WMT, PG & $0.111$ & $0.122$ & $0.112$ & $0.093$ & $0.012$ & $-0.010$ & $0.093$ \\
+\addlinespace
+\multicolumn{8}{l}{\emph{Hedge off, maximum drawdown}} \\
+$\gamma$ per sector & $0.005$ & $-0.015$ & $0.006$ & $0.006$ & $-0.015$ & $-0.007$ & $-0.025$ \\
+Bandit per sector & $-0.007$ & $-0.009$ & $-0.005$ & $-0.002$ & $-0.002$ & $0.000$ & $-0.009$ \\
+Random per sector & $-0.005$ & $-0.007$ & $-0.008$ & $-0.001$ & $-0.006$ & $0.009$ & $0.002$ \\
+\addlinespace[2pt]
+Global $\gamma$ & $-0.053$ & $-0.024$ & $-0.052$ & $-0.053$ & $-0.014$ & $-0.021$ & $-0.039$ \\
+Correlation-aware $\gamma$ & $-0.013$ & $-0.035$ & $-0.013$ & $-0.013$ & $-0.022$ & $-0.012$ & $-0.031$ \\
+Liquid then $\gamma$ & $0.015$ & $0.001$ & $0.010$ & $0.013$ & $-0.026$ & $-0.012$ & $-0.007$ \\
+Random liquid 100 & $-0.011$ & $-0.019$ & $-0.023$ & $-0.010$ & $0.000$ & $-0.004$ & $-0.019$ \\
+Random whole universe & $-0.010$ & $-0.008$ & $-0.010$ & $-0.009$ & $0.004$ & $0.012$ & $-0.006$ \\
+\addlinespace[2pt]
+Hand-picked 13 & $-0.020$ & $-0.022$ & $-0.001$ & $-0.008$ & $-0.004$ & $-0.002$ & $0.002$ \\
+Hand-picked 13 + WMT, PG & $-0.036$ & $-0.043$ & $-0.038$ & $-0.029$ & $-0.002$ & $0.000$ & $-0.038$ \\
+\addlinespace
+\multicolumn{8}{l}{\emph{Hedge on, terminal wealth ratio}} \\
+$\gamma$ per sector & $-0.006$ & $0.010$ & $0.010$ & $0.002$ & $-0.070$ & $-0.007$ & $-0.045$ \\
+Bandit per sector & $-0.042$ & $-0.022$ & $0.002$ & $0.019$ & $-0.046$ & $-0.033$ & $-0.028$ \\
+Random per sector & $-0.049$ & $-0.068$ & $-0.047$ & $0.004$ & $-0.016$ & $-0.107$ & $-0.085$ \\
+\addlinespace[2pt]
+Global $\gamma$ & $0.081$ & $-0.085$ & $0.011$ & $0.025$ & $0.045$ & $0.183$ & $-0.077$ \\
+Correlation-aware $\gamma$ & $-0.011$ & $0.051$ & $0.034$ & $0.015$ & $0.060$ & $-0.035$ & $-0.113$ \\
+Liquid then $\gamma$ & $-0.165$ & $-0.152$ & $-0.180$ & $-0.174$ & $0.032$ & $-0.069$ & $-0.086$ \\
+Random liquid 100 & $-0.006$ & $0.013$ & $0.007$ & $0.022$ & $-0.007$ & $-0.015$ & $-0.042$ \\
+Random whole universe & $-0.080$ & $-0.026$ & $-0.049$ & $-0.046$ & $-0.041$ & $-0.055$ & $-0.090$ \\
+\addlinespace[2pt]
+Hand-picked 13 & $0.036$ & $-0.022$ & $-0.007$ & $-0.040$ & $-0.045$ & $0.025$ & $-0.010$ \\
+Hand-picked 13 + WMT, PG & $0.087$ & $0.069$ & $0.063$ & $0.034$ & $-0.058$ & $-0.076$ & $0.064$ \\
+\addlinespace
+\multicolumn{8}{l}{\emph{Hedge on, maximum drawdown}} \\
+$\gamma$ per sector & $0.005$ & $-0.021$ & $0.005$ & $0.005$ & $-0.018$ & $-0.016$ & $-0.025$ \\
+Bandit per sector & $-0.003$ & $-0.007$ & $-0.008$ & $-0.008$ & $0.003$ & $-0.002$ & $-0.011$ \\
+Random per sector & $-0.009$ & $-0.011$ & $-0.014$ & $-0.009$ & $-0.010$ & $0.011$ & $0.001$ \\
+\addlinespace[2pt]
+Global $\gamma$ & $-0.053$ & $-0.015$ & $-0.045$ & $-0.054$ & $-0.018$ & $-0.021$ & $-0.036$ \\
+Correlation-aware $\gamma$ & $-0.013$ & $-0.035$ & $-0.013$ & $-0.013$ & $-0.025$ & $-0.013$ & $-0.027$ \\
+Liquid then $\gamma$ & $0.003$ & $-0.004$ & $0.001$ & $0.003$ & $-0.046$ & $-0.010$ & $-0.014$ \\
+Random liquid 100 & $-0.010$ & $-0.015$ & $-0.018$ & $-0.013$ & $-0.002$ & $-0.008$ & $-0.030$ \\
+Random whole universe & $-0.021$ & $-0.012$ & $-0.021$ & $-0.015$ & $-0.010$ & $-0.013$ & $-0.027$ \\
+\addlinespace[2pt]
+Hand-picked 13 & $-0.018$ & $-0.022$ & $-0.008$ & $-0.005$ & $-0.001$ & $-0.001$ & $-0.016$ \\
+Hand-picked 13 + WMT, PG & $-0.039$ & $-0.046$ & $-0.040$ & $-0.026$ & $-0.014$ & $-0.003$ & $-0.045$ \\
+\bottomrule
+\end{tabular}
+\end{table}

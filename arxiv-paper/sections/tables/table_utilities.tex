@@ -1,0 +1,41 @@
+% Table: the four utilities built on the score gamma and their optima under the budget alone.
+% Sources: code/src/Allocators.jl (allocate for MyCobbDouglasRule, MyCESRule, MyCESWeightRule, MyStoneGearyRule;
+% budget_only_weights for CD, CES, CESw); config/study.toml [allocators] ces_eta = 0.5, sg_baseline = 0.01;
+% code/src/Backtest.jl _BT_eps = 1e-3 (floor in shares); code/test/test_allocators_utility.jl (SG closed form);
+% results/limits_day.csv (solver vs closed form for CD, CES, CESw: largest gap 1.03e-5).
+\begin{table}[H]
+\centering
+\small
+\caption{\textbf{Weighting rules built on the score.} Each utility sums over the names with $\gamma_i > 0$ in the
+decision's name set $\mathcal{N}$; $n_i$ are shares, $S_i$ prices (USD/share), $W$ wealth (USD) and
+$w_i = n_i S_i / W$ weights. The optimum under the budget alone pays the floors first and splits the rest among the
+names with $\gamma_i > 0$: the proportionality is normalized so that those weights sum to
+$\hat w = 1 - \sum_{\gamma_j \le 0} \varepsilon S_j / W$ for CD, CES and CESw, whose names with $\gamma_j \le 0$ sit at
+% config/study.toml ces_eta = 0.5, sg_baseline = 0.01; Backtest.jl _BT_eps = 1e-3
+$\varepsilon = 10^{-3}$ shares, and to $1 - 0.01\,\lvert\mathcal{N}\rvert$ for SG, whose baseline is
+$b_i = 0.01\,W/S_i$ shares in every name. A hedge-pool name with $\gamma_i \le 0$ is instead free above its floor,
+with no utility term. Both CES rules use $\eta = 0.5$ and $\rho = 1 - 1/\eta = -1$; at
+$\eta = 1$ they reduce to CD. With the study's limits (Eq.~\ref{eq:allocation}) no closed form exists, and each
+utility is maximized numerically as a convex cone program over the cone in the last column, with the volatility cap
+as a second-order cone and the other limits as linear constraints. Derivations are in
+Appendix~\ref{app:allocation}.}
+\label{tab:utilities}
+\begin{tabular}{@{}llllc@{}}
+\toprule
+Rule & Utility $U(n;\gamma)$ & Optimum under the budget alone & Names with $\gamma_i \le 0$ & Cone \\
+\midrule
+CD   & $\sum \gamma_i \ln n_i$
+     & $w_i \propto \gamma_i$
+     & $\varepsilon$ shares & exponential \\
+CES  & $\big(\sum \gamma_i n_i^{\rho}\big)^{1/\rho}$
+     & $n_i \propto (\gamma_i/S_i)^{\eta}$, so $w_i \propto \gamma_i^{\eta} S_i^{1-\eta}$
+     & $\varepsilon$ shares & power \\
+CESw & $\big(\sum \gamma_i w_i^{\rho}\big)^{1/\rho}$
+     & $w_i \propto \gamma_i^{\eta}$
+     & $\varepsilon$ shares & power \\
+SG   & $\sum \gamma_i \ln (n_i - b_i)$
+     & $w_i - 0.01 \propto \gamma_i$
+     & $b_i$ shares & exponential \\
+\bottomrule
+\end{tabular}
+\end{table}

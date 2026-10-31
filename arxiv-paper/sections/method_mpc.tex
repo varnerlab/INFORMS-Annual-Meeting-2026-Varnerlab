@@ -1,0 +1,223 @@
+% method_mpc.tex
+% Methods: the model-predictive rebalancing controller and the backtest design.
+% Sources (the code is the truth where docs disagree): code/src/StudyBacktest.jl (run_study, _study_problem,
+% _study_decision), code/src/Triggers.jl (check_trigger), code/src/Projection.jl (project_gbm),
+% code/src/Covariance.jl (growth_covariance, shrinkage_loss), code/src/OnlineSIM.jl, code/src/SIM.jl,
+% code/src/MarketInputs.jl, code/src/Screens.jl, code/src/Bandit.jl (_stream_seed), code/src/StudyRunner.jl
+% (run lists, study_stats), code/src/GrowthScorecard.jl, code/src/StudyTables.jl (passive_references),
+% config/study.toml, results/calibration_summary.toml, README.md, scripts/dev/gamma_seeds.jl,
+% scripts/dev/large_k.jl, scripts/30_talk_data.jl, code/src/TalkData.jl.
+
+\subsection{Model-predictive rebalancing}\label{sec:method-mpc}
+
+The controller decides when to re-plan the book and leaves it alone in between. It follows model-predictive
+control in the receding-horizon sense~\cite{garcia1989mpc,mayneEtAl2000}. At each re-plan it measures the
+state of the account (the shares $n_i$, the cash $c$, the wealth $W(t)$, the close prices $S_i(t)$ and the online
+estimates of that day), solves the constrained utility maximization of Algorithm~\ref{alg:allocation} for target
+% config/study.toml [triggers] T = 21
+shares $n^\star$, and predicts the distribution of the wealth of holding $n^\star$ over the next $T = 21$ trading
+days with a multi-asset geometric Brownian motion (GBM). It then compares the measured wealth with the prediction
+every day and re-plans from the newly measured state when the horizon elapses, when the wealth leaves the
+predicted band, or when the book falls a set fraction below its peak. The plan over the horizon is to hold
+$n^\star$ without further trades, and the GBM is the controller's only model of prices. The plant is the price
+process that the plan meets, the recorded prices in the backtest and synthetic prices from per-asset JumpHMM
+generators~\cite{alswaidan2026variance} in the stress test, where the controller still forecasts with the GBM and
+never sees the generator. Multi-period trading by convex optimization~\cite{boydEtAl2017} also re-solves from
+the measured state, but it plans a sequence of trades over the horizon and executes the first of them every
+period. Our controller instead solves a single-period allocation, uses the forecast as a reference for the
+realized wealth, and trades only when a trigger fires, so the band around the forecast acts as a no-trade
+region~\cite{davisNorman1990} placed on the portfolio value relative to its forecast rather than on the weights.
+
+At a re-plan on day $t$ the drift of name $i$ is its expected growth rate
+$\mu_{g,i} = \alpha_i(t) + \beta_i(t)\,\tilde g_M(t)$ ($\mathrm{yr}^{-1}$). Here $\alpha_i(t)$ ($\mathrm{yr}^{-1}$)
+and $\beta_i(t)$ (dimensionless) are the online single-index estimates of name $i$ against SPY~\cite{sharpe1963},
+% config/study.toml [sim] ewls_half_life = 63, ewls_prior_weight = 63; [market] gtilde_window = 252
+fitted by exponentially weighted least squares with a half-life of $63$ trading days from a prior worth $63$
+pseudo-observations at the calibration fit (Appendix~\ref{app:controller}), and $\tilde g_M(t)$
+($\mathrm{yr}^{-1}$) is the exponential moving average of the daily growth rate of SPY with a span of $252$ trading
+days. The covariance $\Sigma_g$ ($\mathrm{yr}^{-2}$) of the daily growth rates of the names in the allocation
+problem is
+\begin{equation}
+  \Sigma_g \;=\; \sigma_M^2(t)\,\beta\beta^{\top} \;+\; (1-\lambda)\,\hat\Omega_\varepsilon
+  \;+\; \lambda\,\mathrm{diag}\big(\hat\Omega_\varepsilon\big),
+  \label{eq:mpc-cov}
+\end{equation}
+where $\beta$ is the vector of the loadings $\beta_i(t)$, $\sigma_M(t)$ ($\mathrm{yr}^{-1}$) is the exponentially
+weighted standard deviation of the daily growth rate of SPY with the same $63$-day half-life, and
+% config/study.toml [covariance] omega_window = 126
+$\hat\Omega_\varepsilon$ ($\mathrm{yr}^{-2}$) is the sample covariance of the residuals
+$\varepsilon_i(s) = g_i(s) - \alpha_i(t) - \beta_i(t)\,g_M(s)$ over the $L_\Omega = 126$ daily growth rates that
+end on day $t$. The weight $\lambda \in [0, 1]$ shrinks the residual covariance toward its diagonal, from the full
+sample covariance at $\lambda = 0$ to the covariance of the single-index model, the target of Ledoit and
+Wolf~\cite{ledoitWolf2003}, at $\lambda = 1$. We chose it on the calibration window by the QLIKE
+% results/calibration_summary.toml (lambda = 0.0)
+loss~\cite{patton2011} of $21$-day variance forecasts for random portfolios, which selected $\lambda = 0$
+(Appendix~\ref{app:controller}). The allocation problem uses the same $\mu_g$ and $\Sigma_g$ in its volatility limit
+and in its minimum-variance and tangency benchmarks, so each book is forecast with the model that sized it.
+
+% config/study.toml [triggers] n_paths = 1000, T = 21
+From the target shares $n^\star$ and the close prices $S_i(t)$, the controller simulates $N_p = 1{,}000$ paths over
+the next $T = 21$ trading days. On path $p$ and day $\tau = 1, \dots, T$ after the re-plan, the log price of each
+name advances by $\Delta t$ times a vector of growth rates drawn from a multivariate normal distribution with mean
+$\mu_g$ and covariance $\Sigma_g$, independently across days and paths,
+\begin{equation}
+  \ln S^{(p)}_i(\tau) \;=\; \ln S^{(p)}_i(\tau-1) \;+\; g^{(p)}_i(\tau)\,\Delta t,
+  \qquad g^{(p)}(\tau) \sim \mathcal{N}\big(\mu_g, \Sigma_g\big),
+  \qquad S^{(p)}_i(0) = S_i(t),
+  \label{eq:mpc-gbm}
+\end{equation}
+a multi-asset GBM~\cite{glasserman2003} written in growth rates. Because $\mu_g$ is the expected growth rate of the
+log price, the drift needs no It\^o correction. The wealth of the plan on path $p$ is
+\begin{equation}
+  W^{(p)}(\tau) \;=\; \sum_i n^\star_i\, S^{(p)}_i(\tau) \;+\; c^\star\, e^{g_f(t)\,\tau\,\Delta t},
+  \qquad c^\star \;=\; W(t) - \sum_i n^\star_i\, S_i(t),
+  \label{eq:mpc-value}
+\end{equation}
+where $c^\star$ (USD) is the cash left after paying for the targets at the close of the decision day. The forecast
+is the sample mean $\mu_W(\tau)$ and standard deviation $\sigma_W(\tau)$ (USD) of $W^{(p)}(\tau)$ across the paths.
+It omits the trading costs, the overnight price change before the fill and, for a 130/30 book, the borrow fee, and
+its paths are seeded with the run seed and the decision date, so a run reproduces its forecasts exactly.
+
+% config/study.toml [triggers] z = 1.96, D_max = 0.08, drawdown_reset = true
+The forecast defines a band $\mu_W(\tau) \pm z\,\sigma_W(\tau)$ with $z = 1.96$, which would contain the wealth on
+about $95\%$ of days if the forecast wealth were normal and the model were correct. With $\tau$ the number of trading
+days since the last re-plan, the controller marks the wealth $W(t)$ at each close, after that day's fills, costs,
+cash growth and fees, updates its running peak $W^{\mathrm{pk}}(t)$, and checks three triggers in turn, acting on
+the first that holds. The drawdown trigger fires when $1 - W(t)/W^{\mathrm{pk}}(t) > D_{\max}$ with $D_{\max} = 0.08$, the horizon
+trigger when $\tau \ge T$, and the band trigger when $W(t)$ lies outside $\mu_W(\tau) \pm z\,\sigma_W(\tau)$, so the
+wealth measured $\tau$ days after a re-plan is compared with the forecast for $\tau$ days ahead on days
+$\tau = 1, \dots, T-1$. A drawdown re-plan sets the peak back to the current wealth, so the trigger fires once for
+each fresh loss of $D_{\max}$ rather than on every day that the book stays below an old peak.
+% README.md (88.5% of Tier 1 decisions before the reset of 2026-10-25)
+We adopted this reset after an earlier pass of the Tier 1 grid (the three per-sector selection rules crossed with
+the seven weighting rules) without it, in which $88.5\%$ of the decisions were
+% code/src/StudyBacktest.jl (_study_lots, trig.projection = nothing); config/study.toml cash_revisit = 21
+drawdown re-plans. A re-plan that leaves no position worth more than $0.1\%$ of wealth sets no band, and the next
+re-plan then comes from the drawdown trigger or, after $21$ trading days, from a cash revisit.
+
+% config/study.toml [screens] repick_interval = 21, repick_on_band_exit = true
+The selection rule picks the basket on the first day, every $21$ trading days after its previous pick, and at
+every band exit. With the hedge on, each pick also refreshes the hedge pool, and for the 130/30 benchmark the short
+candidates. When a timer pick changes the set of names on a day when no trigger fired, the controller re-plans as
+well. Because band exits depend on each run's own wealth path, the dates of the picks, and with them the
+baskets, could differ across weighting rules within a seed. At a re-plan it solves the allocation problem from the shares actually held, so the turnover limit counts
+the changes from that book, queues orders to $n^\star$ for the next open, forecasts the new book from the measured
+wealth $W(t)$ and resets $\tau$ to $0$. Each forecast therefore starts from the measured wealth rather than from
+the previous forecast, and the horizon recedes with every re-plan. If the solve fails, the controller keeps every
+holding, queues no orders and forecasts the kept book. One episode of a real run, three consecutive forecasts and
+the re-plans that ended them, shows the mechanism (Fig.~\ref{fig:mpc}), and Algorithm~\ref{alg:mpc} gives the daily
+loop of a run.
+
+\begin{algorithm}[t]
+\caption{Daily loop of one backtest run. A run fixes a selection rule, a weighting rule, the hedge setting and a
+seed. Every decision uses data dated on or before the close of its day.}
+\label{alg:mpc}
+\begin{algorithmic}[1]
+\REQUIRE trading days $t_1, \dots, t_{420}$; calibration fit on 2014--2024; $W_0$; $T$, $z$, $D_{\max}$, $N_p$
+\ENSURE daily wealth $W(t)$ and the log of re-plans
+\STATE $c \gets W_0$, $n \gets 0$, $W^{\mathrm{pk}} \gets W_0$, $\tau \gets 0$; no band, no pending orders
+\FOR{each trading day $t = t_1, \dots, t_{420}$}
+  \IF{orders are pending}
+    \STATE fill them at the open: sells first, then buys scaled by one factor in $[0,1]$ so that $c \ge 0$; pay
+      the costs of Eq.~\eqref{eq:cost}
+  \ENDIF
+  \IF{$t > t_1$}
+    \STATE $c \gets c\,e^{g_f(t)\Delta t}$ if $c > 0$; charge the borrow fee on short positions; $\tau \gets \tau + 1$
+  \ENDIF
+  \STATE mark $W(t) \gets c + \sum_i n_i S_i(t)$ at the close; $W^{\mathrm{pk}} \gets \max(W^{\mathrm{pk}}, W(t))$
+  \STATE update $\alpha_i, \beta_i, \sigma_M, \tilde g_M, \xi$ and $\gamma_i$ with the growth rates into day $t$
+  \STATE reason $\gets$ the first that holds of: first day; cash revisit (last re-plan went to cash and
+    $\tau \ge 21$); drawdown ($1 - W(t)/W^{\mathrm{pk}} > D_{\max}$); horizon ($\tau \ge T$); band exit
+    ($|W(t) - \mu_W(\tau)| > z\,\sigma_W(\tau)$); otherwise none
+  \IF{first day, or $21$ trading days since the last pick, or reason is band exit (except on the fixed schedule)}
+    \STATE pick the basket with the selection rule; refresh the hedge pool and the short candidates
+    \IF{reason is none and the set of names changed}
+      \STATE reason $\gets$ basket change
+    \ENDIF
+  \ENDIF
+  \IF{reason is not none}
+    \STATE build $\mu_g$ and $\Sigma_g$ (Eq.~\eqref{eq:mpc-cov}) for the names of the allocation problem
+    \STATE solve the allocation problem (Algorithm~\ref{alg:allocation}) from $n$, $W(t)$, $S(t)$: targets $n^\star$
+    \IF{the solve failed}
+      \STATE $n^\star \gets n$; queue no orders
+    \ELSIF{$t < t_{420}$}
+      \STATE queue orders to $n^\star$ for the open of the next day, each target worth at most $0.001\,W(t)$ set
+        to zero shares
+    \ENDIF
+    \STATE simulate $N_p$ paths of Eqs.~\eqref{eq:mpc-gbm} and~\eqref{eq:mpc-value} for the book $n^\star$; store
+      $\mu_W(\tau)$, $\sigma_W(\tau)$, $\tau = 1, \dots, T$
+    \STATE set the band from the forecast (no band if the book holds no position above $0.001\,W(t)$);
+      $\tau \gets 0$
+    \IF{reason is drawdown}
+      \STATE $W^{\mathrm{pk}} \gets W(t)$
+    \ENDIF
+  \ENDIF
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Backtest design}\label{sec:method-backtest}
+
+A backtest run fixes a selection rule, a weighting rule, the hedge setting and a seed, and replays
+% config/study.toml [grid] n_seeds = 30, base_seed = 5660
+Algorithm~\ref{alg:mpc} over the $420$ trading days of the trading window. We used the seeds $5660$ to $5689$, $30$
+runs per cell of an experiment grid. The seed enters in three places: the random selection rules draw each basket
+from a stream seeded with the run seed and the pick date, each sector's bandit seeds its exploration with the run
+seed, the pick date and the sector, and the forecast paths of every re-plan are seeded with the run seed and the
+decision date. For the deterministic selection rules (the $\gamma$-based rules and the hand-picked lists) the seed
+changes only the forecast paths, and through them the band exits and so the dates of the re-plans and picks. Each
+run with the hedge on has a twin with the hedge off and the same seed, identical except that the beta cap and the
+hedge pool are removed.
+
+% results/*_summary.csv and results/calendar_baseline/calendar_baseline_summary.csv: every row status ok; distinct
+% labels over the eight files = 18,238 (14,038 + 4,200 calendar-only)
+We ran nine grids over the full trading window, and all $18{,}238$ distinct runs finished
+% results/tier1_summary.csv (854 rows)
+(Table~\ref{tab:S-grids}). The Tier 1 grid crossed the seven weighting rules with three per-sector selection rules
+% results/fixed_summary.csv (427 rows)
+($3$ names per sector, $33$ names) and the hedge on and off ($854$ runs). The fixed-schedule grid repeated its
+hedge-on half with basket picks only on the $21$-day timer ($427$ runs), while band exits and drawdown stops still
+triggered re-plans, unlike the calendar-only grid. Because the random and bandit streams depend
+only on the seed and the pick date, and the $\gamma$ ranking and the hedge pool only on market data, every weighting
+rule in that grid held the same baskets within a seed.
+% results/universe_summary.csv (4,438 rows = 4,410 universe-wide + 28 hand-picked)
+The universe-wide grid applied five selection rules that pick $K$ names from the whole universe, at
+$K = 5, 8, 13, 21$ and $34$ ($4{,}410$ runs), and the hand-picked grid ran the two hand-picked lists ($28$ runs).
+% results/gamma_seeds/gamma_seeds_summary.csv (4,200 rows; 140 labels repeat tier1, universe-wide and hand-picked runs: 14 + 70 + 28 + 28)
+% results/large_k/large_k_summary.csv (1,680 rows)
+A seed rerun gave each deterministic rule all $30$ seeds ($4{,}200$ runs, $140$ of which repeat earlier runs), and
+the large-book grid extended global $\gamma$ and random picks from the whole universe to $K = 100$ and $200$
+($1{,}680$ runs).
+% results/calendar_baseline/calendar_baseline_summary.csv (4,200 rows, z = Inf, D_max = Inf; n_horizon = 19 and
+% n_basket_change = 0 in every run); scripts/dev/calendar_baseline.jl
+A calendar-only grid repeated the $4{,}200$ runs of the main comparison, described next, with the band exit and the
+drawdown stop switched off ($z = \infty$ and $D_{\max} = \infty$), so that a run re-planned only when the $21$-day
+horizon elapsed, and paired each run with the triggered run of the same selection rule, weighting rule, hedge
+setting and seed ($4{,}200$ runs).
+% results/eta_summary.csv (2,562 rows); results/limits_summary.csv (17 rows)
+Two sensitivity grids varied the CES elasticity $\eta$, one on the Tier 1 grid with the single-name cap on and off
+($2{,}562$ runs) and one on the hand-picked $13$-name list under the budget alone ($17$ runs). This paper does not
+report results from the fixed-schedule grid or from the elasticity grid on the Tier 1 rules, and the budget-only grid
+served as the solver check against the closed forms.
+
+The main comparison crosses ten selection rules with the seven weighting rules, with the hedge on and off. The ten
+are $\gamma$, bandit and random per sector ($33$ names each), global $\gamma$, correlation-aware $\gamma$, liquid
+then $\gamma$, random from the $100$ most liquid names and random from the whole universe ($K = 13$ each), and the
+two hand-picked lists. The $13$-name list (AAPL, MSFT, INTC, MU, AMD, NVDA, GS, BAC, WFC, C, F, GM, JNJ) and its
+$15$-name extension with WMT and PG were chosen in advance by the author, from sectors the author follows and
+without 2025 data. Each is one list chosen by a person. Each of the $140$ cells holds $30$ runs, and we report the
+median over the runs of each cell, never a median pooled across selection rules. For each run we computed the
+terminal wealth ratio $W_T/W_0$, with $W_T$ the wealth at the close of 2026-09-04, the realized growth rate
+$\ln(W_T/W_0)/(419\,\Delta t)$, the maximum drawdown $\max_t\big(1 - W(t)/\max_{s \le t} W(s)\big)$, and the
+annualized Sharpe ratio~\cite{sharpe1966} $\bar y/(\sqrt{\Delta t}\,s_y)$, where $\bar y$ and $s_y$ are the mean and
+standard deviation of the daily excess growth $y(t) = g_W(t) - g_f(t)$, with $g_W$ the daily growth rate of the
+run's wealth. We also recorded the intercept $\alpha_W$ ($\mathrm{yr}^{-1}$) and slope $\beta_W$ of an ordinary least-squares regression of $y(t)$ on the daily excess growth
+of SPY, and the number of re-plans by trigger. Two passive benchmarks received the same metrics. SPY buy-and-hold
+puts $W_0$ into SPY at the close of 2025-01-02, and the equal-weight universe puts $W_0/373$ into each name at that
+close and never rebalances. Both are valued at the closes and pay no trading costs. The universe-wide selection
+rules, their thresholds and the grid of $K$ were designed after the Tier 1 results were known, so their comparison
+is exploratory. The $30$-seed reruns and the large-book runs were added afterwards to measure how much the forecast
+seed moves a deterministic rule and whether the comparison of global $\gamma$ with random picks holds for larger
+books. The calendar-only grids, on real prices and on the synthetic stress sets, were added last, after all other
+results were known, to measure what the two early triggers changed.
+

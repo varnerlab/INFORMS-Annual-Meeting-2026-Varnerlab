@@ -25,3 +25,11 @@ talk/*.xdv
 talk/build/
 talk/informs2026.pdf
 talk/informs2026-*.pdf
+arxiv-paper/*.aux
+arxiv-paper/*.bbl
+arxiv-paper/*.blg
+arxiv-paper/*.fdb_latexmk
+arxiv-paper/*.fls
+arxiv-paper/*.log
+arxiv-paper/*.out
+arxiv-paper/*.tar.gz

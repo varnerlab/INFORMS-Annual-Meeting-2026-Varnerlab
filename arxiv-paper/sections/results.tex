@@ -1,0 +1,313 @@
+% Results (agent D). One section, no subsections. Every number-bearing sentence carries its source in the comment
+% line above it. Real-run cells: ok rows with seeds 5660--5689 of results/tier1_summary.csv,
+% results/universe_summary.csv and results/gamma_seeds/gamma_seeds_summary.csv, each run label counted once (as in
+% scripts/30_talk_data.jl); W_T/W_0 = terminal / W0.
+
+% results/tier1_summary.csv (start, stop); talk/data/market_state.csv (420 trading days)
+We ran the same allocation and rebalancing system on real prices and on synthetic futures and compared the median
+terminal wealth of every cell with two passive benchmarks (Tables~\ref{tab:realrun} and~\ref{tab:synthetic}). A cell
+was one selection rule, one weighting rule, and one hedge setting. On real prices, the ten selection rules ($\gamma$
+per sector, bandit per sector, random per sector, global $\gamma$, correlation-aware $\gamma$, liquid then $\gamma$,
+random liquid 100, random whole universe, and the two hand-picked lists) and the seven weighting rules (CD, CES,
+CESw, SG, MinVar, Tangent, and LS) gave $70$ cells for each hedge setting, traded over the $420$ trading days from
+2 January 2025 to 4 September 2026.
+% results/tier1_summary.csv, universe_summary.csv, gamma_seeds/gamma_seeds_summary.csv: 10 x 7 x 2 cells x 30 seeds
+Each of the $140$ cells held $30$ runs with seeds $5660$--$5689$, for $4{,}200$ real runs, and the seed set the
+controller's forecast paths and, for the random and bandit rules, the names picked.
+% talk/data/largek_shares.csv; results/large_k/large_k_summary.csv (K = 100, 200)
+A size comparison set global $\gamma$ against random picks from the whole universe at $K = 5$, $8$, $13$, $21$, $34$,
+$100$, and $200$ names, again with $30$ runs per cell.
+% results/synthetic/tables.md; results/synthetic/paths.csv (typical, burst_stress, bear_stress flags; 978 distinct
+% path ids, so 22 typical paths are also stress paths)
+The synthetic futures were price paths from the JumpHMM generator. We used $600$ typical paths drawn at random from
+$10{,}000$ and two stress sets of $200$ paths each, the deepest SPY drawdowns in the trading window among paths with a
+jump burst (burst stress) and among paths without one (bear stress), and because $22$ typical paths were also stress
+paths, the three sets held $978$ distinct paths. On each path the controller recalibrated on the synthetic 2014--2024
+history and traded the synthetic 2025--2026 window, and it still forecast with the multi-asset GBM while JumpHMM
+supplied the prices.
+% results/synthetic/rows/path_*.csv (532 run rows each: 8 deterministic rules x 7 x 2 + 6 random or bandit rules x
+% 7 x 2 x 5 seeds); results/synthetic/tables.md (520,296 runs, 0 failed)
+Each path carried $532$ runs, from $14$ selection rules (the ten above, plus global $\gamma$ and random whole universe
+at $5$ and $34$ names), the seven weighting rules, and both hedge settings, with five seeds ($5660$--$5664$) for the
+six random and bandit rules, for $520{,}296$ runs in all, none of which failed. The benchmarks were SPY buy-and-hold
+and the equal-weight universe, which put $W_0/373$ into each name at the first close and never rebalanced. We
+measured performance by the terminal wealth ratio $W_T/W_0$ and by continuously compounded growth rates in
+$\mathrm{yr}^{-1}$. Every reported median of $W_T/W_0$ belongs to one cell and is never pooled across selection
+rules, and on synthetic paths the random and bandit rules first took the median over their five seeds within each
+path.
+
+% talk/data/numbers.tex (SectorLo/Hi 1.09/1.23, BasketLo/Hi 1.03/1.70); talk/data/b3_rows_hedge_off.tex
+We compared the seven weighting rules within each selection rule on real prices with the hedge off, and found that
+the selection rule moved terminal wealth more than the weighting rule did (Fig.~\ref{fig:realrun};
+Table~\ref{tab:realrun}). Within the $\gamma$-per-sector basket, the seven weighting rules ended between $1.086$
+(MinVar) and $1.234$ (SG) times initial wealth, and the four utilities lay between $1.219$ and $1.234$, whereas
+across all $70$ cells the medians ran from $1.031$ (random whole universe, with LS) to $1.697$ (hand-picked 13, with
+Tangent).
+% table_realrun.tex Range column and Range row (from the rounded medians); without the hand-picked rows, from the
+% same table: across 0.246--0.422 (median 0.274), within 0.078--0.272 (median 0.135)
+The spread within a selection rule, the highest minus the lowest of its seven medians, was $0.078$ to $0.284$, with
+a median of $0.14$, and the spread across the ten selection rules within a weighting rule was $0.357$ (MinVar) to
+$0.591$ (LS), with a median of $0.518$. Without the two hand-picked lists, the spread across the other eight
+selection rules was $0.246$ to $0.422$ (median $0.274$), against $0.078$ to $0.272$ (median $0.135$) within them.
+% talk/data/realrun_refs.csv; talk/data/realrun_grid.csv (hedge = false)
+SPY buy-and-hold ended at $1.317$ and the equal-weight universe at $1.296$. Of the $70$ cells, $29$ ended above SPY,
+all from five selection rules: global $\gamma$ (six of the seven weighting rules), correlation-aware $\gamma$ (five),
+liquid then $\gamma$ (four), and the two hand-picked lists (seven each). None of the three per-sector rules and
+neither random $13$-name rule ended above SPY with any weighting rule.
+% talk/data/b3_rows_hedge_off.tex
+In the $13$-name baskets, global $\gamma$ ended at $1.248$--$1.520$ against $1.031$--$1.160$ for random names from
+the whole universe, whereas at three names per sector the $\gamma$ rule ($1.086$--$1.234$) and the bandit
+($1.140$--$1.239$) ended close to random picks ($1.127$--$1.205$). The universe-wide rules were designed after the
+per-sector results were known, so the $13$-name comparison is exploratory. The hand-picked lists ended highest, at
+$1.443$--$1.697$ for the $13$ names and $1.362$--$1.646$ with WMT and PG added. Each is one list chosen by one person,
+so it shows what that choice earned in this window and not the result of a repeatable rule.
+% talk/data/b3_rows_hedge_off.tex (row minima)
+MinVar or LS gave the lowest median under every selection rule, MinVar under four rules and LS under six.
+% results/universe_summary.csv, gamma_seeds_summary.csv: quartiles of terminal / W0 over the 30 seeds, CD, hedge off
+For the deterministic rules the seed changed only the controller's forecast paths, so their $30$ runs clustered
+tightly (hand-picked 13 with CD: interquartile range $1.546$--$1.553$), whereas the runs of random picks spread over
+a wider band (random whole universe with CD: $1.048$--$1.220$).
+
+% talk/data/b3_rows_hedge_on.tex against b3_rows_hedge_off.tex (talk/data/realrun_grid.csv, cell medians)
+We repeated every real run with the beta hedge on and compared terminal wealth, portfolio beta, and drawdown with
+the hedge-off runs of the same selection and weighting rules, and found that the hedge lowered market exposure but
+cost terminal wealth in most cells (Fig.~\ref{fig:realrun}; Table~\ref{tab:S-realrun-on}). At each re-plan with the
+hedge on, the allocation obeyed a cap on portfolio $\beta$ that fell as the market state $\xi$ rose, and up to five
+names whose online $\beta$ and down-day $\beta$ were at or below zero could enter as a hedge pool. The median
+$W_T/W_0$ was lower with the hedge on in $50$ of the $70$ cells, and the median of the $70$ changes was $-0.033$.
+Wealth fell in six or seven of the seven cells for the bandit rule, the three random rules, and liquid then
+$\gamma$, and in five and six for the two hand-picked lists. Correlation-aware $\gamma$ ended higher in five of its
+seven cells, and LS weights ended higher under six of the ten selection rules.
+% results/*_summary.csv columns mean_portfolio_beta (daily sum of n_i close_i beta_i / V, averaged over days),
+% mean_hedge_weight, max_drawdown (cell medians, on minus off: -0.018 to 0.019, median 0.001, above zero in 46 of 70
+% cells before rounding), as in Table S-exposure; code/src/StudyBacktest.jl
+We measured exposure by the portfolio $\beta$, the value-weighted online $\beta$ of the holdings divided by total
+wealth, averaged over the days of a run. The hedge lowered this mean portfolio $\beta$ in all $70$ cells (cell
+medians $0.388$--$0.903$ with the hedge off and $0.314$--$0.849$ with it on), and hedge-pool names held
+$8.4$--$39.8\%$ of wealth on an average day (cell medians). The maximum drawdown nonetheless changed little, by at
+most $0.019$ in either direction, with a median change of $+0.001$ across the $70$ cells
+(Table~\ref{tab:S-exposure}).
+% results/tables/hedge_effect_drawdown.csv (bandit and random rows, n_pairs = 30, win_rate <= 0.467)
+When the hedge-on and hedge-off runs were paired by seed, the hedge-on run had the smaller maximum drawdown in no
+more than $14$ of $30$ pairs for any weighting rule under the bandit and random per-sector rules.
+% talk/data/market_state.csv (falling = 1 on 75 of 420 days); results/*_summary.csv n_bear = 75, n_bull = 344,
+% spy_g_bear = 0.266, spy_g_bull = 0.144, g_bear (cell medians, on minus off); standard error of the SPY difference
+% (Welch) from talk/data/market_state.csv spy column: 0.59 /yr
+The cap explained part of the wealth loss. The state $\xi$ was positive on $75$ of the $420$ trading days
+(Fig.~\ref{fig:market-state}), and the portfolio's mean growth rate on the $75$ days that followed a positive $\xi$
+fell with the hedge on in $63$ of the $70$ cells (median change $-0.153\,\mathrm{yr}^{-1}$). On those days SPY's mean
+daily growth rate was $0.266\,\mathrm{yr}^{-1}$, against $0.144\,\mathrm{yr}^{-1}$ on the other $344$ of the $419$
+growth days, so a tighter cap held less of a market that rose on average. The difference of $0.12\,\mathrm{yr}^{-1}$
+was small next to its standard error of $0.59\,\mathrm{yr}^{-1}$, so it describes this window and not a property of
+the market state.
+% results/tables/passive.csv (SPY max_drawdown 0.190)
+The real window was one historical path, with a largest SPY drawdown of $0.190$, so we also tested the hedge on
+simulated sell-offs.
+
+% talk/data/mpc_events.csv, mpc_path.csv, mpc_cone_1.csv, mpc_cone_2.csv (the hand-picked 13, CD, hedge off,
+% seed 5660; scripts/30_talk_data.jl MPC_LABEL); day 29 of mpc_cone_2.csv: mean 1.12346, sd 0.03553; path 1.04885
+We followed the controller through one real episode and counted re-plans by trigger across the $4{,}200$
+main-comparison runs, and found that the forecast band and the drawdown stop brought forward a share of re-plans
+that depended on the selection rule (Fig.~\ref{fig:mpc}; Table~\ref{tab:S-replans}). The episode came from the hand-picked 13 with CD weights,
+the hedge off, and seed $5660$, and ran from a re-plan on 10 October 2025 to 22 December 2025. At each re-plan the
+controller forecast portfolio value over the next $21$ trading days with the multi-asset GBM and $1{,}000$ paths,
+while the portfolio traded real prices. At the horizon re-plan on 10 November the portfolio stood at $1.101$ times
+initial wealth, $0.61$ standard deviations (SD) above the mean of the forecast made on 10 October. Eight trading days
+into the next forecast, on 20 November, the portfolio had fallen to $1.0489$ against a forecast mean of $1.1235$ with
+an SD of $0.0355$, $2.10$~SD below the mean and outside the $1.96$~SD band, and the controller re-planned. The third
+forecast ran to its horizon on 22 December, when the portfolio stood at $1.148$, $1.09$~SD above its mean.
+% results/*_summary.csv (4,200 real runs): cell medians of (n_band_exit + n_drawdown) / (n_decisions - 1), as in
+% Table S-replans (this run's cell: 0.370); per-rule ranges are hedge-off cells; n_horizon, n_band_exit, n_drawdown
+% and n_basket_change sum to n_decisions - 1 in every run, and n_cash_revisit = 0 in all 4,200 runs
+In the cell of this run, the median share of re-plans that came before the horizon was $0.37$. Across the $140$
+cells, the median share brought forward by a band exit or a drawdown stop ranged from $0.20$ to $0.61$
+(Table~\ref{tab:S-replans}). With the hedge off, the share was lowest for the three random rules, at $0.20$ to
+$0.40$, and highest for the four $\gamma$ rules, whose highest cells ran from $0.53$ to $0.61$. The other re-plans
+came at the horizon or on a basket change, a day on which a timer pick changed the set of names, and no run
+re-planned on a cash revisit.
+
+% results/calendar_baseline/calendar_baseline_summary.csv, each run paired with its triggered twin in
+% results/*_summary.csv (4,200 pairs); cell medians over the 30 seeds of terminal / W0, max_drawdown and total_cost
+% (results/calendar_baseline/calendar_vs_triggers.csv); n_horizon = 19 and every other trigger count 0 in all 4,200
+% calendar-only runs; cost ratios of the cell medians 1.027--1.331 hedge off, 1.042--1.451 hedge on, as in Table
+% S-replans; triggered cell medians of n_decisions - 1: 23 to 34
+We repeated the main comparison with the band exit and the drawdown stop switched off, and found that the early
+re-plans lowered the worst drawdown more consistently than they changed terminal wealth (Table~\ref{tab:S-calendar}).
+Each of the $4{,}200$ calendar-only runs kept the selection rule, weighting rule, hedge setting and seed of one
+triggered run, so the two runs of a pair differed only in the two triggers, and every calendar-only run re-planned
+at the $21$-day horizon alone, $19$ times over the window, whereas in every cell the triggered runs re-planned more
+often in the median. We ran this comparison because band exits measure how often the forecast missed, not whether re-planning
+early helped the portfolio. With the hedge off, the median maximum drawdown was smaller with the triggers in $55$ of
+the $70$ cells, by up to $0.053$ (global $\gamma$), and at most $0.015$ larger in the others. With the
+hedge on it was smaller in $61$ of the $70$ cells, by up to $0.054$. Median terminal wealth was higher with the
+triggers in $38$ of the $70$ cells with the hedge off and in $26$ with the hedge on, and the differences ran from
+$-0.093$ to $0.191$ of initial wealth with the hedge off and from $-0.180$ to $0.183$ with it on. The sign of the
+wealth difference did not follow the kind of selection rule: with the hedge off, the triggers raised terminal
+wealth under all seven weighting rules for random liquid 100 and under none for random whole universe or liquid then
+$\gamma$. Every triggered cell paid more trading cost than its calendar-only twin, $3$ to $33\%$ more with the hedge
+off and $4$ to $45\%$ more with it on (Table~\ref{tab:S-replans}), since the triggered runs re-planned more often. On
+the two stress sets of synthetic futures, the triggers likewise lowered the worst drawdown in most cells without
+consistently raising terminal wealth (Tables~\ref{tab:S-calendar-burst} and~\ref{tab:S-calendar-bear}).
+
+% talk/data/largek_shares.csv (share = fraction of the 30 x 30 run pairs with global gamma higher)
+We compared the $K$ highest-$\gamma$ names in the universe with $K$ names drawn at random from the whole universe
+for $K$ from $5$ to $200$ on real prices, and found that the advantage of selection by $\gamma$ shrank as the basket
+grew (Fig.~\ref{fig:S-size}). For each basket size, weighting rule, and hedge setting, we formed all $900$ pairs of
+one of the $30$ global $\gamma$ runs with one of the $30$ random runs, regardless of seed, and counted the share of
+pairs in which global $\gamma$ ended with the higher $W_T/W_0$. Like the $13$-name comparison, this size comparison
+is exploratory.
+% talk/slides/b2-large-books.tex; code/src/TalkData.jl (talk_largek_shares, sg_max_K = 34);
+% arxiv-paper/sections/method_allocation.tex (SG decisions infeasible at K = 100 and 200)
+Stone--Geary was left out at $100$ and $200$ names, because its baseline holding of $1\%$ of wealth per name used the
+whole budget at $100$ names and twice the budget at $200$, so most of its decisions were infeasible.
+% talk/data/largek_shares.csv (hedge off)
+With the hedge off, global $\gamma$ ended higher in $91.8$--$100\%$ of pairs at $5$ names, $94.7$--$100\%$ at $8$, and
+$90.2$--$100\%$ at $13$ across the weighting rules. The share fell to $74.9$--$96.0\%$ at $21$ names and
+$56.6$--$96.0\%$ at $34$, and to $33.3$--$83.2\%$ at $100$ names and $34.6$--$82.7\%$ at $200$. Random picks ended
+higher in most pairs for MinVar at $100$ names and for CD, CES, and Tangent at $200$.
+% talk/data/largek_shares.csv (global_median, random_median, CD, hedge off)
+With CD weights, the global $\gamma$ median fell from $1.568$ at $K = 5$ to $1.520$ at $K = 13$, $1.333$ at
+$K = 34$, $1.244$ at $K = 100$, and $1.185$ at $K = 200$, while the random median rose from $1.048$ to $1.098$,
+$1.182$, $1.203$, and $1.211$ at the same sizes.
+% talk/data/largek_shares.csv (hedge on; non-MinVar at K = 21: 94.6--100, at K = 34: 90.3--100)
+With the hedge on, global $\gamma$ ended higher in $85.9$--$100\%$ of pairs at $5$ to $13$ names, and in
+$90.3$--$100\%$ at $21$ and $34$ names for every weighting rule except MinVar, whose share fell to $43.2\%$ at
+$21$ names and $26.1\%$ at $34$. At $100$ and $200$ names with the hedge on, the shares were $48.4$--$85.2\%$ and
+$30.7$--$81.6\%$. Selection by $\gamma$ thus mattered most for baskets of $5$ to $13$ names, and at $100$ or more of
+the $373$ names the CD medians of the two rules differed by less than $0.05$.
+
+% talk/data/sf_summary.csv, sf_qq.csv, sf_acf.csv, sf_abs_acf.csv (the first 100 typical paths by path id,
+% scripts/30_talk_data.jl N_SYN_PATHS; market factor g_m over 2014--2024 against real SPY over 2014--2024; kurtosis
+% is non-excess, 3 for a normal; abs ACF at lag 21: real 0.134, generator median 0.0067)
+We compared daily growth rates of the JumpHMM market generator with those of real SPY over 2014--2024 and checked
+the composed multi-asset paths against the real universe, and found that the generator reproduced fat tails but not
+the persistence of volatility (Fig.~\ref{fig:jumphmm}; Table~\ref{tab:S-checks}). For the comparison with SPY we
+used the market factor of the first $100$ typical paths by path number. Across these paths the median kurtosis of
+the daily growth rate was $13.7$, against $16.8$ for SPY and $3$ for a normal distribution. In the tails the median
+generator quantile lay at or beyond SPY's, at $-17.2$ against $-16.3\,\mathrm{yr}^{-1}$ for the $0.1\%$ quantile,
+$-10.1$ against $-7.8$ for the $1\%$ quantile, $7.3$ against $6.4$ for the $99\%$ quantile, and $15.1$ against
+$14.8$ for the $99.9\%$ quantile. Both series had small autocorrelation of $g$ at lag 1 ($-0.04$ for the generator
+median, $-0.11$ for SPY). The autocorrelation of $|g|$ differed, since for the generator median it fell from $0.22$
+at lag 1 to $0.08$ at lag 2, $0.03$ at lag 3, and $0.007$ at lag 21, whereas SPY's was $0.36$ at lag 1 and still
+$0.13$ at lag 21, about one trading month.
+% results/synthetic/checks.md (first 50 typical paths, recalibrated on synthetic 2014--2024; V1 over all 10,000)
+Of the $22$ gated checks on the composed paths, each with a pass tolerance, $21$ passed. The median synthetic SPY
+growth rate over 2014--2024 was $0.105\,\mathrm{yr}^{-1}$ across the $10{,}000$ paths, against
+$0.106\,\mathrm{yr}^{-1}$ for real SPY. The median name's variance was $0.994$ of the variance of its own JumpHMM
+draw, and $1.066$ of its real variance, a comparison reported without a tolerance. The mean residual correlation
+within each of the 11 sectors lay within $0.05$ of the real value (for example $0.535$ against $0.542$ in Energy),
+and the SD of the online $\beta$ was $0.985$ of the real one. The failing check was the cross-name SD of $\alpha$,
+the intercept of each name's least-squares regression on the market over 2014--2024, which was
+$0.089\,\mathrm{yr}^{-1}$ against $0.076\,\mathrm{yr}^{-1}$ for the real universe, outside the tolerance of
+$0.01\,\mathrm{yr}^{-1}$.
+% results/synthetic/checks.md (V5 across sectors; V4 synthetic - real at lags 1 and 5, synthetic - own draw at lag 1)
+Comparisons without a tolerance showed what the composition left out. The mean residual correlation across sectors
+was $0.0002$ against $0.031$, because cross-sectional dependence entered only through the market and sector factors.
+The median name's autocorrelation of $|g|$ was $0.10$ below the real one at lag 1 and $0.17$ below at lag 5, but
+within $0.04$ of its own JumpHMM draw, so the shortfall came from the per-name draws and not from the composition.
+% results/synthetic/tables.md lines 9 and 1067 (names whose online beta went to 0 or below: synthetic 2025--26
+% median 7 per path, range 1 to 19; real 2014--2024 windows of the same length, median 5, range 0 to 53 over 112
+% windows; real 2025--26: 120)
+The synthetic paths also offered the hedge fewer candidates, with a median of seven names per path whose online
+$\beta$ reached zero or below in the 2025--2026 window, against $120$ in the real 2025--2026 window and a median of
+five in real 2014--2024 windows of the same length (range $0$ to $53$). The synthetic paths thus resembled a typical
+stretch of 2014--2024, and the real trading window held more hedge candidates than any earlier stretch of that
+length.
+
+% talk/data/syn_typical_refs.csv, syn_typical_dots.csv; results/synthetic/tables/typical_hedge_off_wealth_median.csv
+We ran all selection and weighting rules on the $600$ typical futures, compared selection by $\gamma$ with random
+picks of the same size, and placed each real result among the typical futures of its cell, and found that selection
+by $\gamma$ beat random picks in most typical futures (Tables~\ref{tab:synthetic} and~\ref{tab:S-head-to-head};
+Fig.~\ref{fig:S-percentile}). In the typical futures the median synthetic SPY ended at $1.185$ and the equal-weight
+universe at $1.230$, and the $70$ hedge-off cell medians of the ten main selection rules ran from $1.097$ (random
+whole universe, with LS) to $1.244$ (liquid then $\gamma$, with SG).
+% results/synthetic/tables/typical_hedge_off_wealth_median.csv and typical_hedge_off_wealth_beat_spy.csv (the ten
+% selection rules of Fig. fig:synthetic)
+Of these $70$ cells, $45$ ended above the SPY median and seven above the equal-weight median. The equal-weight
+universe ended above its own path's SPY in $77.5\%$ of typical futures, whereas on real prices it ended below SPY
+($1.296$ against $1.317$).
+% results/synthetic/tables/typical_head_to_head.csv (wealth, share_above_0 and median)
+With the hedge off, global $\gamma$ ended above $13$ random names from the whole universe in $62.3$--$71.2\%$ of
+futures across the weighting rules, with a median difference in $W_T/W_0$ of $0.042$ to $0.101$, and $\gamma$ per
+sector ended above random per sector in $60.0$--$73.7\%$. With the hedge on, the $13$-name share was
+$63.2$--$71.5\%$.
+% talk/data/syn_typical_dots.csv (hedge off; the four gamma rules: gamma per sector, global gamma, correlation-aware
+% gamma, liquid then gamma)
+The hand-picked 13 ended between $1.175$ and $1.242$, within the $1.142$--$1.244$ range of the four $\gamma$ rules
+($\gamma$ per sector, global $\gamma$, correlation-aware $\gamma$, and liquid then $\gamma$), whereas on real prices
+both hand-picked lists ended highest.
+% talk/slides/b1-percentiles.tex (footer); code/src/SyntheticTables.jl (real_percentiles, path_cells);
+% results/synthetic/tables/typical_real_percentile_hedge_off.csv
+To place the real results, we used the seeds of the synthetic runs, $5660$ for the deterministic rules and the median
+over $5660$--$5664$ for the random and bandit rules, rather than the $30$-seed medians, and took the percentile of
+each real value among the $600$ typical futures of its cell. Real SPY sat at percentile $70$ of synthetic SPY and the
+real equal-weight universe at $60.7$, so the real window was a better-than-median period for the market, and part of
+any real margin over the typical futures reflected that period. The real results of the hand-picked 13 sat at
+percentiles $79.2$ to $90.7$ of their cells, those of global $\gamma$ at $47.5$ to $81.7$, those of $\gamma$ per
+sector at $39.8$ to $56.2$, and those of $13$ random names from the whole universe at $43.3$ to $64.3$. Of the $70$
+hedge-off cells, $52$ sat above the median future and $19$ above SPY's percentile of $70$.
+% results/synthetic/tables/typical_real_percentile_hedge_off.csv (hand-picked rows: 14 of 14 above 70, lowest 74.0;
+% the four gamma rules: 5 of 28 above 70)
+The hand-picked lists sat at or above percentile $74$ in all $14$ of their hedge-off cells, above the market's $70$,
+whereas the four $\gamma$ rules sat at percentiles $39.8$ to $81.7$ and above $70$ in five of their $28$ cells
+(Fig.~\ref{fig:S-percentile}). In the real window the hand-picked lists thus exceeded their typical futures by more
+than the market did, and the $\gamma$ rules in most cells did not.
+
+% results/synthetic/paths.csv (window_max_drawdown and window_growth, medians per set)
+We repeated the comparison on the two stress sets of simulated sell-offs, and found that every selection and
+weighting median ended above SPY and the equal-weight universe (Fig.~\ref{fig:synthetic};
+Table~\ref{tab:synthetic}). The median synthetic SPY drawdown in the 2025--2026 window was $0.364$ in the burst
+stress set and $0.406$ in the bear stress set, against $0.176$ in the typical futures, and SPY's median growth rate
+was $-0.087$ and $-0.199\,\mathrm{yr}^{-1}$, against $0.102\,\mathrm{yr}^{-1}$.
+% talk/data/syn_burst_stress_dots.csv, _refs.csv; talk/data/syn_bear_stress_dots.csv, _refs.csv;
+% results/synthetic/tables/{burst,bear}_stress_hedge_{off,on}_wealth_median.csv (all 14 rules, 98 cells per setting)
+In both stress sets all $140$ cell medians of the ten main selection rules ended above the SPY median and the
+equal-weight median, and so did all $98$ cells per hedge setting of the $14$ synthetic selection rules. Among the
+ten main selection rules, the lowest median in the burst stress set was $0.924$ (random per sector, MinVar, hedge off), against $0.865$ for SPY and $0.916$
+for the equal-weight universe, and the highest was $1.031$ (hand-picked 13, LS, hedge off). In the bear stress set
+the lowest median was $0.774$ (random whole universe, Tangent, hedge off), against $0.718$ for SPY and $0.753$ for
+the equal-weight universe, and the highest was $1.001$ (hand-picked 13 with WMT and PG, LS, with either hedge
+setting).
+% results/synthetic/tables/{burst,bear}_stress_hedge_{off,on}_wealth_beat_spy.csv
+Each cell also ended above its own path's SPY in $69.0$--$88.5\%$ of burst futures and $72.5$--$100\%$ of bear
+futures. Random picks also ended above SPY, so the margin over SPY did not come from selection by $\gamma$.
+% results/synthetic/tables/{burst,bear}_stress_hedge_off_wealth_median.csv (SPY 0.86496 and 0.71847, equal weight
+% 0.91555 and 0.75313, lowest cells 0.92412 and 0.77386)
+The equal-weight universe, which neither caps volatility nor re-plans, also ended above SPY, by $0.051$ in the burst
+stress set and $0.035$ in the bear stress set, and the lowest cell medians exceeded it by $0.009$ and $0.021$, so part
+of the margin over SPY came from the synthetic market and the rest from parts of the system that every cell shared.
+% results/synthetic/rows/path_*.csv mean_portfolio_beta, ten main selection rules, hedge off: median over seeds within
+% a path, then over the 200 paths of each stress set, as in Table S-synbeta
+With the hedge off, the cell medians of the mean portfolio $\beta$ were $0.322$ to $0.764$ in the burst stress set and
+$0.229$ to $0.850$ in the bear stress set, all below one (Table~\ref{tab:S-synbeta}).
+% results/synthetic/tables/bear_stress_head_to_head.csv, burst_stress_head_to_head.csv (wealth, share_above_0)
+In bear futures selection by $\gamma$ lost its typical-future advantage for five of the seven weighting rules. With
+the hedge off, global $\gamma$ ended above $13$ random names in $28.0$--$38.0\%$ of bear futures for CD, CES, CESw,
+SG, and LS, and at $5$ names the same five weighting rules gave $38.5$--$45.0\%$. MinVar and Tangent, whose weights do
+not use $\gamma$, reversed this pattern, with global $\gamma$ ahead in $70.0\%$ and $71.0\%$ of bear futures. In
+burst futures global $\gamma$ ended above $13$ random names in $52.5$--$67.5\%$ of futures with the hedge off.
+% talk/data/syn_{typical,burst_stress,bear_stress}_dots.csv (hedge on minus hedge off, per cell)
+With the hedge on, the median $W_T/W_0$ ended higher in $65$ of the $70$ cells of the bear stress set (median of the
+$70$ cell changes $+0.029$), and the lowest cell median rose from $0.774$ to $0.814$. In the burst stress set it
+ended higher in $34$ of the $70$ cells (median change $-0.001$), and in the typical futures in $11$ of the $70$
+(median change $-0.006$). The $\beta$ cap and hedge pool thus raised terminal wealth in prolonged declines and
+lowered it in typical futures, as they did on real prices.
+
+% results/calendar_baseline/synthetic_vs_triggers.csv (scripts/dev/calendar_baseline_synthetic.jl): within a path the
+% median over seeds of each cell, then the median across the 200 paths of the set. Triggered minus calendar-only cell
+% medians: max_drawdown -0.0222 to 0.0073 (median of the 280 cell reductions 0.0091; real prices 0.0111 over 140
+% cells, results/calendar_baseline/calendar_vs_triggers.csv), terminal / W0 -0.0309 to 0.0287. Calendar-only: 19
+% re-plans in every run; lowest cell medians 0.93009 (burst) and 0.77246 (bear). Triggered cell medians of
+% n_decisions - 1: 25 to 32
+We repeated the calendar-only comparison on the $400$ stress futures, and found that the early re-plans again lowered
+the worst drawdown more consistently than they changed terminal wealth, by about $0.01$ in the median cell as on real
+prices, although the stress declines were deeper (Tables~\ref{tab:S-calendar-burst} and~\ref{tab:S-calendar-bear}).
+The median maximum drawdown was smaller with the triggers in $65$ of the $70$ cells with the hedge off and in all $70$
+with it on in the burst stress set, and in $65$ and $67$ of the $70$ in the bear stress set, by up to $0.022$, and at
+most $0.007$ larger in the others. Median terminal wealth was higher with the triggers in $33$ and $28$ of the $70$
+cells in the burst stress set and in $51$ and $56$ in the bear stress set, with differences from $-0.031$ to $0.029$
+of initial wealth. Every calendar-only run re-planned $19$ times, every $21$ trading days, while the triggered cells
+re-planned $25$ to $32$ times in the median. With the two triggers switched off, every cell median still ended above
+the SPY median and the equal-weight median in both stress sets, the lowest at $0.930$ in the burst stress set and
+$0.772$ in the bear stress set, so the margin over SPY did not depend on the early re-plans.
+

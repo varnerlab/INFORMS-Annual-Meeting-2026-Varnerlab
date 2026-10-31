@@ -1,0 +1,32 @@
+% tableS_sector_params.tex (agent C)
+% Sources: results/synthetic/generator_summary.toml [sectors.*] (delta_median, loading_scale, model_mean, sigma_s);
+% results/synthetic/generator.jld2 (key generator: sector_index for name counts, factors[s].jump.lambda), read
+% 2026-10-30. Every sector model has jump probability 1e-4.
+\begin{table}[H]
+\centering
+\caption{\textbf{Sector factors and their JumpHMMs.} For each sector, the number of names, the standard deviation of
+the real sector factor $f_s$ over 2014--2024 ($\sigma_s$, yr$^{-1}$), the scale $\kappa_s$ applied to the leave-one-out
+loadings, the median sector loading $\delta_i$ after scaling, the tuned mean episode length $\lambda$ of the sector
+JumpHMM in trading days (every sector model has $\epsilon = 10^{-4}$), and the long-run mean of its draw (yr$^{-1}$),
+which enters the composition uncentered.}
+\label{tab:S-sector-params}
+\small
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+\textbf{Sector} & \textbf{Names} & \textbf{$\sigma_s$} & \textbf{$\kappa_s$} & \textbf{Median $\delta_i$} &
+  \textbf{$\lambda$} & \textbf{Mean} \\
+\midrule
+Communication Services & $15$ & $1.500$ & $1.337$ & $0.784$ & $71.1$ & $-0.0007$ \\
+Consumer Discretionary & $39$ & $1.719$ & $1.084$ & $0.834$ & $95.6$ & $0.0010$ \\
+Consumer Staples & $31$ & $1.576$ & $1.072$ & $0.941$ & $95.6$ & $0.0013$ \\
+Energy & $16$ & $4.215$ & $1.024$ & $0.968$ & $10.0$ & $0.0048$ \\
+Financials & $53$ & $1.724$ & $1.020$ & $1.047$ & $107.8$ & $-0.0067$ \\
+Health Care & $44$ & $1.400$ & $1.085$ & $0.911$ & $46.7$ & $0.0003$ \\
+Industrials & $60$ & $1.350$ & $1.056$ & $1.002$ & $107.8$ & $-0.0010$ \\
+Information Technology & $50$ & $1.471$ & $1.069$ & $0.813$ & $71.1$ & $-0.0005$ \\
+Materials & $17$ & $2.004$ & $1.151$ & $0.770$ & $95.6$ & $-0.0027$ \\
+Real Estate & $22$ & $2.293$ & $1.040$ & $0.952$ & $71.1$ & $-0.0028$ \\
+Utilities & $26$ & $2.460$ & $1.021$ & $1.014$ & $120.0$ & $-0.0014$ \\
+\bottomrule
+\end{tabular}
+\end{table}

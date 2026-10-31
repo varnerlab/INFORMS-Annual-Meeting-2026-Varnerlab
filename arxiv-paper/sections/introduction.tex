@@ -1,0 +1,59 @@
+Managing a live equity portfolio raises three linked questions. An allocation rule answers what to hold, given
+forecasts and limits on risk, concentration and trading; a rebalancing rule answers when the holdings should be
+recomputed; and an evaluation asks whether the two rules together would have worked on markets other than the one
+that was observed. Mean-variance optimization~\cite{markowitz1952} and its continuous-time
+extensions~\cite{merton1969} give a principled answer to the first question, but optimized weights are sensitive to
+errors in the estimated means and covariances~\cite{michaud1989, ledoitWolf2004}, and an equal-weight portfolio
+often matches optimized portfolios out of sample~\cite{demiguelGarlappiUppal2009}. Transaction costs turn the second
+question into a control problem. With proportional costs, the optimal policy leaves the holdings alone inside a
+no-trade region and trades only at its boundary~\cite{magillConstantinides1976, davisNorman1990}, and multi-period
+formulations solve a sequence of forecast-based optimizations over a receding horizon~\cite{herzogDondiGeering2007,
+boydEtAl2017}. The third question is usually answered with a backtest on the historical record, which is a single
+path of the market. Choosing among rules on one path inflates their measured performance~\cite{baileyEtAl2014,
+harveyLiu2015}, and a short window may contain few of the market conditions a portfolio must survive.
+
+These lines of work mostly treat the three questions one at a time, although a live portfolio answers them
+together and the answers interact. The allocation rule decides which positions the rebalancing rule must track, and
+the market's path between rebalances decides when the next trade comes and from which holdings it starts. An
+allocation that is easy to interpret helps here, because a change in a holding can then be traced to a change in one
+stated number. Utility functions from consumer theory offer such a rule when each stock's preference weight is a
+score with a plain meaning~\cite{cobbDouglas1928, arrowEtAl1961, stone1954, geary1950}. Testing the combined system
+beyond the historical path requires synthetic markets that reproduce the stylized facts of daily growth rates, in
+particular heavy tails and volatility clustering~\cite{mandelbrot1963, cont2001}, while keeping the dependence
+between stocks and the market~\cite{sharpe1963}. Per-asset hidden Markov generators with a jump mechanism, combined
+through a common market factor with each asset's own draw rescaled so that the market term does not inflate the
+asset's total variance, reproduce the heavy tails of individual stocks within a multi-asset
+market~\cite{alswaidan2026variance}. Such a market makes it possible to run a complete system, with its calibration
+repeated on each simulated history, on futures that did not occur, including futures with deeper declines than the historical
+window contains.
+
+In this study, we built a portfolio management system that answers the three questions together and tested it on
+real and synthetic markets. A selection rule chose the stocks a portfolio could hold, by ranking a score across the
+whole universe or within each sector, by a bandit within each sector, or at random as a control, and two short lists
+chosen in advance by the author served as further selections. Each stock's score divided its expected growth rate
+from a single-index fit to the market by its absolute beta raised to a power that was positive when the market had
+recently been falling and negative when it had been rising, so that, among stocks with positive expected growth,
+low-beta stocks scored higher after declines and high-beta stocks after rises, and a hyperbolic tangent kept the score bounded. Utility functions from
+consumer theory, with the scores as preference weights, and three standard portfolios (minimum variance, tangency
+and long-short) set the holdings under shared limits on the budget, each stock's weight, portfolio
+volatility and trading cost. An optional market hedge capped the portfolio's beta more tightly as the market
+weakened and added up to five stocks with zero or negative beta to those the portfolio could hold. A model-predictive controller forecast the value of the
+holdings with a multi-asset geometric Brownian motion and re-solved the allocation from the current holdings when
+its horizon had passed, when the value left a band around the forecast, or when a drawdown limit was reached. We
+calibrated the system on a decade of United States equity prices and ran it on the following twenty months, and we
+ran it again on simulated price paths of the same period (synthetic futures) built from per-asset hidden Markov
+generators with jumps, including futures, selected from many simulated paths, with deeper market declines than the
+historical window contained. On real prices, which stocks a portfolio held mattered more for its terminal wealth than which utility
+function weighted them, and the forecast band and the drawdown limit brought many re-plans forward of the horizon.
+Compared with re-planning on the calendar alone, these early re-plans made the worst drawdown smaller in most
+combinations of rules, on real prices and in the deepest simulated declines, but did not raise terminal wealth
+consistently.
+In the deepest simulated declines, every combination of selection and weighting rule ended ahead of both the
+simulated market index and an equal-weight portfolio of all stocks, random selections included, and did so with the
+early re-plans switched off as well, so the margin came from parts of the system that all combinations shared, such
+as the volatility cap, rather than from the choice of stocks or the re-planning triggers. The market hedge cost
+wealth while markets rose and helped when declines persisted, and the synthetic futures favored score-based
+selection partly because the generator preserved each stock's historical trend. More broadly, the results suggest
+that portfolio systems are best evaluated as a whole, on synthetic as well as historical markets, and that a synthetic
+test measures the value of stock selection fairly only when its generator does not build in the trend persistence
+that selection rules exploit.

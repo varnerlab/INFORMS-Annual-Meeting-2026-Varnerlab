@@ -1,0 +1,146 @@
+% appendix_b.tex
+% Online Appendix: estimation equations behind the controller's forecast (online single-index fit, market
+% volatility, residual covariance and the choice of lambda, forecast simulation) and fill details.
+% Sources: code/src/SIM.jl (ewls_init, ewls_update!, ewvar_init, ewvar_update!, estimate_sim),
+% code/src/OnlineSIM.jl, code/src/Covariance.jl (growth_covariance, shrinkage_loss, choose_shrinkage),
+% code/src/Calibration.jl, code/src/Projection.jl (project_gbm), code/src/Backtest.jl (_bt_fill!,
+% _bt_adv, _bt_projection_seed), code/src/Bandit.jl (_stream_seed), config/study.toml,
+% results/calibration_summary.toml, README.md.
+% The settings table is sections/tables/tableS_controller_params.tex (label tab:S-controller-params); it is
+% not \input here, so the lead author can place it with the other supplementary tables.
+
+\section{Controller and estimation details}\label{app:controller}
+
+This appendix gives the preparation of the price data, the estimators behind the controller's forecast and the
+details of the simulated fills. The settings of every real-data run are collected in
+Table~\ref{tab:S-controller-params} and the experiment grids in Table~\ref{tab:S-grids}.
+
+\subsection{Universe and price files}
+
+% data/sp500-sectors.csv (503 rows); 418 = tickers in all three price files with a sector, counted with
+% code/src/Data.jl on data/; results/calibration_summary.toml (373 names and the sector counts)
+The sector snapshot lists $503$ tickers. Of the $418$ tickers that appear in all three price files with a sector,
+$373$ have a positive open and close on all $3{,}187$ trading days from 2014-01-03 to 2026-09-04: $15$ in
+Communication Services, $39$ in Consumer Discretionary, $31$ in Consumer Staples, $16$ in Energy, $53$ in
+Financials, $44$ in Health Care, $60$ in Industrials, $50$ in Information Technology, $17$ in Materials, $22$ in Real
+Estate and $26$ in Utilities. Each price file is split-adjusted by the vendor as of its own creation date, so a
+split between the creation dates of two files shows as a one-day jump at their boundary.
+% code/src/Data.jl (SPLIT_GATE = 0.4, SPLIT_RATIOS, SPLIT_RATIO_TOL = 0.1, SPLIT_VOLUME_TOL = 3, SPLIT_SPY_MAX = 0.05)
+At each of the two boundaries we flagged a name when its overnight log price move exceeded $0.4$ in magnitude, the
+move matched a standard split ratio to within a factor of $e^{0.1}$, its volume moved in the matching direction by
+a factor within $3$ of that ratio, and the overnight log move of SPY was within $0.05$ in magnitude. We then divided
+the earlier prices of a flagged name by the split ratio and multiplied its earlier volumes by it, which leaves the
+growth rates within each file and the dollar volumes unchanged.
+% README.md (Data and its limitations); results/large_k/run.log (split basis reconciled lines)
+This changed seven names, ORLY (ratio $15$), NFLX ($10$), NOW ($5$) and FAST ($2$) at 2025-01-02, and KLAC ($10$),
+% README.md; code/src/Data.jl (LARGE_MOVE_WARN = 0.9)
+MNST ($2$) and APH ($2$) at 2026-01-02. Two one-day close moves larger than $0.9$ in log magnitude remain, IR on
+2020-03-02 and NI on 2015-07-02, both inside the calibration window, and we left them as given.
+
+\subsection{Online single-index fit}
+
+For each name $i$ the controller updates the intercept $\alpha_i$ ($\mathrm{yr}^{-1}$) and loading $\beta_i$
+(dimensionless) of the single-index model $g_i(t) = \alpha_i + \beta_i\,g_M(t) + \varepsilon_i(t)$ once per
+trading day by exponentially weighted least squares. With half-life $h$ (trading days) the decay factor is
+$\delta = 2^{-1/h}$, and the weighted sums are updated with the growth rates into day $t$ as
+\begin{equation}
+  \begin{aligned}
+    S_w &\leftarrow \delta S_w + 1, &
+    S_x &\leftarrow \delta S_x + g_M(t), &
+    S_y &\leftarrow \delta S_y + g_i(t),\\
+    S_{xx} &\leftarrow \delta S_{xx} + g_M(t)^2, &
+    S_{xy} &\leftarrow \delta S_{xy} + g_i(t)\,g_M(t), & &
+  \end{aligned}
+  \label{eq:ewls-update}
+\end{equation}
+after which
+\begin{equation}
+  \beta_i(t) \;=\; \frac{S_w S_{xy} - S_x S_y}{S_w S_{xx} - S_x^2},
+  \qquad
+  \alpha_i(t) \;=\; \frac{S_y - \beta_i(t)\,S_x}{S_w},
+  \label{eq:ewls-solve}
+\end{equation}
+with the previous estimates kept on a day when the denominator is at most $10^{-12}$ in magnitude. The sums start
+from a prior worth $N_0$ pseudo-observations. Let $\alpha_i^{\mathrm{cal}}$ and $\beta_i^{\mathrm{cal}}$ be the
+ordinary least-squares fit of name $i$ on SPY over the $2{,}766$ daily growth rates of the calibration window, and
+let $m_M$ ($\mathrm{yr}^{-1}$) and $v_M$ ($\mathrm{yr}^{-2}$) be the mean and population variance of SPY's daily
+growth rate over the same days. The prior is
+\begin{equation}
+  \begin{aligned}
+    &S_w = N_0, \qquad S_x = N_0\,m_M, \qquad
+    S_y = N_0\big(\alpha_i^{\mathrm{cal}} + \beta_i^{\mathrm{cal}} m_M\big),\\
+    &S_{xx} = N_0\big(v_M + m_M^2\big), \qquad
+    S_{xy} = N_0\big(\alpha_i^{\mathrm{cal}} m_M + \beta_i^{\mathrm{cal}}(v_M + m_M^2)\big),
+  \end{aligned}
+  \label{eq:ewls-prior}
+\end{equation}
+the sums that $N_0$ observations would give if SPY's growth had the calibration mean and variance and name $i$
+followed its calibration fit in the mean. Before the first update Eq.~\eqref{eq:ewls-solve} gives
+$\alpha_i^{\mathrm{cal}}$ and $\beta_i^{\mathrm{cal}}$ exactly, and the weight of the prior halves every $h$ days.
+% config/study.toml [sim] ewls_half_life = 63.0, ewls_prior_weight = 63.0; results/calibration_summary.toml
+% (m_m = 0.10610, v_m = 7.5109, sigma_m = 2.7411, vol_cap_annual = 0.17267)
+We used $h = 63$ and $N_0 = 63$, with $m_M = 0.1061$~$\mathrm{yr}^{-1}$ and $v_M = 7.511$~$\mathrm{yr}^{-2}$, and
+the first update used the growth into 2025-01-02. SPY's standard deviation $\sigma_M(t)$ follows the same decay,
+\begin{equation}
+  \begin{aligned}
+    &Q_w \leftarrow \delta Q_w + 1, \qquad Q_x \leftarrow \delta Q_x + g_M(t), \qquad
+    Q_{xx} \leftarrow \delta Q_{xx} + g_M(t)^2,\\
+    &\sigma_M^2(t) \;=\; \frac{Q_{xx}}{Q_w} - \left(\frac{Q_x}{Q_w}\right)^2,
+  \end{aligned}
+  \label{eq:ewvar}
+\end{equation}
+from the prior $Q_w = N_0$, $Q_x = 0$ and $Q_{xx} = N_0\,\sigma_{\mathrm{SPY}}^2$, where $\sigma_{\mathrm{SPY}} = 2.741$~$\mathrm{yr}^{-1}$ is
+the sample standard deviation of SPY's daily growth rate over the calibration window ($0.1727$ when multiplied by
+$\sqrt{\Delta t}$ to an annual volatility, the value that also sets the volatility cap).
+
+\subsection{Residual covariance and the choice of the shrinkage weight}
+
+At a re-plan on day $t$ the residual matrix holds $\varepsilon_i(s) = g_i(s) - \alpha_i(t) - \beta_i(t)\,g_M(s)$
+for the names of the allocation problem over the $L_\Omega$ daily growth rates that end on day $t$. We write the sample covariance of these residuals as
+$\hat\Omega_\varepsilon = D R D$, with $D$ the diagonal matrix of the sample standard deviations of the residual
+columns and $R$ their sample correlation matrix, and Eq.~\eqref{eq:mpc-cov} replaces $R$ by $(1-\lambda)R +
+\lambda I$. A residual column with zero variance carries no correlation information and gets zero correlation with
+the others. We chose $\lambda$ once, on the calibration window, by the accuracy of the residual part of
+Eq.~\eqref{eq:mpc-cov} as a forecast of portfolio variance. The anchors were the last trading days of each month
+% code/src/Covariance.jl (_shrinkage_anchors, shrinkage_loss: 252-day OLS, 21-day realized window, 200
+% portfolios, up to 33 names, Dirichlet(1), seed 5660, grid 0:0.1:1)
+with at least $252$ trading days of the window behind them and $21$ ahead. At each anchor we fitted $\alpha_i$
+and $\beta_i$ by ordinary least squares on the trailing $252$ daily growth rates, because the online fit has no
+warm-up period inside the calibration window, and formed $\hat\Omega_\varepsilon$ over the trailing
+$L_\Omega = 126$ growth rates. We then drew $200$ portfolios per anchor, each of up to $33$ names taken in turn
+from the $11$ sectors with weights $w$ drawn from a flat Dirichlet distribution. For each portfolio the realized
+variance $r$ is the sample variance of $w^{\top}\varepsilon(s)$ over the $21$ days after the anchor and the
+prediction is $p(\lambda) = w^{\top}\big[(1-\lambda)\hat\Omega_\varepsilon +
+\lambda\,\mathrm{diag}(\hat\Omega_\varepsilon)\big]w$. The loss of $\lambda$ is the mean over portfolios and
+anchors of
+\begin{equation}
+  \mathcal{L}(\lambda) \;=\; \frac{r}{p(\lambda)} - \ln\frac{r}{p(\lambda)} - 1,
+  \label{eq:qlike}
+\end{equation}
+the QLIKE loss, which ranks variance forecasts consistently when the realized variance is a noisy proxy for the
+true one~\cite{patton2011}. Over the grid $\lambda = 0, 0.1, \dots, 1$ we took the $\lambda$ with the smallest mean
+loss, breaking ties toward the larger $\lambda$.
+% README.md (lambda calibration: forecast loss 0.353 at lambda = 0, rising steadily to 0.619 at lambda = 1);
+% results/calibration_summary.toml (lambda = 0.0)
+The mean loss was $0.353$ at $\lambda = 0$ and rose steadily to $0.619$ at $\lambda = 1$, so the study used
+$\lambda = 0$, the full sample residual covariance.
+
+\subsection{Forecast simulation and fills}
+
+The simulation of Eq.~\eqref{eq:mpc-gbm} draws the daily log-price increments as $\Delta t\,\mu_g +
+\sqrt{\Delta t}\,L_{\Delta} z$, with $z$ a vector of independent standard normal draws and $L_{\Delta}$ the lower
+Cholesky factor of
+$\Delta t\,\Sigma_g + 10^{-12} I$. The diagonal term keeps the factorization defined when $\Sigma_g$ is singular
+and has no other effect at the scale of the forecast. The value of a 130/30 book on each path counts its short
+positions with negative shares. The forecast standard deviation uses the $N_p - 1$ denominator.
+% code/src/Backtest.jl (_bt_projection_seed: seed * 1_000_003 + Dates.value(date)); code/src/Bandit.jl
+% (_stream_seed: (seed * 1_000_003 + Dates.value(date)) * 64 + s)
+The paths of a re-plan come from a Mersenne Twister generator seeded with $1{,}000{,}003$ times the run seed plus
+the serial day number of the decision date. The picks of a random rule use the same integer for the pick date
+multiplied by $64$, and each sector's bandit adds the rank of its sector to that product, so every run is
+reproducible and does not depend on the thread that runs it. At a fill,
+% code/src/Backtest.jl (_BT_BISECT_ITERS = 60, _BT_ADV_DAYS = 63, ADV floored at 1 share)
+the common factor that scales the buys is the largest value in $[0, 1]$ that keeps cash nonnegative after the
+buys and their costs, found by $60$ bisection steps, and the average daily volume $A_i$ in Eq.~\eqref{eq:cost} is
+floored at one share. Names held before a re-plan that are not part of the new allocation problem are sold at the
+next open.

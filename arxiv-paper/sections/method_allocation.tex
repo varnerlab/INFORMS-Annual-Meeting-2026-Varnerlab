@@ -1,0 +1,296 @@
+% method_allocation.tex
+% Methods: the score gamma and the selection rules, then allocation by constrained utility maximization.
+% Agent A draft, 2026-10-30. Verified against the code, which is the truth where the design notes differ:
+% code/src/Allocators.jl, AllocatorsLongShort.jl, AllocatorsMeanVariance.jl (utilities, limits, solvers, benchmarks),
+% code/src/HedgePool.jl (pool, down-day beta, beta cap), code/src/StudyBacktest.jl (_study_problem,
+% _study_problem_columns, _study_decision, _study_lots, run_study), code/src/MarketInputs.jl (xi, g-tilde, gamma),
+% code/src/SIM.jl and OnlineSIM.jl (EWLS), code/src/Covariance.jl (Sigma_g), code/src/Screens.jl (selection rules,
+% bandit), config/study.toml (every setting), results/calibration_summary.toml (calibrated values).
+% Notation follows methods_data.tex and method_mpc.tex: bar c is the half spread as a fraction (5 bps), Sigma_g is
+% Eq. eq:mpc-cov, g_i(k) and g_M(k) are daily growth rates (Eq. eq:growth).
+% The source of each number is in a comment on the line above it.
+
+\subsection{The score and the selection rules}\label{sec:method-score}
+
+The score combines a single-index fit of each name to the market with the market state. The daily growth rates
+$g_i(k)$ of name $i$ and $g_M(k)$ of SPY (Eq.~\ref{eq:growth}, yr$^{-1}$) follow the single-index model
+$g_i(k) = \alpha_i + \beta_i\, g_M(k) + \varepsilon_i(k)$~\cite{sharpe1963}, with intercept $\alpha_i$ (yr$^{-1}$),
+market loading $\beta_i$ (dimensionless) and residual $\varepsilon_i(k)$ (yr$^{-1}$). We fit the model by ordinary
+least squares on 2014--2024 and, during the trading window, updated $(\alpha_i, \beta_i)$ every trading day by
+exponentially weighted least squares (EWLS),
+\begin{equation}
+(\alpha_i, \beta_i)_t = \arg\min_{a,\,b} \Big[ \sum_{k = t_0 + 1}^{t} \delta^{\,t-k}
+  \big( g_i(k) - a - b\, g_M(k) \big)^2
+  + \delta^{\,t - t_0} N_0\, \mathrm{E}_0 \big[ ( g_i - a - b\, g_M )^2 \big] \Big],
+\label{eq:ewls}
+\end{equation}
+% config/study.toml [sim] ewls_half_life = 63.0, ewls_prior_weight = 63.0; SIM.jl ewls_init, ewls_update!
+where $t_0$ is the last trading day before the window and $\delta = 2^{-1/63}$ is the daily decay, a half-life of
+$63$ trading days. The prior term counts as $N_0 = 63$ observations, with $\mathrm{E}_0$ the expectation under the
+% results/calibration_summary.toml m_m = 0.1061 (1/yr), v_m = 7.511 (1/yr^2)
+2014--2024 fit and SPY's 2014--2024 mean ($0.106$~yr$^{-1}$) and variance ($7.51$~yr$^{-2}$) of daily growth; its
+minimizer is the 2014--2024 fit, and its weight decays with the data's. The estimates used on day $t$ include the
+growth into day $t$ and nothing later. Two market inputs come from SPY's closes. The market growth average
+% config/study.toml [market] gtilde_window = 252; MarketInputs.jl gtilde_series
+$\tilde g_M$ (yr$^{-1}$) is the exponential moving average of SPY's daily growth rate with a span of $252$ trading
+days (smoothing factor $2/253$). The market state is
+\begin{equation}
+\xi_t = -G \left( \frac{\mathrm{EMA}_{21}(t)}{\mathrm{EMA}_{63}(t)} - 1 \right),
+\label{eq:xi}
+\end{equation}
+% config/study.toml [market] xi_short = 21, xi_long = 63, xi_quantile = 0.99; MarketInputs.jl xi_gain, xi_series
+where $\mathrm{EMA}_{21}$ and $\mathrm{EMA}_{63}$ are exponential moving averages of SPY's close with spans of $21$
+% results/calibration_summary.toml G = 21.2315
+and $63$ trading days, and the gain $G = 21.23$ is the reciprocal of the $99$th percentile of
+$\lvert \mathrm{EMA}_{21}/\mathrm{EMA}_{63} - 1 \rvert$ over 2014--2024, so $\lvert\xi_t\rvert \le 1$ on $99\%$ of
+those days. The state $\xi_t$ is positive exactly when the 21-day average lies below the 63-day average, as in a
+% talk/data/market_state.csv: xi > 0 on 75 of 420 trading days
+falling market, and it was positive on $75$ of the $420$ trading days of the window (Fig.~\ref{fig:market-state}).
+The score of name $i$ is
+\begin{equation}
+% config/study.toml [market] beta_floor = 0.1; MarketInputs.jl gamma_weights
+\gamma_i = \tanh\!\left( \frac{\alpha_i + \beta_i\, \tilde g_M}{\max(\lvert\beta_i\rvert,\, 0.1)^{\xi_t}} \right),
+\label{eq:gamma}
+\end{equation}
+with growth rates in yr$^{-1}$ entering the hyperbolic tangent as plain numbers, so $\gamma_i \in (-1, 1)$. The
+numerator is the name's expected growth rate $\mu_{g,i}$ from the single-index fit. It keeps the sign of $\beta_i$,
+so a name with a negative loading is charged rather than credited for market growth when $\tilde g_M > 0$. The
+denominator, the beta penalty, is positive, so $\gamma_i$ always has the sign of the expected growth rate and the
+market state changes only its size. When $\xi_t > 0$ the penalty divides the expected growth of a name with
+$\lvert\beta_i\rvert > 1$ by a number above one and that of a name with $\lvert\beta_i\rvert < 1$ by a number below
+one, so the score favors names that move less with the market; when $\xi_t < 0$ the effect reverses and the score
+favors names that move more; at $\xi_t = 0$ the score is the hyperbolic tangent of expected growth. The floor of
+$0.1$ keeps the penalty finite for names with a loading near zero, and at the window's largest $\xi_t$ of $0.90$ it
+% 0.1^(-0.90) = 7.94
+limits their amplification to a factor of $0.1^{-0.90} \approx 7.9$. The same expected growth rate enters the
+tangency rule and the controller's forecast.
+
+% results/calibration_summary.toml universe_size = 373, 11 sectors
+A selection rule chose the names of each decision from the $373$ names of the universe in $11$ sectors, using data
+dated on or before the day of the pick only, and the study compared ten rules. Three picked $3$ names in each sector,
+$33$ in all: \emph{$\gamma$ per sector} kept the $3$ highest $\gamma_i$ in each sector, \emph{bandit per sector} kept
+the $3$ names a per-sector bandit ranked highest, and \emph{random per sector} drew $3$ names per sector uniformly at
+% config/study.toml [screens] basket_K = 13
+random. Five picked $K$ names from the whole universe with no sector quota, with $K = 13$ in the main comparison and
+other sizes in the size comparison (Fig.~\ref{fig:S-size}). \emph{Global $\gamma$} kept the $K$ highest $\gamma_i$.
+\emph{Correlation-aware $\gamma$} walked down the same ranking and accepted a name only if the Pearson correlation of
+% config/study.toml [screens] corr_max = 0.7, corr_window = 252
+its daily growth rates with those of every name already accepted, over the trailing $252$ trading days, was at most
+$0.7$, and filled any shortfall from the ranking. \emph{Liquid then $\gamma$} kept the $K$ highest $\gamma_i$ among
+% config/study.toml [screens] liquidity_shortlist = 100, liquidity_window = 63
+the $100$ names with the largest median daily dollar volume (close times volume) over the trailing $63$ trading days,
+\emph{random liquid 100} drew $K$ names uniformly from that shortlist, and \emph{random whole universe} drew $K$ names
+uniformly from the universe. The random rules drew afresh at every pick, from a stream seeded by the run seed and the
+date. The last two rules were fixed lists: the hand-picked $13$ (AAPL, MSFT, INTC, MU, AMD, NVDA, GS, BAC, WFC, C, F,
+% config/study.toml [grid.fixed_lists] l8b_13, l8b_15
+GM, JNJ), which the author chose in advance from sectors the author follows and without 2025 data, and the same list
+with WMT and PG added. Each is one list chosen by one person, and a pick never changed it, although the hedge pool
+(the stocks with zero or negative beta that join each decision when the market hedge is on) could change.
+
+% config/study.toml [screens] bandit_*; Screens.jl MyBanditScreen, pick, train_ticker_bandit, rank_arms
+The bandit rule ran one $\epsilon$-greedy bandit~\cite{lattimoreSzepesvari2020} per sector, retrained from scratch at
+% results/calibration_summary.toml sector_counts: 15 (Communication Services) to 60 (Industrials)
+each pick, with each of the sector's $A$ names (between $15$ and $60$) as one arm. A pull of arm $j$ drew a window
+start $d$ uniformly from the $252$ trading days whose 21-day window ends within the trailing $252$ trading days, so
+every window was complete by the day of the pick, and earned the excess growth rate
+$x_j(d) = [\ln(S_j(d+21)/S_j(d)) - \ln(S_M(d+21)/S_M(d))]/(21\,\Delta t)$ (yr$^{-1}$) of name $j$ over SPY, with
+$S_M$ SPY's close. The bandit made $\min(\max(50A, 500), 5000)$ pulls. The first pull chose an arm uniformly at
+random; at pull $k > 1$ the bandit chose a uniformly random arm with probability
+$\epsilon_k = \max\{0.05,\, \min[1,\, k^{-1/3} (A \ln k)^{1/3}]\}$, and otherwise the pulled arm with the highest
+running-mean reward, ties going to a random rank drawn at the start. With these settings $\epsilon_k$ stayed above
+% computed from the epsilon_k formula with A = 15..60 and the pull counts above: min over pulls and sectors = 0.510
+$0.51$ at every pull in every sector, so the floor of $0.05$ never bound and each pull explored with probability
+above one half. The rule kept the $3$ arms with the highest mean reward, unpulled arms last
+(Algorithm~\ref{alg:S-bandit}). Because every arm can be scored on every window, the bandit approximates a ranking of
+each sector's names by their mean 21-day growth rate in excess of SPY over the trailing year, a sector-neutral
+momentum screen~\cite{jegadeesh1993}.
+
+
+\subsection{Allocation by constrained utility maximization}\label{sec:method-allocation}
+
+At each decision, made after the close of trading day $t$, the allocator chose a continuous number of shares
+$n_i \ge 0$ for every name $i$ in the decision's name set $\mathcal{N}$, which held the names picked by the selection
+rule and, with the market hedge on, a pool of hedge names. With $S_i$ the closing price of name $i$ (USD/share), $W$
+the wealth at the close (USD) and $w_i = n_i S_i / W$ the weight of name $i$ (dimensionless), the allocator solved
+\begin{equation}
+\begin{aligned}
+\max_{n \ge 0}\quad & U(n;\gamma) \\
+\text{subject to}\quad & \textstyle\sum_{i \in \mathcal{N}} n_i S_i \le W, \qquad
+  w_i \le \bar w_i \;\; (i \in \mathcal{N}), \qquad \sqrt{w^{\top} \Sigma_g\, w} \le \sigma_{\mathrm{SPY}}, \\
+& \bar c\, \bar S \textstyle\sum_{i \in \mathcal{N}} \lvert n_i - n_i^{\mathrm{prev}} \rvert \le B, \qquad
+  \textstyle\sum_{i \in \mathcal{N}} \beta_i w_i \le \bar\beta \;\; \text{(hedge on)},
+\end{aligned}
+\label{eq:allocation}
+\end{equation}
+where $U(n;\gamma)$ is the weighting rule's utility and $\gamma_i$ the score of name $i$ (Eq.~\ref{eq:gamma}); wealth
+not invested is held as cash, which has a market loading of zero.
+% config/study.toml [limits] w_max = 0.10, w_max_scale = 1.5; StudyBacktest.jl _study_problem (cap_pick, is_short)
+The single-name cap was $\bar w_i = \max(0.10,\, 1.5/K)$ for a name picked by the selection rule, with $K$ the number
+of picks, and $0.10$ for hedge-pool names and $130/30$ short names, so a pick could hold up to $10\%$ of wealth in the
+% K = 33, 13, 5: max(0.10, 1.5/K) = 0.10, 0.1154, 0.30
+$33$-name baskets, $11.5\%$ in the $13$-name baskets and $30\%$ at $K = 5$. In the volatility cap, $\Sigma_g$
+(yr$^{-2}$) is the covariance of the names' daily growth rates, the single-index market term plus the sample
+% config/study.toml [covariance] omega_window = 126; results/calibration_summary.toml lambda = 0.0
+residual covariance over the trailing $126$ trading days (Eq.~\ref{eq:mpc-cov} with its calibrated shrinkage of
+% results/calibration_summary.toml sigma_m = 2.7411 (1/yr), vol_cap_annual = 0.1727
+zero), and $\sigma_{\mathrm{SPY}} = 2.741$~yr$^{-1}$ is the sample standard deviation of SPY's daily growth rate over
+2014--2024, an annualized volatility of $17.3\%$; the solver imposed the cap as a second-order cone on $L^{\top} w$
+% Allocators.jl add_shared_constraints!: cholesky(Sigma_g + 1e-8 I)
+with $L L^{\top} = \Sigma_g + 10^{-8} I$. The turnover budget caps the half-spread cost of the share changes from
+the holdings $n^{\mathrm{prev}}$ before the decision, priced at the half spread $\bar c$ of the cost model
+(Eq.~\ref{eq:cost}) times the mean closing price $\bar S$ (USD/share) of the names in $\mathcal{N}$, with
+% config/study.toml [costs] half_spread_bps = 5.0; [limits] turnover_frac = 0.10
+$\bar c = 5 \times 10^{-4}$ and $B = 0.10\,W$ (USD). For a long-only book this budget can bind only when $\bar S$
+% StudySettings.jl docstring: 5e-4 * mean(S) * 2W/min(S) <= 0.10 W unless mean(S)/min(S) > 100
+exceeds $100$ times the cheapest name's price.
+% config/study.toml [limits] s_max = 1.0 (no sector cap)
+The study set no sector limit. With the hedge on, the portfolio's market loading $\sum_i \beta_i w_i$, computed with
+each name's signed online loading (Eq.~\ref{eq:ewls}), was capped at
+% config/study.toml [hedge] beta_ref = 1.0, kappa_beta = 1.0, beta_min = 0.0; HedgePool.jl beta_cap
+$\bar\beta = \max(0,\, 1 - \xi_t)$, where $\xi_t$ is the market state (Eq.~\ref{eq:xi}). The cap equals SPY's loading
+of one at $\xi_t = 0$, tightens as $\xi_t$ rises in a falling market, reaches zero at $\xi_t \ge 1$ and rises above
+% talk/data/market_state.csv: min xi = -0.7999, max xi = 0.8999 over the 420 trading days
+one when $\xi_t < 0$; over the trading window $\xi_t$ ranged from $-0.80$ to $0.90$, so $\bar\beta$ ranged from
+$1.80$ down to $0.10$ (Fig.~\ref{fig:market-state}).
+
+% config/study.toml [hedge] pool_H = 5, downday_lookback = 252; HedgePool.jl down_day_beta, hedge_pool
+The hedge pool was refreshed at every pick of the basket. A universe name was eligible when its online market loading
+was at most zero and its down-day beta was at most zero, where the down-day beta is the ordinary least squares slope,
+with intercept, of the name's daily growth rate on SPY's over the days of the trailing $252$ trading days on which
+SPY's growth rate was negative. The pool held up to $H = 5$ eligible names, most negative down-day beta first, and
+joined every decision's name set on top of the picks, a name both picked and pooled counting once as a hedge name.
+In the rules that use $\gamma$, a pool name with $\gamma_i > 0$ entered the utility like any other name, while a pool
+name with $\gamma_i \le 0$ had no utility term and was a free variable above its floor, so the allocator bought it only
+when the $\beta$ cap or the volatility cap made it worth its share of the budget. Because the objective is flat along
+% Allocators.jl _HEDGE_TIEBREAK = 1e-6, _min_hedge, _solve_utility
+such a name's weight whenever no limit binds, it subtracted a tie-break cost of $10^{-6}$ per unit of hedge weight,
+and a second, lexicographic solve then fixed every other name's shares at their first-stage values and minimized the
+total weight of the free hedge names under the same limits. The utility depends only on the fixed names, so the
+second solve left it unchanged and held a hedge name above its floor only as far as a binding limit required; if the
+second solve failed, the first-stage shares stood. With the hedge off, a decision had neither the $\beta$ cap nor the
+% docs/superpowers/specs/2026-10-20-screened-utility-panel-study-design.md section 14 (known limitations)
+pool and was otherwise identical. We added the $\beta$ cap and the pool to the design after inspecting how the online
+loadings behaved in the February--April 2025 sell-off; every decision used trailing data only, and every result is
+reported with the hedge on and off.
+
+We compared four utilities built on the score. With $\mathcal{P} = \{ i \in \mathcal{N} : \gamma_i > 0 \}$ the names
+with a positive score, they are
+\begin{equation}
+\begin{aligned}
+U_{\mathrm{CD}} &= \sum_{i \in \mathcal{P}} \gamma_i \ln n_i, &
+U_{\mathrm{CES}} &= \Big( \sum_{i \in \mathcal{P}} \gamma_i\, n_i^{\rho} \Big)^{1/\rho}, \\
+U_{\mathrm{SG}} &= \sum_{i \in \mathcal{P}} \gamma_i \ln \left( n_i - b_i \right), &
+U_{\mathrm{CESw}} &= \Big( \sum_{i \in \mathcal{P}} \gamma_i\, w_i^{\rho} \Big)^{1/\rho},
+\end{aligned}
+\label{eq:utilities}
+\end{equation}
+the Cobb--Douglas (CD)~\cite{cobbDouglas1928}, Stone--Geary (SG)~\cite{geary1950, stone1954} and constant elasticity
+of substitution (CES)~\cite{arrowEtAl1961} utilities, the last on share counts (CES) and on weights (CESw). Both CES
+% config/study.toml [allocators] ces_eta = 0.5, sg_baseline = 0.01
+rules used the elasticity $\eta = 0.5$, so $\rho = 1 - 1/\eta = -1$, and SG used the baseline $b_i = 0.01\,W/S_i$
+shares, a core position worth $1\%$ of wealth that SG holds in every name of $\mathcal{N}$ ($n_i \ge b_i$). Under the
+budget alone each utility has a closed-form optimum (Table~\ref{tab:utilities}; derivations in
+Appendix~\ref{app:allocation}). CD splits the invested wealth in proportion to $\gamma_i$. CES sets
+$n_i \propto (\gamma_i/S_i)^{\eta}$, so its weights $w_i \propto \gamma_i^{\eta} S_i^{1-\eta}$ depend on each name's
+share price when $\eta \ne 1$, whereas CESw sets $w_i \propto \gamma_i^{\eta}$ and does not; both equal CD at
+$\eta = 1$, approach equal share counts (CES) or equal weights (CESw)~\cite{demiguelGarlappiUppal2009} as
+$\eta \to 0$, and concentrate in the name with the largest $\gamma_i/S_i$ (CES) or $\gamma_i$ (CESw) as
+$\eta \to \infty$. SG first buys every baseline and then splits the remaining wealth in proportion to $\gamma_i$.
+With the limits of Eq.~\ref{eq:allocation} there is no closed form, and each utility becomes a convex cone
+program~\cite{boydVandenberghe2004}: CD and SG use exponential cones, the two CES rules use power cones, the
+volatility cap is a second-order cone and the other limits are linear. We built each program in JuMP
+% code/Manifest.toml: JuMP 1.32.1, Clarabel 0.11.1, SCS 2.7.0; Allocators.jl _CLARABEL_ATTRIBUTES
+$1.32.1$~\cite{lubin2023jump} and solved it with the interior-point solver Clarabel $0.11.1$~\cite{goulart2024clarabel}
+(absolute and relative duality-gap tolerances $10^{-12}$, feasibility tolerance $10^{-9}$, at most $500$ iterations),
+accepting its optimal and almost-optimal statuses; when Clarabel reached neither, the same program went to SCS
+$2.7.0$~\cite{odonoghue2016scs} with its default settings. To check the solver against the closed forms, we allocated
+% results/limits_day.csv; scripts/11_run_study.jl limits_day_step; StudyRunner.jl limits_runs; config/study.toml W0
+a new book of $100{,}000$ USD on 2 January 2025 across the hand-picked $13$-name list, with the hedge off and every
+limit except the budget removed (the turnover budget stayed and did not bind). Over $17$ solves (CD, and CES and CESw
+% results/limits_day.csv: max |weight - closed_form| = 1.03e-5 (CES, eta = 0.1); gate tol 1e-3 (Limits.jl)
+at eight values of $\eta$ from $0.05$ to $20$), the largest gap between a solver weight and its closed form was
+$1.0 \times 10^{-5}$, below the tolerance of $10^{-3}$ we required.
+
+% Allocators.jl allocate (CD, CES, CESw: pins at constraints.eps); Backtest.jl _BT_eps = 1e-3, _BT_HELD_W = 1e-3
+The rules treat names with $\gamma_i \le 0$ differently. CD, CES and CESw leave them out of the utility and hold them
+at a floor of $\varepsilon = 10^{-3}$ shares, which disappears when targets worth at most $0.1\%$ of wealth are set
+to zero before trading, so the three rules held only names with $\gamma_i > 0$ and any hedge names the limits
+required; when no name in $\mathcal{N}$ had $\gamma_i > 0$, they skipped the solve and moved the book to cash. SG
+holds a name with $\gamma_i \le 0$ at its baseline $b_i$; with no positive score it held the baselines, adding the
+least hedge weight that met the $\beta$ cap, and it reported the problem infeasible when the baselines exceeded the
+budget or broke another limit. The baselines use $1\%$ of wealth per name, so SG cannot hold more than $100$ names.
+% results/large_k/large_k_summary.csv: SG n_failed 600 of 600 decisions at K = 200 (mean invested 0), 2,435 of 2,768 at K = 100
+In the large-book runs every SG decision at $K = 200$ was infeasible and the book stayed in cash, and at $K = 100$ most
+SG decisions were infeasible and kept the previous book.
+
+Three benchmarks ran under the same limits. Minimum variance (MinVar) and tangency
+(Tangent)~\cite{markowitz1952, tobin1958} do not use $\gamma$ and could hold any name of $\mathcal{N}$, with
+$n_i \ge 0$ and no floors. Each followed a two-fund form: it found the largest invested fraction
+$s = \min(1, \max \sum_i w_i)$ that the budget, single-name, $\beta$ and turnover limits allowed without the
+volatility cap, chose the mix at $\sum_i w_i = s$ that minimized $w^{\top} \Sigma_g w$ (MinVar) or maximized
+$(\mu_g - g_f \mathbf{1})^{\top} w / \sqrt{w^{\top} \Sigma_g w}$ (Tangent), and scaled the mix by
+$\min(1, \sigma_{\mathrm{SPY}} / \sigma_{\mathrm{mix}})$ onto the volatility cap, holding the rest in cash. Here
+$\mu_{g,i} = \alpha_i + \beta_i \tilde g_M$ (yr$^{-1}$) is the expected growth rate of name $i$ from the score's inputs
+and $g_f$ (yr$^{-1}$) the risk-free growth rate (Eq.~\ref{eq:riskfree}). Tangent solved its ratio as a quadratic
+program after a Charnes--Cooper change of variables~\cite{charnes1962} and fell back to MinVar when no feasible mix
+had positive excess growth. The $130/30$ long-short Cobb--Douglas rule (LS)~\cite{jacobsLevyStarer1998} maximized
+$\sum_{\gamma_i > 0} \gamma_i \ln n_i^{+} + \sum_{\gamma_i < 0} \lvert\gamma_i\rvert \ln n_i^{-}$ over long shares
+$n_i^{+}$ and short shares $n_i^{-}$ ($n_i = n_i^{+} - n_i^{-}$), so it shorted names with $\gamma_i < 0$ weighted by
+% config/study.toml [allocators] ls_long = 1.30, ls_short = 0.30, ls_net = 1.00
+$\lvert\gamma_i\rvert$. Long weights summed to at most $1.30$, short weights to at most $0.30$ in absolute value and
+the net weight to at most $1$, so cash stayed nonnegative; the single-name cap applied to $\lvert w_i \rvert$, the
+volatility and $\beta$ caps to the signed weights and the turnover budget to the signed share changes. Its long side
+held the picks with $\gamma_i > 0$ and the hedge pool, and its short side held the short candidates, up to $3$ names
+% config/study.toml [screens] N_per_sector = 3; Screens.jl short_candidates
+per sector with the most negative $\gamma_i < 0$ outside the pool, chosen at each pick of the basket and kept only
+while $\gamma_i < 0$. A hedge name was never shorted, since shorting a name with a negative loading raises the
+portfolio's loading. With no short candidate LS ran as long-only CD, and with no positive score it moved to cash.
+
+Algorithm~\ref{alg:allocation} lists one allocation decision. A decision whose program a solver certified
+infeasible, that neither solver solved, or that produced non-finite shares kept every holding and placed no orders.
+% results/tier1_summary.csv: n_failed 102 of n_decisions 23,050 (0.44%); results/fixed_summary.csv: 105 of 11,497
+% (0.91%, the largest); results/universe_summary.csv: 171 of 121,859 (0.14%); results/gamma_seeds/gamma_seeds_summary.csv:
+% 29 of 125,401 (0.02%); results/eta_summary.csv: 41 of 67,608 (0.06%); results/limits_summary.csv: 0 of 571;
+% results/large_k/large_k_summary.csv: 0 outside SG
+Apart from SG with $100$ or more names, this happened in under $1\%$ of the decisions of every grid of real-data runs.
+
+\begin{algorithm}[t]
+\caption{One allocation decision after the close of day $t$.}
+\label{alg:allocation}
+\begin{algorithmic}[1]
+  \REQUIRE Closes through day $t$; held shares $n^{\mathrm{prev}}$; wealth $W$ (USD); weighting rule $U$; selection
+    rule; hedge on or off; whether a pick of the basket is due (Algorithm~\ref{alg:mpc}).
+  \ENSURE Target shares $n^{\star}$ and orders for the open of day $t+1$, or the kept book and no orders.
+  \STATE $\gamma_i \gets$ Eq.~\ref{eq:gamma} for every universe name, from the day's $(\alpha_i, \beta_i)$
+    (Eq.~\ref{eq:ewls}), $\tilde g_M$ and $\xi_t$ (Eq.~\ref{eq:xi})
+  \IF{a pick is due}
+    \STATE $\mathcal{K} \gets$ picks of the selection rule; $\mathcal{H} \gets$ hedge pool if the hedge is on, else
+      $\emptyset$
+    \STATE $\mathcal{S}^{-} \gets$ up to $3$ names per sector with the most negative $\gamma_i < 0$, outside
+      $\mathcal{H}$ \hfill \COMMENT{LS only; else $\emptyset$}
+  \ENDIF
+  \STATE $\mathcal{N} \gets \mathcal{K} \cup \mathcal{H}$; for LS,
+    $\mathcal{N} \gets \{ i \in \mathcal{K} : \gamma_i > 0 \} \cup \mathcal{H} \cup
+    \{ i \in \mathcal{S}^{-} : \gamma_i < 0 \}$
+  \STATE Build $\mu_{g,i} = \alpha_i + \beta_i \tilde g_M$, $\Sigma_g$ (Eq.~\ref{eq:mpc-cov}), $\bar w_i$,
+    $\bar c\,\bar S$, $B = 0.10\,W$, and $\bar\beta = \max(0, 1 - \xi_t)$ (hedge on) or $\bar\beta = \infty$
+  \IF{$U$ uses $\gamma$ and no $i \in \mathcal{N}$ has $\gamma_i > 0$}
+    \STATE $n^{\star} \gets$ floors: $\varepsilon$ (CD, CES, CESw), $0$ (LS), or $b_i$ plus the least hedge weight
+      that meets $\bar\beta$ (SG) \hfill \COMMENT{no utility solve}
+  \ELSE
+    \STATE Solve Eq.~\ref{eq:allocation} for $U$ with Clarabel \hfill \COMMENT{MinVar, Tangent: mix, then scale}
+    \IF{Clarabel is neither optimal nor almost optimal}
+      \STATE Solve the same program with SCS
+    \ENDIF
+    \IF{a hedge name has $\gamma_i \le 0$ and $U$ uses $\gamma$}
+      \STATE Fix the other names' shares; minimize $\sum_{i \in \mathcal{H}} w_i$ under the same limits
+    \ENDIF
+  \ENDIF
+  \IF{the program is infeasible, both solvers failed, or some $n^{\star}_i$ is not finite}
+    \STATE $n^{\star} \gets n^{\mathrm{prev}}$; \textbf{return} no orders \hfill \COMMENT{keep the whole book}
+  \ENDIF
+  \STATE $n^{\star}_i \gets 0$ where $\lvert n^{\star}_i S_i \rvert \le 0.001\,W$, and for held names outside
+    $\mathcal{N}$
+  \RETURN orders $n^{\star} - n^{\mathrm{prev}}$, filled at the open of day $t+1$
+\end{algorithmic}
+\end{algorithm}

@@ -1,0 +1,62 @@
+% Online Appendix. Sections S1 to S3 give the details of the allocation, the controller and the synthetic market;
+% S4 holds the supplementary results. Supplementary tables and figures sit with the section that uses them.
+
+\input{sections/appendix_a}
+
+\input{sections/appendix_b}
+\input{sections/tables/tableS_controller_params}
+\input{sections/tables/tableS_grids}
+
+\clearpage
+\input{sections/appendix_c}
+\input{sections/tables/tableS_generator_params}
+\input{sections/tables/tableS_sector_params}
+\input{sections/tables/tableS_generator_checks}
+
+\clearpage
+\section{Additional results}\label{app:results}
+
+The real-data backtest with the market hedge on, the market exposure of the portfolios on real prices and on the
+stress sets, the share of re-plans that the triggers brought forward and the trading cost they added, the comparison
+of the re-plan triggers with calendar-only re-planning on real prices and on the two stress sets, the paired
+comparisons of selection rules on synthetic futures, the percentile of each real result among the typical synthetic
+futures, and the comparison of global $\gamma$ with random picks at basket sizes from $5$ to $200$ names are reported
+here (Tables~\ref{tab:S-realrun-on}, \ref{tab:S-exposure}, \ref{tab:S-replans}, \ref{tab:S-calendar},
+\ref{tab:S-calendar-burst}, \ref{tab:S-calendar-bear}, \ref{tab:S-head-to-head} and~\ref{tab:S-synbeta};
+Figs.~\ref{fig:S-percentile} and~\ref{fig:S-size}).
+
+\input{sections/tables/tableS_realrun_on}
+\input{sections/tables/tableS_exposure}
+\input{sections/tables/tableS_replans}
+\input{sections/tables/tableS_calendar}
+\input{sections/tables/tableS_calendar_burst}
+\input{sections/tables/tableS_calendar_bear}
+\input{sections/tables/tableS_head_to_head}
+\input{sections/tables/tableS_synbeta}
+
+% talk/data/b1_dots.csv, b1_bars.csv, b1_refs.csv
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{figs/supplement/figS_percentile.pdf}
+    \caption{\textbf{Real-data results as percentiles of the typical synthetic futures.} For each selection rule and
+    weighting rule, the percentile of the real terminal wealth ratio among the same cell's $600$ typical futures
+    Filled dots have the market hedge off and open dots have it on (a $\beta$ cap that tightened as the market
+    weakened, plus up to five names with $\beta \le 0$); the pale bar spans each row's lowest to highest dot. At $50$ (dashed) a real
+    result equals the median future; the gold line marks real SPY, at the $70$th percentile of synthetic SPY. Real
+    results use the seeds of the synthetic runs: the median over seeds $5660$--$5664$ for the random and bandit
+    rules, and seed $5660$ for the rest.}
+    \label{fig:S-percentile}
+\end{figure}
+
+% talk/data/b2_dots.csv, b2_bars.csv
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figs/supplement/figS_size.pdf}
+    \caption{\textbf{Global $\gamma$ against random picks from the whole universe, from $5$ to $200$ names, on real
+    prices.} For each basket size and weighting rule, the share of the $900$ pairs of one global $\gamma$ run and one
+    random run ($30$ runs each) in which global $\gamma$ ended with the higher terminal wealth ratio (market hedge
+    off filled, on open). At $50\%$ (dashed) the two rules end higher equally often. Stone--Geary is left out at
+    $100$ and $200$ names, where its baseline holding of $1\%$ of wealth per name uses the whole budget or twice the
+    budget.}
+    \label{fig:S-size}
+\end{figure}

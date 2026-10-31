@@ -1,0 +1,67 @@
+% tableS_generator_checks.tex (agent C)
+% Source: results/synthetic/checks.csv and results/synthetic/checks.md, written by scripts/24_synthetic_checks.jl on
+% 2026-10-28 (22 gated rows, 21 pass; V9 alpha spread fails). Values rounded to three decimals from checks.csv.
+% Rows are in check order (checks.csv lists V7 last). V8, the study's test suite, is run on its own and is not one
+% of the 22 gated rows: .superpowers/sdd/2026-10-26-synthetic-market-stress-test/progress.md (suite exit 0).
+% V5 residuals: single-index-model residuals over 2014--2024 (code/src/SyntheticChecks.jl, residual_correlations).
+\begin{table}[H]
+\centering
+\caption{\textbf{Generator checks against the real market.} A gated check passes when the synthetic value lies within
+the tolerance of the reference. References are real values, except for V3 and V4, which compare each composed name
+with its own JumpHMM draw, and V7, which builds one path twice. Each of the first $50$ typical paths was recalibrated
+on its synthetic 2014--2024 data. A statistic with one value per path is the median over these paths, and one with
+a value per name is the median over names of each name's path median. V1 uses all
+$10{,}000$ market paths. Statistics cover 2014--2024 unless a row names the trading window (2025-01-02 to
+2026-09-04). Twenty-one of the $22$ gated checks passed, and the test suite (V8) passed
+separately. Growth rates and intercepts are in yr$^{-1}$. ACF: autocorrelation of absolute growth
+rates. Residual correlation: mean pairwise correlation of single-index-model residuals. $\hat\beta_i$: the method's
+online estimate of the market loading.}
+\label{tab:S-checks}
+\footnotesize
+\begin{tabular}{@{}l p{6.3cm} r r l l@{}}
+\toprule
+\textbf{Check} & \textbf{Statistic} & \textbf{Synthetic} & \textbf{Reference} & \textbf{Tolerance} & \textbf{Pass} \\
+\midrule
+\multicolumn{6}{@{}l}{\textit{Gated checks}} \\
+V1 & SPY growth rate & $0.105$ & $0.106$ & $\pm 0.02$ & yes \\
+V2 & Equal-weight growth rate, daily rebalancing minus buy and hold & $-0.023$ & $-0.020$ & $\pm 0.02$ & yes \\
+V3 & Composed variance divided by the variance of the own draw & $0.994$ & $1$ & $[0.95, 1.05]$ & yes \\
+V3 & Absolute gap between the OLS $\beta$ and the mean of $\beta_i(t)$ & $0.021$ & $0$ & $\le 0.05$ & yes \\
+V4 & ACF at lag $1$, composed minus own draw & $-0.038$ & $0$ & $\pm 0.05$ & yes \\
+V4 & ACF at lag $5$, composed minus own draw & $0.004$ & $0$ & $\pm 0.05$ & yes \\
+V4 & ACF at lag $20$, composed minus own draw & $0.006$ & $0$ & $\pm 0.05$ & yes \\
+V5 & Residual correlation, Communication Services & $0.091$ & $0.094$ & $\pm 0.05$ & yes \\
+V5 & Residual correlation, Consumer Discretionary & $0.108$ & $0.112$ & $\pm 0.05$ & yes \\
+V5 & Residual correlation, Consumer Staples & $0.201$ & $0.204$ & $\pm 0.05$ & yes \\
+V5 & Residual correlation, Energy & $0.535$ & $0.542$ & $\pm 0.05$ & yes \\
+V5 & Residual correlation, Financials & $0.234$ & $0.239$ & $\pm 0.05$ & yes \\
+V5 & Residual correlation, Health Care & $0.121$ & $0.128$ & $\pm 0.05$ & yes \\
+V5 & Residual correlation, Industrials & $0.134$ & $0.135$ & $\pm 0.05$ & yes \\
+V5 & Residual correlation, Information Technology & $0.098$ & $0.102$ & $\pm 0.05$ & yes \\
+V5 & Residual correlation, Materials & $0.159$ & $0.166$ & $\pm 0.05$ & yes \\
+V5 & Residual correlation, Real Estate & $0.361$ & $0.366$ & $\pm 0.05$ & yes \\
+V5 & Residual correlation, Utilities & $0.540$ & $0.549$ & $\pm 0.05$ & yes \\
+V6 & Standard deviation of $\hat\beta_i$ divided by the real one & $0.985$ & $1$ & $[0.9, 1.1]$ & yes \\
+V7 & Market-data fields that differ when one path is built twice & $0$ & $0$ & $= 0$ & yes \\
+V9 & Cross-name standard deviation of the OLS intercepts & $0.089$ & $0.076$ & $\pm 0.01$ & no \\
+V9 & Correlation of OLS intercepts, 2014--2019 with 2020--2024 & $0.134$ & $0.175$ & $\pm 0.05$ & yes \\
+\midrule
+\multicolumn{6}{@{}l}{\textit{Reported, not gated}} \\
+V3 & Composed variance divided by the real variance & $1.066$ & $1$ & & \\
+V4 & ACF at lag $1$, synthetic minus real & $-0.097$ & $0$ & & \\
+V4 & ACF at lag $5$, synthetic minus real & $-0.171$ & $0$ & & \\
+V4 & ACF at lag $20$, synthetic minus real & $-0.097$ & $0$ & & \\
+V5 & Residual correlation across sectors & $0.0002$ & $0.031$ & & \\
+V6 & Lag-$252$ autocorrelation of $\hat\beta_i$ & $0.188$ & $0.206$ & & \\
+V6 & Share of paths with a name whose $\hat\beta_i \le 0$ on some day of the trading window (reference: real
+  2025--2026, $1$ = yes) & $1$ & $1$ & & \\
+V6 & Names with $\hat\beta_i \le 0$ on some day of the trading window (synthetic range $2$ to $11$ over paths;
+  reference: real 2025--2026) & $7$ & $120$ & & \\
+V6 & As above, reference: median over $112$ real 2014--2024 windows of the same length, ending every $21$ trading
+  days up to 2024-12-31 (range $0$ to $53$) & $7$ & $5$ & & \\
+V6 & As above, reference: the real window of the same length ending 2024-12-31 & $7$ & $53$ & & \\
+V9 & Correlation of OLS intercepts, 2014--2024 with the trading window (reference: real 2025--2026) & $0.100$ &
+  $-0.121$ & & \\
+\bottomrule
+\end{tabular}
+\end{table}

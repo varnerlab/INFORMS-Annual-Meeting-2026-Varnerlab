@@ -1,0 +1,161 @@
+% appendix_a.tex
+% Online Appendix: allocation details (closed forms, cone programs, hedge stage, benchmarks, bandit, parameters).
+% Agent A draft, 2026-10-30. Sources: code/src/Allocators.jl, AllocatorsLongShort.jl, AllocatorsMeanVariance.jl,
+% code/src/Screens.jl, code/src/StudyBacktest.jl, config/study.toml, results/calibration_summary.toml,
+% code/test/test_allocators_utility.jl. The source of each number is in a comment on the line above it.
+
+\section{Allocation details}\label{app:allocation}
+
+\paragraph{Closed forms under the budget alone.}
+We derive the optima of Table~\ref{tab:utilities} for a decision without hedge names. Let $\mathcal{P}$ be the names
+with $\gamma_i > 0$ and $F = W - \sum_{j \notin \mathcal{P}} \varepsilon S_j$ (USD) the wealth left after the floors
+of the other names. Each utility increases in every $n_i$ with $i \in \mathcal{P}$, so the budget
+$\sum_{i \in \mathcal{P}} S_i n_i \le F$ binds. For CD, stationarity of the Lagrangian gives
+$\gamma_i / n_i = \nu S_i$ with multiplier $\nu > 0$ (USD$^{-1}$), so $S_i n_i = \gamma_i / \nu$, and the budget sets
+$\nu = \sum_{j \in \mathcal{P}} \gamma_j / F$, hence $w_i = (F/W)\, \gamma_i / \sum_{j \in \mathcal{P}} \gamma_j$.
+For CES with $0 < \rho < 1$ ($\eta > 1$) the rule maximizes the concave sum $\sum \gamma_i n_i^{\rho}$; with
+$\rho < 0$ ($0 < \eta < 1$) the outer power $1/\rho$ is negative, so the rule minimizes the convex sum
+$\sum \gamma_i n_i^{\rho}$. In both cases stationarity gives $\rho\, \gamma_i\, n_i^{\rho - 1} = \nu S_i$ with $\nu$
+of the sign of $\rho$, and because $1/(\rho - 1) = -\eta$,
+\begin{equation}
+n_i = C \left( \frac{\gamma_i}{S_i} \right)^{\eta}, \qquad
+C = \frac{F}{\sum_{j \in \mathcal{P}} S_j (\gamma_j / S_j)^{\eta}}, \qquad
+w_i = \frac{F}{W}\, \frac{\gamma_i^{\eta} S_i^{1-\eta}}{\sum_{j \in \mathcal{P}} \gamma_j^{\eta} S_j^{1-\eta}}.
+\label{eq:S-ces-closed}
+\end{equation}
+As $\eta \to 0$ every name in $\mathcal{P}$ receives the same share count, a price-weighted book; as
+$\eta \to \infty$ the budget goes to the name with the largest $\gamma_i / S_i$. The same steps with $w_i$ in place of
+$n_i$ and the budget $\sum_{i \in \mathcal{P}} w_i \le F/W$ give CESw,
+$w_i = (F/W)\, \gamma_i^{\eta} / \sum_{j \in \mathcal{P}} \gamma_j^{\eta}$, which tends to equal weights as
+$\eta \to 0$ and to the name with the largest $\gamma_i$ as $\eta \to \infty$. For SG every name of $\mathcal{N}$ holds
+$n_i \ge b_i$ and the names outside $\mathcal{P}$ hold exactly $b_i$. Writing $e_i = n_i - b_i$ for the excess shares,
+SG maximizes $\sum_{i \in \mathcal{P}} \gamma_i \ln e_i$ subject to
+% config/study.toml sg_baseline = 0.01
+$\sum_{i \in \mathcal{P}} S_i e_i \le W - \sum_{j \in \mathcal{N}} S_j b_j = W (1 - 0.01\,\lvert\mathcal{N}\rvert)$,
+which is the CD problem on the excess shares, so
+\begin{equation}
+w_i = 0.01 + \left( 1 - 0.01\,\lvert\mathcal{N}\rvert \right) \frac{\gamma_i}{\sum_{j \in \mathcal{P}} \gamma_j},
+\qquad i \in \mathcal{P}.
+\label{eq:S-sg-closed}
+\end{equation}
+A feasible SG book therefore needs $\lvert\mathcal{N}\rvert \le 100$, and a positive excess needs
+$\lvert\mathcal{N}\rvert < 100$. The unit tests checked Eq.~\ref{eq:S-sg-closed} against the solver on a three-name
+% code/test/test_allocators_utility.jl: rtol = 1e-4 (Clarabel stops at ALMOST_OPTIMAL there)
+problem to a relative tolerance of $10^{-4}$, and on the hand-picked list the CD, CES and CESw solver weights stayed
+% results/limits_day.csv: max |weight - closed_form| = 1.03e-5
+within $1.0 \times 10^{-5}$ of their closed forms.
+
+\paragraph{Cone programs.}
+We use the cone conventions of MathOptInterface. The exponential cone is the closure of
+$\{(x, y, z) : y > 0,\ y\, e^{x/y} \le z\}$, so, with an auxiliary variable $t_i$ per name, $(t_i, 1, n_i)$ in the
+cone is $t_i \le \ln n_i$. CD maximizes
+% Allocators.jl allocate(::MyCobbDouglasRule): lower bound 1e-8 on preferred shares
+$\sum_{i \in \mathcal{P}} \gamma_i t_i$ with $n_i \ge 10^{-8}$, and SG puts $(t_i, 1, n_i - b_i)$ in the cone. The
+power cone with exponent $a \in (0, 1)$ is $\{(x, y, z) : x^{a} y^{1-a} \ge \lvert z \rvert,\ x, y \ge 0\}$. The CES
+rules act on a scaled variable $u_i = n_i \sum_{j \in \mathcal{P}} S_j / W$ (CES), which equals one at equal share
+counts that spend $W$, or $u_i = \lvert\mathcal{P}\rvert\, w_i$ (CESw), which equals one at equal weights; a common
+positive scale multiplies $\sum \gamma_i u_i^{\rho}$ by a constant and leaves the optimum unchanged, and it keeps
+$u_i$ near one at any wealth and basket size. For $\eta > 1$ the program puts $(u_i, 1, t_i)$ in the power cone with
+exponent $\rho$, so $t_i \le u_i^{\rho}$, and maximizes $\sum \gamma_i t_i$. For $\eta < 1$ it puts $(t_i, u_i, 1)$ in
+the power cone with exponent $\eta$, so $t_i^{\eta} u_i^{1-\eta} \ge 1$, which is $t_i \ge u_i^{\rho}$, and minimizes
+$\sum \gamma_i t_i$. At $\eta = 1$ both CES rules call CD. The volatility cap puts
+$(\sigma_{\mathrm{SPY}}, L^{\top} w)$ in the second-order cone. The turnover budget uses slack variables
+$v_i \ge \lvert n_i - n_i^{\mathrm{prev}} \rvert$ with $\bar c\, \bar S \sum_i v_i \le B$, added only when the largest
+possible share change could break the budget. A name held at its floor enters the limits as a constant, and a limit
+row made only of constants is checked directly instead of being sent to the solver, because all-zero rows degraded
+% Allocators.jl _add_le!: CD with one floor, share error 1.3e-5 with zero rows, 2e-6 without
+Clarabel's accuracy (a share error of $1.3 \times 10^{-5}$ with them against $2 \times 10^{-6}$ without, on a CD
+test). LS uses two exponential-cone blocks, $(t_i^{+}, 1, n_i^{+})$ for the long names with $\gamma_i > 0$ and
+% AllocatorsLongShort.jl: lower bound 1e-8 on n+ and n-
+$(t_i^{-}, 1, n_i^{-})$ for the short names, with $n_i^{\pm} \ge 10^{-8}$, and applies the limits to the signed
+% Allocators.jl _CLARABEL_ATTRIBUTES and the comment above them
+weights $w_i = (n_i^{+} - n_i^{-}) S_i / W$. We set Clarabel's duality-gap tolerances to $10^{-12}$ because the
+utility is flat at its optimum, so the share error scales with the square root of the gap: on a three-name CD test the
+solver's shares missed the closed form by $2.5 \times 10^{-5}$ at a gap tolerance of $10^{-9}$ and by
+$6 \times 10^{-9}$ at $10^{-12}$. An exception thrown inside a solver, such as the domain error that Clarabel
+$0.11.1$ raised in its power-cone barrier for some CES problems at $\eta \le 0.25$ and $\eta \ge 4$, counted as that
+solver not accepting the problem, and the decision moved on to SCS.
+
+\paragraph{The hedge stage.}
+Let $\mathcal{H}_f$ be the free hedge names, the pool names with $\gamma_i \le 0$, and $n^{(1)}$ the first-stage
+shares. The second stage holds every name with a utility term at $n_i^{(1)}$ as a fixed variable, so its share
+change still counts toward the turnover budget, holds every other name outside $\mathcal{H}_f$ at its floor, and
+solves
+\begin{equation}
+\min_{n_i \ge f_i,\ i \in \mathcal{H}_f} \ \sum_{i \in \mathcal{H}_f} w_i
+\quad \text{subject to the limits of Eq.~\ref{eq:allocation} (and the 130/30 rows for LS)},
+\label{eq:S-hedge}
+\end{equation}
+% Allocators.jl _min_hedge, _solve_utility; _HEDGE_TIEBREAK = 1e-6
+with $f_i$ the floor of hedge name $i$ ($\varepsilon$ for CD, CES and CESw, $b_i$ for SG and $10^{-8}$ for LS). The
+first stage already subtracts $10^{-6} \sum_{i \in \mathcal{H}_f} w_i$ from the utility, but that cost is below the
+solver's dual accuracy and alone would leave hedge holdings of several percent of wealth along the flat direction;
+Eq.~\ref{eq:S-hedge} removes them. For SG with no positive score and a finite $\beta$ cap, the second stage runs
+with no fixed names and finds the least hedge holding that lets the baselines meet every limit.
+
+\paragraph{Minimum variance and tangency.}
+Both benchmarks use long-only shares with no floors and the expected growth rates
+$\mu_{g,i} = \alpha_i + \beta_i \tilde g_M$. They first solve
+$s = \min\big(1, \max \sum_i w_i\big)$ over the budget, single-name, $\beta$ and turnover limits without the
+volatility cap. MinVar then minimizes $w^{\top} \Sigma_g w$ over the same limits with
+% AllocatorsMeanVariance.jl _S_TOL = 1e-7
+$\sum_i w_i \ge s - 10^{-7}$. Tangent, with excess growth $e = \mu_g - g_f \mathbf{1}$, first finds the best feasible
+excess growth $\bar e = \max e^{\top} w$ over that set; when $\bar e \le 10^{-6}\, s \max_i \lvert e_i \rvert$ no
+% AllocatorsMeanVariance.jl _MIN_EXCESS_REL = 1e-6
+feasible mix has positive excess growth and the rule falls back to the MinVar portfolio. Otherwise it applies the
+Charnes--Cooper change of variables~\cite{charnes1962} $y = \kappa n$, $v = \kappa w$ with $\kappa \ge 0$, and solves
+\begin{equation}
+\min_{y \ge 0,\ \kappa \ge 0} \ v^{\top} \Sigma_g\, v
+\quad \text{subject to} \quad e^{\top} v = \bar e, \qquad \textstyle\sum_i v_i \ge (s - 10^{-7})\,\kappa,
+\label{eq:S-tangent}
+\end{equation}
+with the right-hand side of every limit multiplied by $\kappa$, and sets $w_{\mathrm{mix}} = v / \kappa$. Fixing
+$e^{\top} v$ at $\bar e$ instead of one leaves the optimum unchanged, because the Sharpe ratio does not depend on the
+scale of $w$, and it keeps $\kappa = \bar e / e^{\top} w_{\mathrm{mix}} \ge 1$, so the division does not amplify solver
+error. Each mix is then scaled by $c = \min\big(1, \sigma_{\mathrm{SPY}} / \sqrt{w_{\mathrm{mix}}^{\top} \Sigma_g\,
+w_{\mathrm{mix}}}\big)$ with the rest in cash. Scaling down keeps the budget, the single-name caps and the $\beta$ cap,
+whose bound is never negative; the turnover budget is checked again, and a scaled book that breaks it keeps the
+previous holdings. An earlier version forced $\sum_i w_i$ to the largest investment the volatility cap allowed, which
+left a single feasible portfolio whenever the cap bound, so MinVar and Tangent coincided; the two-fund form, a risky
+mix scaled against cash~\cite{tobin1958}, avoids this.
+
+\paragraph{The bandit selection rule.}
+One sector's bandit at a pick on day $t$ runs as in Algorithm~\ref{alg:S-bandit}. The window starts $d$ run over
+$\mathcal{D}_t = \{t - 272, \dots, t - 21\}$, the $252$ starts whose 21-day windows end on days $t - 251$ through $t$.
+% Bandit.jl _stream_seed: (seed * 1,000,003 + date value) * 64 + sector rank
+The random stream of the sector with rank $r$ (sectors in alphabetical order) is seeded with
+$(\text{seed} \cdot 1{,}000{,}003 + \text{date}) \cdot 64 + r$, where date is the day count of the pick date, so a
+pick depends only on the run seed, the date and the sector.
+
+\begin{algorithm}[tp]
+\caption{Bandit selection rule for one sector at a pick on day $t$.}
+\label{alg:S-bandit}
+\begin{algorithmic}[1]
+  \REQUIRE The sector's names $j = 1, \dots, A$; excess growth rates $x_j(d)$ (yr$^{-1}$) for window starts
+    $d \in \mathcal{D}_t$; a random stream seeded by the run seed, the date and the sector.
+  \ENSURE The $3$ names with the highest mean reward.
+  \IF{$A \le 3$}
+    \RETURN all $A$ names
+  \ENDIF
+  \STATE $M \gets \min(\max(50A, 500), 5000)$; $\hat\mu_j \gets 0$ and $c_j \gets 0$ for every $j$; draw a random
+    permutation $\pi$ of $1, \dots, A$ as the tie-break rank
+  \FOR{$k = 1, \dots, M$}
+    \STATE $\epsilon_k \gets 1$ if $k = 1$, else $\max\{0.05,\, \min[1,\, k^{-1/3} (A \ln k)^{1/3}]\}$
+    \IF{$\mathrm{Uniform}(0,1) < \epsilon_k$ or no arm has been pulled}
+      \STATE $a \gets$ an arm drawn uniformly from $1, \dots, A$ \hfill \COMMENT{explore}
+    \ELSE
+      \STATE $a \gets \arg\max_{j : c_j > 0} \hat\mu_j$, ties to the smallest $\pi_j$ \hfill \COMMENT{exploit}
+    \ENDIF
+    \STATE $d \gets$ a start drawn uniformly from $\mathcal{D}_t$; $c_a \gets c_a + 1$;
+      $\hat\mu_a \gets \hat\mu_a + (x_a(d) - \hat\mu_a)/c_a$
+  \ENDFOR
+  \RETURN the first $3$ names ordered by: pulled before unpulled, then $\hat\mu_j$ descending, then $\pi_j$ ascending
+\end{algorithmic}
+\end{algorithm}
+
+\paragraph{Parameters.}
+The settings of the allocation, the score and the selection rules, with the calibrated values from 2014--2024, are
+in Table~\ref{tab:S-allocation-params}.
+
+\clearpage
+\input{sections/tables/tableS_allocation_params}

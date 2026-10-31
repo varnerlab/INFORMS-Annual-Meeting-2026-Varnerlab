@@ -1,0 +1,83 @@
+% Source: results/calendar_baseline/synthetic_vs_triggers.csv, written by scripts/dev/calendar_baseline_synthetic.jl
+% from results/calendar_baseline/synthetic/cal_<p>.csv (364 calendar-only runs per stress path, z = Inf, D_max = Inf;
+% every row ok, 19 re-plans per run, no band exit or drawdown stop) and results/synthetic/rows/path_<p>.csv (the
+% triggered twins, same label without "|calendar"; every twin's hash was rebuilt and matched before its path ran).
+% Within a path the median over seeds of each cell, then the median across the 200 paths of the set; entries are
+% triggered minus calendar-only, of terminal / W0 and of max_drawdown. The triggered medians equal
+% results/synthetic/tables/burst_stress_hedge_{off,on}_wealth_median.csv.
+\begin{table}[H]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\caption{\textbf{Re-plan triggers against calendar-only re-planning in the burst stress set.} Each entry is the
+median across the $200$ synthetic futures of the set (the deepest SPY drawdowns among futures with a jump burst) of
+the runs with the band exit and the drawdown stop, minus the same median of the runs with both switched off, for
+each selection rule (row) and weighting rule (column). Within a future, the bandit and random rules contribute the
+median over seeds $5660$--$5664$, and the other rules ran once. Without the two triggers a run re-planned every
+$21$ trading days, $19$ times over the window, at the horizon or, when its last re-plan had gone to cash, on the
+cash revisit. A positive terminal wealth entry means the triggered runs ended higher, and a negative maximum
+drawdown entry means their worst drawdown was smaller. Rows are grouped as in Table~\ref{tab:S-calendar}, and the
+triggered medians are those of Fig.~\ref{fig:synthetic}.}
+\label{tab:S-calendar-burst}
+\begin{tabular}{l*{7}{r}}
+\toprule
+Selection rule & CD & CES & CESw & SG & MinVar & Tangent & LS \\
+\midrule
+\multicolumn{8}{l}{\emph{Hedge off, terminal wealth ratio}} \\
+$\gamma$ per sector & $-0.009$ & $0.008$ & $-0.002$ & $-0.002$ & $0.002$ & $-0.016$ & $0.006$ \\
+Bandit per sector & $0.008$ & $-0.007$ & $-0.002$ & $-0.012$ & $0.004$ & $0.015$ & $-0.010$ \\
+Random per sector & $0.000$ & $0.003$ & $0.003$ & $0.007$ & $-0.008$ & $0.003$ & $0.002$ \\
+\addlinespace[2pt]
+Global $\gamma$ & $-0.027$ & $0.001$ & $-0.006$ & $-0.031$ & $-0.022$ & $-0.009$ & $-0.026$ \\
+Correlation-aware $\gamma$ & $-0.013$ & $-0.008$ & $-0.013$ & $-0.015$ & $-0.025$ & $-0.013$ & $-0.002$ \\
+Liquid then $\gamma$ & $0.007$ & $-0.009$ & $0.002$ & $0.014$ & $0.003$ & $0.005$ & $0.014$ \\
+Random liquid 100 & $0.022$ & $-0.009$ & $0.021$ & $-0.006$ & $0.009$ & $0.013$ & $0.016$ \\
+Random whole universe & $0.007$ & $0.002$ & $0.004$ & $-0.001$ & $-0.007$ & $-0.011$ & $-0.001$ \\
+\addlinespace[2pt]
+Hand-picked 13 & $-0.004$ & $-0.007$ & $-0.002$ & $0.000$ & $0.004$ & $0.011$ & $0.024$ \\
+Hand-picked 13 + WMT, PG & $0.003$ & $-0.008$ & $-0.001$ & $0.013$ & $0.005$ & $-0.004$ & $0.021$ \\
+\addlinespace
+\multicolumn{8}{l}{\emph{Hedge off, maximum drawdown}} \\
+$\gamma$ per sector & $-0.006$ & $-0.003$ & $-0.007$ & $-0.005$ & $-0.014$ & $-0.001$ & $-0.006$ \\
+Bandit per sector & $0.000$ & $-0.001$ & $-0.003$ & $-0.002$ & $-0.002$ & $0.002$ & $-0.008$ \\
+Random per sector & $-0.013$ & $-0.013$ & $-0.016$ & $-0.008$ & $-0.007$ & $-0.001$ & $-0.017$ \\
+\addlinespace[2pt]
+Global $\gamma$ & $0.000$ & $-0.004$ & $-0.009$ & $-0.004$ & $-0.002$ & $-0.005$ & $-0.002$ \\
+Correlation-aware $\gamma$ & $-0.002$ & $-0.005$ & $-0.006$ & $0.002$ & $0.001$ & $-0.007$ & $0.001$ \\
+Liquid then $\gamma$ & $-0.009$ & $-0.008$ & $-0.009$ & $-0.010$ & $-0.009$ & $-0.003$ & $0.000$ \\
+Random liquid 100 & $-0.010$ & $-0.010$ & $-0.013$ & $-0.011$ & $-0.004$ & $-0.003$ & $-0.004$ \\
+Random whole universe & $-0.011$ & $-0.010$ & $-0.009$ & $-0.004$ & $-0.002$ & $-0.003$ & $-0.012$ \\
+\addlinespace[2pt]
+Hand-picked 13 & $-0.022$ & $-0.020$ & $-0.020$ & $-0.012$ & $-0.009$ & $-0.006$ & $-0.022$ \\
+Hand-picked 13 + WMT, PG & $-0.020$ & $-0.020$ & $-0.021$ & $-0.015$ & $-0.008$ & $-0.005$ & $-0.019$ \\
+\addlinespace
+\multicolumn{8}{l}{\emph{Hedge on, terminal wealth ratio}} \\
+$\gamma$ per sector & $0.009$ & $0.002$ & $0.002$ & $-0.003$ & $-0.001$ & $0.017$ & $-0.010$ \\
+Bandit per sector & $-0.013$ & $-0.019$ & $-0.013$ & $-0.005$ & $-0.002$ & $0.003$ & $-0.007$ \\
+Random per sector & $0.012$ & $0.019$ & $0.014$ & $-0.006$ & $0.001$ & $0.000$ & $0.015$ \\
+\addlinespace[2pt]
+Global $\gamma$ & $-0.003$ & $-0.002$ & $-0.007$ & $0.003$ & $-0.003$ & $-0.010$ & $-0.018$ \\
+Correlation-aware $\gamma$ & $-0.012$ & $-0.002$ & $-0.023$ & $-0.016$ & $-0.014$ & $-0.015$ & $-0.026$ \\
+Liquid then $\gamma$ & $-0.004$ & $0.004$ & $-0.016$ & $0.002$ & $0.015$ & $0.003$ & $-0.014$ \\
+Random liquid 100 & $0.000$ & $-0.010$ & $0.007$ & $0.009$ & $0.015$ & $0.006$ & $-0.002$ \\
+Random whole universe & $-0.007$ & $0.001$ & $-0.002$ & $0.013$ & $-0.013$ & $-0.011$ & $0.005$ \\
+\addlinespace[2pt]
+Hand-picked 13 & $-0.007$ & $-0.017$ & $-0.004$ & $-0.011$ & $0.000$ & $-0.010$ & $0.021$ \\
+Hand-picked 13 + WMT, PG & $-0.010$ & $-0.008$ & $-0.007$ & $0.002$ & $-0.007$ & $-0.010$ & $0.010$ \\
+\addlinespace
+\multicolumn{8}{l}{\emph{Hedge on, maximum drawdown}} \\
+$\gamma$ per sector & $-0.007$ & $-0.009$ & $-0.008$ & $-0.010$ & $-0.007$ & $-0.004$ & $-0.011$ \\
+Bandit per sector & $-0.005$ & $-0.013$ & $-0.008$ & $-0.013$ & $-0.004$ & $-0.002$ & $-0.011$ \\
+Random per sector & $-0.018$ & $-0.015$ & $-0.017$ & $-0.016$ & $-0.009$ & $-0.010$ & $-0.012$ \\
+\addlinespace[2pt]
+Global $\gamma$ & $-0.012$ & $-0.010$ & $-0.014$ & $-0.012$ & $-0.014$ & $-0.009$ & $-0.006$ \\
+Correlation-aware $\gamma$ & $-0.011$ & $-0.005$ & $-0.012$ & $-0.014$ & $-0.002$ & $-0.005$ & $-0.004$ \\
+Liquid then $\gamma$ & $-0.009$ & $-0.009$ & $-0.008$ & $-0.012$ & $-0.014$ & $-0.007$ & $-0.009$ \\
+Random liquid 100 & $-0.013$ & $-0.013$ & $-0.014$ & $-0.014$ & $-0.007$ & $-0.011$ & $-0.003$ \\
+Random whole universe & $-0.014$ & $-0.017$ & $-0.009$ & $-0.009$ & $-0.011$ & $-0.003$ & $-0.017$ \\
+\addlinespace[2pt]
+Hand-picked 13 & $-0.018$ & $-0.015$ & $-0.021$ & $-0.020$ & $-0.011$ & $-0.007$ & $-0.022$ \\
+Hand-picked 13 + WMT, PG & $-0.021$ & $-0.016$ & $-0.020$ & $-0.015$ & $-0.009$ & $0.000$ & $-0.020$ \\
+\bottomrule
+\end{tabular}
+\end{table}

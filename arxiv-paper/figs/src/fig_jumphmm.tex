@@ -1,0 +1,19 @@
+% Fig. jumphmm: the JumpHMM generator's architecture and its stylized facts against SPY, 2014-2024 (slide 7).
+\documentclass[border=2pt, varwidth=18cm]{standalone}
+\usepackage{paperfig}
+\input{figs/mpc.tex}
+\input{figs/jumphmm_architecture.tex}
+\input{figs/stylized_facts.tex}
+\paperfigcolors
+\begin{document}
+\vnjumphmmarchitecture\par
+\vspace{2pt}
+{\centering\fontsize{7.5}{9}\selectfont\color{vnslidebody}%
+  \tikz[baseline=-0.6ex]\draw[draw=vnaccent, line width=1.2pt] (0,0) -- (0.45,0);~real SPY, 2014–2024\hspace{1.5em}%
+  \tikz[baseline=-0.6ex]{\fill[vnband, fill opacity=0.3] (0,-0.08) rectangle (0.45,0.08);
+    \draw[draw=vnslidelink, line width=0.9pt] (0,0) -- (0.45,0);}~generator, 100 paths: median, 10–90\%\hspace{1.5em}%
+  \tikz[baseline=-0.6ex]\draw[draw=vndottick, line width=0.8pt, dash pattern=on 2.5pt off 1.5pt] (0,0) --
+    (0.45,0);~normal, SPY's mean and SD\par}
+\vspace{2pt}
+{\centering\vnstylizedfacts{3.35cm}{2.0cm}\par}
+\end{document}

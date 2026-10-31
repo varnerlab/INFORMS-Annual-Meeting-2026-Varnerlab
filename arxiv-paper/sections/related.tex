@@ -1,0 +1,61 @@
+Portfolio allocation is usually posed as a trade-off between expected growth and risk, following mean-variance
+analysis~\cite{markowitz1952} and its dynamic extensions~\cite{merton1969}. Optimized weights amplify errors in the
+estimated inputs~\cite{michaud1989}. Practical work therefore shrinks the covariance estimate~\cite{ledoitWolf2004}
+or adds limits on weights and trading, and judges the result against simple rules such as equal weighting, which is
+difficult to beat out of sample~\cite{demiguelGarlappiUppal2009}. The single-index model~\cite{sharpe1963} reduces
+the inputs to each stock's intercept and market loading, and factor models add further common
+factors~\cite{famaFrench1993}. The allocation used here keeps the single-index inputs for its risk limits and its
+scores, but replaces the mean-variance objective with utility functions from consumer theory: the Cobb--Douglas
+form~\cite{cobbDouglas1928}, the constant elasticity of substitution form~\cite{arrowEtAl1961}, applied once to
+share counts and once to portfolio weights, and the Stone--Geary form with a minimum holding of each
+stock~\cite{stone1954, geary1950}, four utilities in all. In each utility, a stock's preference weight is its score,
+a number between $-1$ and $1$ equal to the hyperbolic tangent of the ratio of its expected growth rate from the
+single-index fit to a penalty on its market loading whose strength depends on the recent direction of the market. Each
+preference weight is thus a single number that states why a stock is held. Stocks with a negative score receive no
+preference weight in the long-only utilities. The expected growth rate rewards a stock's trend, and trend-following
+signals in prices have a long empirical record~\cite{brockLakonishokLeBaron1992, moskowitzOoiPedersen2012}. The
+penalty on large loadings, which is harsher when the market is falling, follows the evidence that portfolios tilted
+away from high-beta stocks have earned higher risk-adjusted performance than portfolios tilted toward
+them~\cite{frazziniPedersen2014}. Three benchmarks run under the same limits: the minimum-variance portfolio, the
+tangency portfolio and a $130/30$ long-short portfolio, which holds $130\%$ of wealth long and $30\%$ short and so
+relaxes the long-only constraint of the utility portfolios~\cite{jacobsLevyStarer1998}. Choosing which stocks to
+hold before weighting them is a separate decision, and one of the selection rules studied here ranks the stocks of
+each sector with a multi-armed bandit~\cite{lattimoreSzepesvari2020}, whose arms are the sector's stocks and whose
+rewards are their growth in excess of the market over past 21-day windows.
+
+With proportional trading costs, the optimal rebalancing policy leaves the holdings alone inside a no-trade region
+and trades only at its boundary~\cite{magillConstantinides1976, davisNorman1990}. When expected growth rates are predictable, the
+optimal policy instead trades a fraction of the gap between the current portfolio and the portfolio the investor
+would hold without costs~\cite{garleanuPedersen2013}. Model-predictive control solves a finite-horizon optimization
+from the measured state, applies the first decision, and solves again from the next measured
+state~\cite{mayneEtAl2000}. Its portfolio applications include stochastic formulations with forecast models of asset
+prices~\cite{herzogDondiGeering2007}, linear control policies for multi-period allocation~\cite{calafiore2008}, and
+convex multi-period trading with costs and limits~\cite{boydEtAl2017}, all of which re-solve at every period.
+Drawdown control has its own literature, in which exposure is adjusted continuously to keep wealth above a fixed
+fraction of its running maximum~\cite{grossmanZhou1993}. The controller used here solves a single-period allocation
+at each re-plan, forecasts the value of the resulting holdings over a $21$-day horizon, and keeps the holdings
+unchanged until a trigger fires. Its default schedule is the horizon itself; a re-plan comes earlier when the
+measured portfolio value leaves a band around the forecast, so that a forecast miss brings trading forward, or when
+the drawdown reaches a limit. A re-plan re-solves the allocation from the current holdings and starts a new
+forecast; it does not by itself reduce exposure.
+
+Evaluating trading rules on the historical record carries a selection risk: when many rules or settings are tried on
+the same path, the best measured result overstates the result to expect~\cite{baileyEtAl2014, harveyLiu2015}.
+Synthetic data can test rules on paths that were not observed~\cite{assefaEtAl2020, jordonEtAl2022}, and the test is
+informative to the extent that the generator reproduces the stylized facts of daily growth rates, in particular
+heavy tails and volatility clustering~\cite{mandelbrot1963, cont2001}. Block bootstrap resampling keeps short-range
+dependence~\cite{politisRomano1994}. Conditional variance models such as GARCH reproduce volatility
+clustering~\cite{engle1982, bollerslev1986}. Regime-switching models, including hidden Markov models, represent
+shifts between market states~\cite{hamilton1989}, and neural generators learn the joint distribution
+directly~\cite{wieseEtAl2020}. Reviews of time-series synthesis note that a realistic distribution of daily values
+does not imply realistic behavior over time~\cite{stengerEtAl2024}. Earlier work built the generator used here, a
+hidden Markov model for each asset whose hidden states are bins of the daily growth rate, with heavy-tailed draws in
+each state and occasional episodes in which the chain is held in its most extreme states for a random number of
+days, producing bursts of large moves~\cite{alswaidan2026variance}. The same work combined the draws of many assets
+through a common market factor, rescaling each asset's own draw so that adding the market term does not inflate the
+asset's total variance. The present study adds drifting market loadings and sector factors to that combination, and
+uses the result only as a market for the complete allocation and rebalancing system to trade in; the controller's
+own forecast remains a geometric Brownian motion. The generator reproduces heavy tails more closely than volatility
+clustering, and the evaluation carries that limitation.
+
+

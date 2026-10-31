@@ -1,0 +1,80 @@
+% Source: results/tier1_summary.csv, results/universe_summary.csv and results/gamma_seeds/gamma_seeds_summary.csv
+% (ok rows, seeds 5660--5689, each run label once, the rows of talk_realrun_grid in code/src/TalkData.jl); each entry
+% is a median over the 30 runs of one selection rule, weighting rule and hedge setting.
+% Columns mean_portfolio_beta (daily sum of n_i close_i beta_i / V, averaged over days; code/src/StudyBacktest.jl),
+% mean_hedge_weight (x 100) and max_drawdown (median with the hedge on minus median with the hedge off).
+\begin{table}[H]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\caption{\textbf{Market exposure on real prices.} For each selection rule (row) and weighting rule (column), the
+median over the $30$ runs (seeds $5660$--$5689$) of the mean portfolio $\beta$ with the hedge off and on, of the
+mean weight of hedge-pool names with the hedge on, and of the maximum drawdown, as the median with the hedge on
+minus the median with it off. The portfolio $\beta$ of a day is the value-weighted online $\beta$ of the holdings
+divided by total wealth, and its mean is taken over the days of a run. The first three rows of each block hold $33$
+names ($3$ per sector), the next five hold $13$, and the last two are the hand-picked lists. With the market hedge
+on, a cap on portfolio $\beta$ tightened as the market weakened and up to five names with zero or negative $\beta$
+could be held.}
+\label{tab:S-exposure}
+\begin{tabular}{l*{7}{r}}
+\toprule
+Selection rule & CD & CES & CESw & SG & MinVar & Tangent & LS \\
+\midrule
+\multicolumn{8}{l}{\emph{Hedge off, mean portfolio $\beta$}} \\
+$\gamma$ per sector & 0.798 & 0.817 & 0.808 & 0.810 & 0.496 & 0.638 & 0.710 \\
+Bandit per sector & 0.821 & 0.837 & 0.836 & 0.842 & 0.437 & 0.621 & 0.717 \\
+Random per sector & 0.730 & 0.723 & 0.717 & 0.737 & 0.388 & 0.582 & 0.638 \\
+\addlinespace[2pt]
+Global $\gamma$ & 0.761 & 0.762 & 0.749 & 0.748 & 0.760 & 0.742 & 0.605 \\
+Correlation-aware $\gamma$ & 0.774 & 0.787 & 0.783 & 0.779 & 0.761 & 0.758 & 0.639 \\
+Liquid then $\gamma$ & 0.784 & 0.784 & 0.787 & 0.785 & 0.782 & 0.759 & 0.621 \\
+Random liquid 100 & 0.764 & 0.767 & 0.774 & 0.785 & 0.626 & 0.787 & 0.626 \\
+Random whole universe & 0.627 & 0.631 & 0.629 & 0.656 & 0.555 & 0.667 & 0.467 \\
+\addlinespace[2pt]
+Hand-picked 13 & 0.868 & 0.882 & 0.897 & 0.903 & 0.863 & 0.891 & 0.771 \\
+Hand-picked 13 + WMT, PG & 0.883 & 0.894 & 0.887 & 0.899 & 0.784 & 0.899 & 0.765 \\
+\addlinespace
+\multicolumn{8}{l}{\emph{Hedge on, mean portfolio $\beta$}} \\
+$\gamma$ per sector & 0.791 & 0.803 & 0.793 & 0.795 & 0.340 & 0.544 & 0.705 \\
+Bandit per sector & 0.793 & 0.800 & 0.799 & 0.813 & 0.338 & 0.536 & 0.695 \\
+Random per sector & 0.681 & 0.663 & 0.661 & 0.682 & 0.314 & 0.478 & 0.592 \\
+\addlinespace[2pt]
+Global $\gamma$ & 0.728 & 0.733 & 0.733 & 0.733 & 0.575 & 0.679 & 0.590 \\
+Correlation-aware $\gamma$ & 0.762 & 0.767 & 0.760 & 0.762 & 0.519 & 0.663 & 0.627 \\
+Liquid then $\gamma$ & 0.763 & 0.752 & 0.764 & 0.763 & 0.560 & 0.660 & 0.609 \\
+Random liquid 100 & 0.702 & 0.696 & 0.706 & 0.715 & 0.383 & 0.563 & 0.559 \\
+Random whole universe & 0.564 & 0.549 & 0.557 & 0.578 & 0.342 & 0.470 & 0.379 \\
+\addlinespace[2pt]
+Hand-picked 13 & 0.838 & 0.846 & 0.848 & 0.849 & 0.449 & 0.692 & 0.746 \\
+Hand-picked 13 + WMT, PG & 0.831 & 0.839 & 0.836 & 0.843 & 0.417 & 0.643 & 0.730 \\
+\addlinespace
+\multicolumn{8}{l}{\emph{Hedge on, hedge-pool weight (\% of wealth)}} \\
+$\gamma$ per sector & 8.4 & 11.8 & 8.6 & 9.2 & 34.1 & 19.8 & 13.4 \\
+Bandit per sector & 10.1 & 11.5 & 9.5 & 8.4 & 30.2 & 19.2 & 14.6 \\
+Random per sector & 11.7 & 12.1 & 11.6 & 10.1 & 25.9 & 20.8 & 14.7 \\
+\addlinespace[2pt]
+Global $\gamma$ & 27.9 & 28.9 & 29.8 & 28.5 & 39.8 & 30.9 & 33.5 \\
+Correlation-aware $\gamma$ & 25.5 & 26.1 & 25.8 & 26.0 & 39.3 & 28.4 & 32.1 \\
+Liquid then $\gamma$ & 29.2 & 29.7 & 29.7 & 29.5 & 39.2 & 29.9 & 33.7 \\
+Random liquid 100 & 21.8 & 21.7 & 22.0 & 21.4 & 34.0 & 29.7 & 26.9 \\
+Random whole universe & 21.1 & 21.4 & 21.4 & 21.0 & 33.0 & 27.6 & 26.0 \\
+\addlinespace[2pt]
+Hand-picked 13 & 23.2 & 22.9 & 22.4 & 22.6 & 37.6 & 31.4 & 29.6 \\
+Hand-picked 13 + WMT, PG & 21.3 & 22.2 & 20.6 & 20.5 & 35.4 & 32.3 & 29.0 \\
+\addlinespace
+\multicolumn{8}{l}{\emph{Maximum drawdown, hedge on minus hedge off}} \\
+$\gamma$ per sector & $0.000$ & $-0.006$ & $-0.001$ & $0.000$ & $0.000$ & $-0.009$ & $0.000$ \\
+Bandit per sector & $0.010$ & $0.007$ & $0.002$ & $0.001$ & $0.011$ & $0.007$ & $0.008$ \\
+Random per sector & $0.002$ & $0.001$ & $-0.001$ & $-0.003$ & $0.000$ & $0.008$ & $0.002$ \\
+\addlinespace[2pt]
+Global $\gamma$ & $0.000$ & $0.008$ & $0.007$ & $0.000$ & $0.001$ & $-0.009$ & $0.003$ \\
+Correlation-aware $\gamma$ & $0.000$ & $0.000$ & $0.000$ & $0.000$ & $0.004$ & $-0.001$ & $0.005$ \\
+Liquid then $\gamma$ & $-0.002$ & $0.008$ & $0.001$ & $0.000$ & $-0.009$ & $0.005$ & $0.005$ \\
+Random liquid 100 & $0.003$ & $0.005$ & $0.005$ & $-0.001$ & $0.009$ & $0.019$ & $0.015$ \\
+Random whole universe & $0.002$ & $0.005$ & $0.002$ & $0.000$ & $-0.002$ & $-0.018$ & $0.003$ \\
+\addlinespace[2pt]
+Hand-picked 13 & $0.002$ & $0.000$ & $-0.007$ & $0.003$ & $0.005$ & $0.003$ & $-0.009$ \\
+Hand-picked 13 + WMT, PG & $-0.003$ & $-0.003$ & $-0.003$ & $0.004$ & $-0.006$ & $0.000$ & $0.006$ \\
+\bottomrule
+\end{tabular}
+\end{table}

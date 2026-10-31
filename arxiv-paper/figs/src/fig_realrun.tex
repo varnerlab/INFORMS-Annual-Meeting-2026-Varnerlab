@@ -1,0 +1,11 @@
+% Fig. realrun: the real-data backtest, terminal wealth by selection rule and weighting rule, hedge on and off (slide 6).
+\documentclass[border=2pt, varwidth=18cm]{standalone}
+\usepackage{paperfig}
+\input{figs/dotplot.tex}
+\paperfigcolors
+\begin{document}
+\vndotreadrefs{data/realrun_refs.csv}%
+\pgfplotsset{vndot extra/.style={extra description/.code={\vndotlegendstacked}}}%
+\vndotplot[xmin=0.97, xmax=1.72, xstep=0.1, spy=\vndotSPY, ew=\vndotEW, width=10.1cm, height=4.9cm,
+  xlabel={terminal wealth ÷ initial wealth, median of 30 runs}]{data/realrun_grid.csv}{data/realrun_bars.csv}
+\end{document}

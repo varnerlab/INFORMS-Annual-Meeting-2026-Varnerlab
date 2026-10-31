@@ -1,0 +1,29 @@
+We built a system that chose stocks, set their share counts by maximizing a utility under limits on weight,
+volatility and turnover, and re-planned the holdings with a model-predictive controller, and we tested it on $373$
+United States equities over $420$ trading days of 2025--2026 and on simulated markets. On real prices, the choice of
+stocks moved terminal wealth more than the choice among seven weighting rules: one $33$-stock selection ended between
+$1.09$ and $1.23$ times initial wealth across the weighting rules, while different selections ended between $1.03$
+and $1.70$, the highest being a $13$-stock list the author picked in advance. The share of the controller's re-plans that came
+before the $21$-day horizon, because the portfolio value left the $95\%$ band of its forecast or fell $8\%$ below its
+peak, ranged from a fifth to three fifths across combinations of
+selection and weighting rule, highest for stocks selected by their score, the expected growth rate from a
+single-index fit divided by a power of the stock's market beta that depended on the market's recent direction.
+Compared with re-planning every $21$ trading days alone, these early re-plans made the median worst drawdown smaller
+in $55$ of the $70$ combinations of the ten selection rules and seven weighting rules without the market hedge and
+in $61$ with it, and raised trading cost in all of them, but raised median terminal wealth in $38$ and $26$ of the
+$70$. Among $10{,}000$ simulated price paths (synthetic futures), we kept two sets of $200$ with the
+deepest drawdowns of simulated SPY, one from futures whose SPY went through a burst of extreme daily moves and one
+from futures without such a burst. In both sets, the median terminal wealth of every combination ended above those
+of simulated SPY bought and held and of the equal-weight universe. Random selections did so as well, and so did
+every combination with the band exit and the drawdown stop switched off, so the margin came from parts of the system
+that every combination shared other than those two triggers, such as the volatility cap, whose separate effect the
+study did not measure. In these sets the early re-plans again made the median worst drawdown smaller, in $65$ to
+$70$ of the $70$ combinations for each set and hedge setting, without consistently raising median terminal wealth. In $600$ futures drawn at random from the $10{,}000$ (typical futures),
+the $13$ stocks with the highest scores ended above $13$ random stocks in $62$ to $71\%$ of futures across the
+weighting rules, but the generator kept each stock's 2014--2024 trend constant, and the score's trend term estimates
+that trend, whereas in the real market those trends did not carry over into 2025--2026, so
+part of this advantage came from the generator's design and may not carry over to real prices. A market hedge, which
+capped the portfolio's beta more tightly as the market weakened and added stocks with zero or negative beta, reduced
+terminal wealth on real prices and added to it in the set without bursts, whose declines were the most sustained. Deciding which selection rule is
+better, and when such a hedge pays, will need more historical windows and generators whose trends persist no more
+than real ones do.

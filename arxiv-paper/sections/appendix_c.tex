@@ -1,0 +1,135 @@
+% appendix_c.tex (agent C)
+% Online Appendix: details of the synthetic market. Tables tab:S-generator-params
+% (sections/tables/tableS_generator_params.tex), tab:S-sector-params (sections/tables/tableS_sector_params.tex) and
+% tab:S-checks (sections/tables/tableS_generator_checks.tex) belong with this appendix; the lead author places them.
+% Sources as in method_synthetic.tex: code/src/SyntheticMarket.jl, code/src/SyntheticCalibration.jl,
+% scripts/20_synthetic_fit.jl, results/synthetic/generator_summary.toml, results/synthetic/generator.jld2,
+% results/synthetic/paths.csv, and the ledger in .superpowers/sdd/2026-10-26-synthetic-market-stress-test/.
+
+\section{Synthetic market details}\label{app:synthetic}
+
+The settings and fitted values of the generator are collected in Table~\ref{tab:S-generator-params}, and those of
+the $11$ sector models in Table~\ref{tab:S-sector-params}. This appendix gives the calculations behind the sector
+loading scale, the variance of a composed name, the fits of the loading drift and the intercept pull, the choice of
+centering, and the frequency of jump bursts in the trading window.
+
+For a sector $s$ with $n_s$ names, the real sector factor is $f_s(t) = n_s^{-1}\sum_{i \in s} e_i(t)$, with variance $\sigma_s^2$, so the sum of
+the real residual covariances over the ordered pairs $i \ne j$ of the sector is
+$n_s^2 \sigma_s^2 - \sum_{i \in s} \mathrm{Var}(e_i)$. In the generator, the shared part of two names in the sector
+is $\delta_i f_s(t)$ and $\delta_j f_s(t)$, whose covariance is $\delta_i \delta_j \sigma_s^2$ when the sector draw has
+the real factor variance, and the sum of $\delta_i \delta_j$ over the ordered pairs is
+$(\sum_i \delta_i)^2 - \sum_i \delta_i^2$. With $\delta_i^{\rm loo}$ the slope of $e_i$ on the mean residual of the other $n_s - 1$ names of the sector,
+the scale $\kappa_s$ that makes the generator's mean pairwise covariance equal the real one is
+\begin{equation}
+  \kappa_s^2 = \frac{n_s^2 \sigma_s^2 - \sum_{i \in s} \mathrm{Var}(e_i)}
+    {\left[\left(\sum_{i \in s} \delta_i^{\rm loo}\right)^2 - \sum_{i \in s} \left(\delta_i^{\rm loo}\right)^2\right]
+    \sigma_s^2},
+  \label{eq:kappa}
+\end{equation}
+and $\delta_i = \kappa_s \delta_i^{\rm loo}$. The leave-one-out mean contains the common factor plus the average
+noise of the other $n_s - 1$ names, so the slope on it is attenuated as in an errors-in-variables regression. For
+names with equal loadings and a common residual correlation $r_s$, the slope is attenuated by the factor
+$r_s/(r_s + (1 - r_s)/(n_s - 1))$, and to first order
+\begin{equation}
+  \kappa_s^2 \approx 1 + \frac{1 - r_s}{(n_s - 1)\, r_s},
+  \label{eq:kappa-approx}
+\end{equation}
+so the scale is largest in small sectors with weak residual co-movement. With $15$ names and $r_s = 0.094$,
+% results/synthetic/checks.csv (V5 reference column); generator_summary.toml [sectors.*] loading_scale
+Eq.~\eqref{eq:kappa-approx} gives $\kappa_s \approx 1.30$ for Communication Services against a fitted $1.34$, and with $17$ names and
+$r_s = 0.166$ it gives $1.15$ for Materials, as fitted. In Financials ($53$ names, $r_s = 0.239$), Utilities ($26$,
+$0.549$) and Energy ($16$, $0.542$), the fitted scales were $1.02$. With the scaled loadings, every sector's mean
+residual correlation on the check paths came within $0.01$ of its real value (Table~\ref{tab:S-checks}).
+
+The draws $g_m$, $f_s$ and $\varepsilon_i$ come from separate models with separate seeds, and the drift shocks
+$z_i(t)$ are independent of all three, so the variance of Eq.~\eqref{eq:compose} on a day is approximately
+\begin{equation}
+  \mathrm{Var}\left(g_i(t)\right) \approx \theta_i^2 \left(\mathrm{E}\left[\beta_i(t)^2\right] v_m
+    + \delta_i^2 v_s\right) + s_i^2 v_i,
+  \label{eq:composed-variance}
+\end{equation}
+where $v_m$, $v_s$ and $v_i$ (yr$^{-2}$) are the variances of the market, sector and name draws. The omitted term,
+the variance of the drift times the squared mean of $g_m$, is at most $\bar g_m^2/v_m$ times the first term, about
+% results/synthetic/checks.csv (V1: median synthetic SPY growth 0.105); generator.jld2 (sigma2_m = 7.51)
+$0.105^2/7.51 \approx 0.0015$. The stationary
+variance of the drift in Eq.~\eqref{eq:beta-drift} is $a^2 k_i^2/(1 - (1-a)^2) = k_i^2 a/(2-a)$, so
+$\mathrm{E}[\beta_i(t)^2] = \hat\beta_i^2 + k_i^2 a/(2-a)$, the term in Eq.~\eqref{eq:rho-bar}. If each draw
+variance were exactly its real counterpart, with $v_m = \sigma_m^2$, $v_s = \sigma_s^2$ and $v_i = \sigma_i^2$, the
+rule $s_i^2 = 1 - \bar\rho_i$ would give $\mathrm{Var}(g_i) = \sigma_i^2$. Each JumpHMM instead drew a few percent
+more variance than its training series (the median standard deviation ratio of the name models was $1.037$), and when
+% results/synthetic/generator_summary.toml [model_sd_ratio]; results/synthetic/checks.csv (V3 rows)
+the market, sector and name models inflate variance by similar ratios, Eq.~\eqref{eq:composed-variance} lands near
+$v_i$, the variance of the name's own draw.
+The checks found median ratios of $0.994$ to $v_i$ and $1.066$ to $\sigma_i^2$.
+
+The loading drift was fitted on a bank of $20$ synthetic paths, drawn once without drift and reused at every
+% scripts/20_synthetic_fit.jl (BANK = 1,000,001:1,000,020); code/src/SyntheticCalibration.jl (fit_beta_drift)
+candidate value. On each bank path, a name was composed with a trial $(h_\beta, k_i)$, the online estimator was
+started from the OLS fit of that path's 2014--2024 and the market moments of that path, and the standard deviation and
+lag-$252$ autocorrelation of $\hat\beta_i(t)$ over 2014--2024 were averaged over the bank. For each half-life, each
+$k_i$ came from $30$ bisection steps on the stationary standard deviation $k_i\sqrt{a/(2-a)}$ between $0$ and $1.5$,
+with $k_i = 0$ reserved for a name whose estimation noise alone reached its target, which happened for no name. The
+median lag-$252$ autocorrelation then rose with the half-life, from $0.059$ at $63$ trading days to $0.178$ at $126$,
+% results/synthetic/generator_summary.toml [[beta.table]] (acf252 and k_median by h)
+$0.307$ at $252$, $0.397$ at $504$, $0.447$ at $1{,}008$ and $0.481$ at $2{,}016$, and $126$ came closest to the real
+$0.206$. The median drift scale at the chosen half-life was $4.97$, and the real median standard deviation of
+$\hat\beta_i(t)$ that the fit reproduced was $0.208$.
+
+The intercept pull used the same bank. OLS is linear in the growth path and $\alpha_i$ does not enter $\bar\rho_i$,
+so on each bank path and window the synthetic OLS intercept of name $i$ is $\bar\alpha + \phi(\hat\alpha_i -
+\bar\alpha) + r_i$, where $r_i$ is the intercept of the same name composed with a zero intercept. We computed $r_i$
+once for every name, path and window (2014--2024, 2014--2019 and 2020--2024) and searched $\phi$ from $0$ to $1.5$
+in steps of $0.01$, jointly with an intercept drift whose stationary standard deviation ran from $0$ to
+% code/src/SyntheticCalibration.jl (fit_alpha_drift grids and loss); generator_summary.toml [alpha], [alpha_joint_reference]
+$0.15$~yr$^{-1}$ in steps of $0.0025$~yr$^{-1}$. With $\mathrm{spread}$ the cross-name standard deviation of the
+2014--2024 OLS intercepts and $\mathrm{corr}$ the cross-name correlation of the 2014--2019 and 2020--2024 intercepts,
+each computed on a path and averaged over the bank, the loss was $((\mathrm{spread} - 0.0764)/0.01)^2 +
+((\mathrm{corr} - 0.175)/0.05)^2$.
+The joint minimum lay at $\phi = 0.6$ with no drift, where the bank gave a spread of $0.088$~yr$^{-1}$ and a
+correlation of $0.150$ (loss $1.61$). The real pooled statistic, the mean over names of the squared change in OLS
+intercept between 2014--2019 and 2020--2024 minus the mean over names of the sum of its two squared standard
+errors, was
+$-0.0043$~yr$^{-2}$, so the real changes were no larger than their noise. The synthetic spread contains the
+estimation noise of each name's intercept, whose real root-mean-square standard error is $0.075$~yr$^{-1}$, so the
+% docs/superpowers/specs/2026-10-26-synthetic-market-stress-test-design.md section 4.3 (RMS standard error 0.075)
+spread could not fall below about $0.075$~yr$^{-1}$ for any $\phi$, close to the real spread of $0.076$~yr$^{-1}$,
+while the half-window correlation fell toward zero as $\phi$ shrank. A value of $\phi$ low enough to bring the spread
+within its tolerance would therefore have pushed the correlation further below its target, and the fitted $\phi$
+left the spread $0.013$~yr$^{-1}$ above the
+real value on the check paths, the one failed check.
+
+The composition centers each name's draw on the model's long-run mean $\bar\varepsilon_i$, not on the draw's own mean
+over the path. The full calendar holds $2{,}766$ growth days in the calibration window, one growth day from
+% results/synthetic/generator.jld2 (dates: 2024-12-31 is day 2,767, 2025-01-02 is day 2,768, 2026-09-04 is day 3,187)
+2024-12-31 to 2025-01-02, and $419$ growth days in the trading window. Centering on the path mean forces
+$2{,}766\, m_{\mathcal{C}} + \tilde\varepsilon_i(2{,}767) + 419\, m_{\mathcal{W}} = 0$, where $m_{\mathcal{C}}$ and
+$m_{\mathcal{W}}$ are the mean draws in the two windows, so $m_{\mathcal{W}} \approx -6.6\, m_{\mathcal{C}}$. A name
+whose own draw raised its calibration intercept by chance would then have its trading-window intercept lowered by
+% .superpowers/sdd/2026-10-26-synthetic-market-stress-test/task-6-report.md (-0.48, range -0.71 to -0.16; 0.003)
+about $6.6$ times that amount. On the bank, the noise parts of the two intercepts correlated $-0.48$ across names under
+path centering (from $-0.71$ to $-0.16$ across paths) and $0.003$ when centered on the model's mean. Leaving the draws
+uncentered is not an alternative, since the long-run mean of a name model is the name's own mean growth (median
+% results/synthetic/generator.jld2 (eps_center: median 0.087); task-6-report.md (uncentered: noise correlation 0.20)
+$0.087$~yr$^{-1}$), which would act as a second, persistent intercept and in the same diagnostic made the noise parts
+of the intercepts of 2014--2019 and 2020--2024 correlate $0.20$.
+
+A jump episode of the market model overlaps a trading window of $L = 419$ growth days if it starts inside the window
+or starts before it and is still under way on its first day. With $\epsilon$ small, the expected number of such
+episodes is $\epsilon L$ for the first kind plus $\epsilon\, \mathrm{E}[K] = \epsilon\lambda$ for the second, where
+$K$ is the episode length, so the probability that a window contains a burst is approximately
+\begin{equation}
+  1 - \exp\left(-\epsilon (L + \lambda)\right) = 1 - \exp\left(-10^{-4} (419 + 118.9)\right) = 0.052,
+  \label{eq:burst-prob}
+\end{equation}
+% results/synthetic/paths.csv (has_burst: 523 of 10,000); generator.jld2 (market.jump: 1e-4, 118.93)
+against $523$ of $10{,}000$ windows in the simulation. Over the whole calendar of $3{,}186$ growth days, with no
+episode under way before the first day, $1 - \exp(-3{,}186\,\epsilon)$ gives a probability of $0.27$ that a path contains at least one episode, most of which fall in the
+calibration window.
+
+Every random stream is seeded from the path number $p$. The market draw uses seed $p$, sector $s$ uses
+% code/src/SyntheticMarket.jl (path_seed, center_seed); scripts/20_synthetic_fit.jl (tuning seeds 5660 + j, 7000 + s)
+$10^{12} + 10^4 p + s$, name $j$ uses $2 \times 10^{12} + 10^4 p + j$, and the drift shocks of all names come from
+one stream seeded with $3 \times 10^{12} + p$. The long-run means use fixed seeds above $4 \times 10^{12}$, and the
+tuning of name $j$ and sector $s$ used seeds $5660 + j$ and $7000 + s$. JumpHMM.jl reseeds the generator at each
+simulation call, so the draws do not depend on the number of threads, and building one path twice gave identical
+market data (Table~\ref{tab:S-checks}).

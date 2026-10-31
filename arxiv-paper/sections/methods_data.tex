@@ -1,0 +1,76 @@
+% methods_data.tex
+% Opening prose of the Methods section (no subsection header; it sits directly under \section{Methods}):
+% data and vendor, universe and sectors, split basis, windows, growth rates, risk-free rate, initial wealth,
+% cash, fills and trading costs. Data-preparation details (sector counts, split detection) are in appendix_b.tex.
+% Sources (the code is the truth where docs disagree): scripts/00_fetch_data.jl, code/src/Data.jl,
+% code/src/Costs.jl, code/src/Backtest.jl (_bt_fill!, _bt_adv), code/src/StudyBacktest.jl (run_study),
+% config/study.toml, results/calibration_summary.toml, README.md.
+
+We tested a rebalancing strategy built from three parts, a score that ranks stocks by expected growth, a
+constrained utility maximization that sets how many shares of the selected stocks to hold, and a
+model-predictive controller that decides when to re-plan, in a backtest on recorded prices and in a stress test
+on synthetic prices. The recorded prices were the daily opens and closes (USD/share) and volumes (shares/day) of
+the constituents of the S\&P~500 index and of the exchange-traded fund SPY, which served as the market and was
+never held. They came from Polygon.io in three files covering 2014-01-03 to 2024-12-31, calendar 2025, and
+2026-01-02 to 2026-09-04, and the trading days were those of SPY. Each name took one of the $11$ sectors of the
+Global Industry Classification Standard (GICS) from a snapshot of the index constituent list. The universe kept
+every ticker that appeared in all three files with a sector and had a positive open and close on every trading
+% results/calibration_summary.toml (universe_size = 373; sector_counts from 15 to 60)
+day from 2014-01-03 to 2026-09-04, which left $N = 373$ names with between $15$ and $60$ per sector
+(Appendix~\ref{app:controller}), and we write $s(i)$ for the sector of name $i$. Because the snapshot lists current
+members, the universe holds only names that were index members at the snapshot date and traded on every day of
+$2014$--$2026$, each with its current sector. The prices were split-adjusted by the vendor and not adjusted for
+dividends, and we used them as given, so neither the portfolios nor SPY received dividends. Each file was
+% README.md (Data and its limitations); results/large_k/run.log (seven split-basis lines)
+split-adjusted as of its own creation date, so for the seven names that split between the creation dates of two
+files we put the earlier rows on the newest file's basis (Appendix~\ref{app:controller}).
+
+% config/study.toml [window]; trading-day counts with code/src/Data.jl on data/ and talk/data/market_state.csv (420 rows)
+The calibration window ran from 2014-01-03 to 2024-12-31 ($2{,}767$ trading days) and the trading window from
+2025-01-02 to 2026-09-04 ($420$ trading days). Quantities fitted on the calibration window (the prior of the online
+single-index fit, the growth moments of SPY, the volatility cap, the gain of the market state and the covariance
+shrinkage) were fitted once and then held fixed. In the trading window every decision was made after the close of
+day $t$ from data dated on or before day $t$, and its orders filled at the open of day $t+1$. We measured
+performance with continuously compounded growth rates. For a price or wealth series $S$ observed on trading days,
+the growth rate over the $k$ trading days that end on day $t$ is
+\begin{equation}
+  g(t;k) \;\equiv\; \frac{1}{k\,\Delta t}\,\ln\!\left(\frac{S(t)}{S(t-k)}\right),
+  \label{eq:growth}
+\end{equation}
+% code/src/Data.jl (growth_rates, Delta t = 1/252); 419 = 420 - 1 daily steps
+where $\Delta t = 1/252$~yr is the length of one trading day, so that $g$ has units of $\mathrm{yr}^{-1}$. We write
+$g_i(t) = g_i(t;1)$ for the daily growth rate of name $i$ and $g_M(t)$ for that of SPY, and the realized growth rate
+of a run is Eq.~\eqref{eq:growth} applied to its wealth over the $k = 419$ daily steps of the trading window.
+
+The risk-free growth rate came from the 3-month Treasury bill rate DTB3~\cite{fredDTB3}, a bank discount rate $d$
+(a fraction, on a 360-day year), converted to the continuously compounded growth rate of a $91$-day bill,
+\begin{equation}
+  g_f(t) \;=\; -\,\frac{365}{91}\,\ln\!\left(1 - \frac{91\,d}{360}\right),
+  \label{eq:riskfree}
+\end{equation}
+in $\mathrm{yr}^{-1}$. Day $t$ used the last observation dated before $t$, because the rate for a day is published
+% data/DTB3.csv through code/src/Data.jl (_risk_free): min 0.0358, max 0.0439 over 2025-01-02 to 2026-09-04
+on the following day, and $g_f$ ranged from $0.036$ to $0.044$~$\mathrm{yr}^{-1}$ over the trading window. It set
+the growth of cash in the backtest and in the controller's forecast, the excess growth of the tangency
+benchmark, and the excess growth behind the Sharpe ratio and the regression on SPY.
+
+% config/study.toml (W0 = 100000.0); code/src/Backtest.jl (_BT_HELD_W = 1e-3)
+Each run started with $W_0 = 100{,}000$~USD in cash at the close of 2025-01-02, and its wealth at the close of day
+$t$ was $W(t) = c(t) + \sum_i n_i(t)\,S_i(t)$, with cash $c$ (USD), fractional shares $n_i$ (negative for a short
+position) and close prices $S_i$ (USD/share). Positive cash grew by the factor $e^{g_f(t)\,\Delta t}$ each day.
+Orders filled at the next open, sells before buys, with all buys scaled down by one common factor when the cash
+could not cover them, so cash never went negative, and a target position worth at most $0.1\%$ of wealth was set to
+zero shares. A fill of $q$ shares (signed) of name $i$ at the open price $S^{\mathrm{o}}_i$ (USD/share) paid
+\begin{equation}
+  C(q) \;=\; \bar c\, S^{\mathrm{o}}_i\,|q| \;+\; \kappa\,\frac{|q|}{A_i}\,S^{\mathrm{o}}_i\,|q|
+  \label{eq:cost}
+\end{equation}
+% config/study.toml [costs] half_spread_bps = 5.0, impact_kappa = 0.001; code/src/Backtest.jl (_BT_ADV_DAYS = 63)
+in USD, the half spread $\bar c = 5$~bps of the traded value plus a linear impact cost~\cite{almgrenChriss2001}
+with coefficient $\kappa = 0.001$ on the participation $|q|/A_i$, where $A_i$ (shares/day) is the mean daily volume
+of name $i$ over the $63$ trading days that end on the decision day. There was no commission, and the same half
+% config/study.toml [allocators] borrow_rate = 0.0075
+spread prices the turnover limit of the allocation problem. Short positions, which only the 130/30 benchmark took,
+paid a borrow fee at the rate $b = 0.0075$~$\mathrm{yr}^{-1}$ on their value at each close, charged daily, and their
+sale proceeds were held as cash.
+

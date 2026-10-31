@@ -1,0 +1,31 @@
+% Fig. synthetic: terminal wealth on 600 typical, 200 burst-stress and 200 bear-stress JumpHMM futures (slide 9).
+% The hedge key is an overlay right of the last panel; the space after that panel keeps it inside the page.
+\documentclass[border=2pt, varwidth=18cm]{standalone}
+\usepackage{paperfig}
+\input{figs/dotplot.tex}
+\paperfigcolors
+\def\vndotOffRadius{1.4pt}
+\def\vndotOnRadius{1.35pt}
+\def\vndotBarWidth{1.7pt}
+\begin{document}
+\vndotreadaxis{data/syn_axes.csv}{typical}%
+\vndotreadrefs{data/syn_typical_refs.csv}%
+\vndotplot[xmin=\vndotAxisLo, xmax=\vndotAxisHi, xstep=0.1, spy=\vndotSPY, ew=\vndotEW, width=2.95cm,
+  height=4.6cm, labelsize=7, title={\vnmedium Typical}]%
+  {data/syn_typical_dots.csv}{data/syn_typical_bars.csv}%
+\hspace{0.3cm}%
+\vndotreadaxis{data/syn_axes.csv}{burst_stress}%
+\vndotreadrefs{data/syn_burst_stress_refs.csv}%
+\pgfplotsset{vndot extra/.style={xlabel style={overlay, yshift=2pt}}}%
+\vndotplot[xmin=\vndotAxisLo, xmax=\vndotAxisHi, xstep=0.1, spy=\vndotSPY, ew=\vndotEW, width=2.95cm,
+  height=4.6cm, rowlabels=false, spylabel=SPY, ewlabel=Equal,
+  xlabel={terminal wealth ÷ initial wealth, median across futures}, title={\vnmedium Burst stress}]%
+  {data/syn_burst_stress_dots.csv}{data/syn_burst_stress_bars.csv}%
+\vndotreadaxis{data/syn_axes.csv}{bear_stress}%
+\vndotreadrefs{data/syn_bear_stress_refs.csv}%
+\pgfplotsset{vndot extra/.style={extra description/.code={\vndothedgekey}}}%
+\vndotplot[xmin=\vndotAxisLo, xmax=\vndotAxisHi, xstep=0.1, spy=\vndotSPY, ew=\vndotEW, width=2.95cm,
+  height=4.6cm, rowlabels=false, title={\vnmedium Bear stress}]%
+  {data/syn_bear_stress_dots.csv}{data/syn_bear_stress_bars.csv}\hspace*{1.6cm}\par
+\vspace{14pt}
+\end{document}

@@ -1,0 +1,45 @@
+% tableS_grids.tex
+% The experiment grids of the real-data backtest. Run counts are rows with status ok in each summary file
+% (every row is ok): results/tier1_summary.csv 854, results/fixed_summary.csv 427,
+% results/universe_summary.csv 4,438 (4,410 universe-wide + 28 hand-picked),
+% results/gamma_seeds/gamma_seeds_summary.csv 4,200 (140 labels repeat tier1 and universe runs),
+% results/large_k/large_k_summary.csv 1,680, results/eta_summary.csv 2,562, results/limits_summary.csv 17,
+% results/calendar_baseline/calendar_baseline_summary.csv 4,200 (z = Inf, D_max = Inf).
+% Distinct labels over all eight files: 18,238. Grid builders: code/src/StudyRunner.jl (tier1_runs,
+% fixed_schedule_runs, universe_runs, fixed_list_runs, eta_runs, limits_runs), scripts/dev/gamma_seeds.jl,
+% scripts/dev/large_k.jl, scripts/dev/calendar_baseline.jl; settings config/study.toml [grid].
+\begin{table}[H]
+\centering
+\small
+\caption{\textbf{Experiment grids of the real-data backtest.} Every grid runs the full trading window
+(2025-01-02 to 2026-09-04) with the seven weighting rules (CD, CES, CESw, SG, MinVar, Tangent and LS) unless the
+row says otherwise. Seeds run from $5660$, and a deterministic selection rule ran with seed $5660$ alone except in
+the seed rerun. The seed rerun repeats $140$ runs of the Tier 1, universe-wide and hand-picked grids, and each repeated run counts
+once in the total.}
+\label{tab:S-grids}
+\begin{tabular}{@{}p{2.2cm}p{5.4cm}lll@{}}
+\toprule
+\textbf{Grid} & \textbf{Selection rules and weighting rules} & \textbf{Hedge} & \textbf{Seeds} &
+  \textbf{Runs} \\
+\midrule
+Tier 1 & $\gamma$, bandit and random per sector ($33$ names) & on, off & $30$ ($\gamma$: $1$) & $854$ \\
+Fixed schedule & as Tier 1, picks on the $21$-day timer only & on & $30$ ($\gamma$: $1$) & $427$ \\
+Universe-wide & global $\gamma$, liquid then $\gamma$, correlation-aware $\gamma$, random from the $100$ most
+  liquid, random from the universe, at $K = 5, 8, 13, 21, 34$ & on, off & $30$ ($\gamma$ rules: $1$) &
+  $4{,}410$ \\
+Hand-picked & the $13$-name list and its $15$-name extension & on, off & $1$ & $28$ \\
+Seed rerun & $\gamma$ per sector; global $\gamma$ at $K = 5, 8, 13, 21, 34$; correlation-aware $\gamma$ and liquid
+  then $\gamma$ at $K = 13$; both hand-picked lists & on, off & $30$ & $4{,}200$ \\
+Large book & global $\gamma$ and random from the universe at $K = 100, 200$ & on, off & $30$ & $1{,}680$ \\
+Calendar only & the ten selection rules of the main comparison, with the band exit and the drawdown stop off &
+  on, off & $30$ & $4{,}200$ \\
+CES elasticity & as Tier 1; CES and CESw at $\eta = 0.1, 0.25, 0.5, 2, 4, 10$ with the single-name cap on and
+  off, CD with the cap off (CES at $\eta = 0.1$ and the cap-on points at $\eta = 0.5$ left out) & on, off &
+  $30$ ($\gamma$: $1$) & $2{,}562$ \\
+Budget only & hand-picked $13$; CD, and CES and CESw at $\eta = 0.05, 0.1, 0.25, 0.5, 2, 4, 10, 20$, with no
+  single-name or volatility cap & off & $1$ & $17$ \\
+\midrule
+Total & distinct runs & & & $18{,}238$ \\
+\bottomrule
+\end{tabular}
+\end{table}

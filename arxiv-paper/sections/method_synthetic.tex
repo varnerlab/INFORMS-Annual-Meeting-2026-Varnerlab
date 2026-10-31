@@ -1,0 +1,347 @@
+% method_synthetic.tex (agent C)
+% Methods subsections on the synthetic market and the evaluation on synthetic futures, with Algorithms
+% alg:generator and alg:evaluation. Tables for the lead author to place in the Online Appendix:
+% sections/tables/tableS_generator_checks.tex (tab:S-checks), sections/tables/tableS_generator_params.tex
+% (tab:S-generator-params) and sections/tables/tableS_sector_params.tex (tab:S-sector-params); fitting details and
+% derivations in sections/appendix_c.tex (app:synthetic).
+% The code is the source of truth: code/src/SyntheticMarket.jl (compose_name, synthetic_draws, synthetic_growth),
+% code/src/SyntheticCalibration.jl (SYNTH_HMM, fit_beta_drift, fit_alpha_drift), code/src/SyntheticRunner.jl,
+% scripts/20_synthetic_fit.jl to scripts/24_synthetic_checks.jl. Design record:
+% docs/superpowers/specs/2026-10-26-synthetic-market-stress-test-design.md; decision ledger:
+% .superpowers/sdd/2026-10-26-synthetic-market-stress-test/ (rulings.md, progress.md).
+
+\subsection{Synthetic markets from per-asset JumpHMM generators}\label{sec:method-synthetic}
+
+% results/synthetic/generator.jld2 (dates: 2025-01-02 is day 2,768 and 2026-09-04 is day 3,187, so 420 days);
+% docs/superpowers/specs/2026-10-26-synthetic-market-stress-test-design.md section 1 (one sell-off, Feb-Apr 2025)
+The backtest covers one real history of $420$ trading days with one sell-off, so it cannot show how the method
+behaves in conditions that did not occur in that window. We therefore built synthetic markets for the whole universe
+and ran the complete method on each. Every synthetic series came from JumpHMM, the hidden Markov generator with jumps
+of Alswaidan and Varner~\cite{alswaidan2026variance} (Fig.~\ref{fig:jumphmm}). A JumpHMM is a hidden Markov
+model~\cite{rabinerJuang1986,hamilton1989} whose states are intervals of the daily growth rate bounded by
+equal-probability quantiles of a fitted Laplace distribution, whose transition matrix is estimated by counting, and
+% ~/.julia/packages/JumpHMM/dToqv/src/JumpHMM.jl (fit); code/src/SyntheticCalibration.jl (SYNTH_HMM.nu)
+whose draw for each day is Student-$t$ with $\nu = 5$ degrees of freedom, located and scaled by the training days in
+the selected state. Because the counted chain mixes within a few days, JumpHMM adds jump episodes to reproduce the
+slow decay of the autocorrelation of absolute growth rates~\cite{mandelbrot1963,cont2001,bullaBulla2006}. On a day
+with no episode under way, an episode starts with probability $\epsilon$ and lasts a Poisson number of days with mean
+$\lambda$, and on each of its days the state is drawn uniformly from the $N_{\rm tail}$ most negative states with
+probability $p_{\rm neg}$ or from the $N_{\rm tail}$ most positive states otherwise, which makes an episode a sustained
+burst of large moves of both signs rather than a single price jump~\cite{merton1976,kou2002}. The pair
+$(\epsilon, \lambda)$ minimizes on a grid, over simulated paths that contain an episode, the squared error in the
+% ~/.julia/packages/JumpHMM/dToqv/src/Tune.jl (w_kappa = 0.20, acf_lags = 25)
+absolute-growth autocorrelation at lags $1$ to $25$ plus $0.20$ times the squared error in excess kurtosis. We write
+$\epsilon$ for the jump probability and $\varepsilon$ for a growth-rate draw.
+
+% code/src/SyntheticCalibration.jl (SYNTH_HMM); results/synthetic/generator.jld2 (jump.p_neg, jump.N_tail)
+Every JumpHMM here used $50$ states, $\nu = 5$, $p_{\rm neg} = 0.52$ and $N_{\rm tail} = 5$, with jumps enabled
+(Table~\ref{tab:S-generator-params}). Two settings differ from the SPY generator of the JumpHMM paper. That paper used
+% ~/Desktop/julia_work/HMM-w-jumps-paper/arxiv-paper/sections/main_tables.tex (tab:hyperparams: N = 100)
+$100$ states, so its tail sets held the most extreme $5\%$ of states on each side, whereas with $50$ states they hold
+$10\%$. Its multi-asset comparisons either disabled jumps or gave every asset the SPY values of $(\epsilon, \lambda)$,
+whereas each sector and name model here was tuned on its own series. As for SPY in that paper, the tuned $\epsilon$
+% results/synthetic/generator.jld2 (factors[s].jump, names[i].jump)
+sat at the lower edge of its grid, $10^{-4}$ per day, for all $11$ sector models and $370$ of the $373$ name models,
+while $\lambda$ spread over its whole grid of $10$ to $120$ trading days. We used JumpHMM.jl version $0.1.0$ at a
+% code/Manifest.toml (deps.JumpHMM: repo-rev aaed969a4517bd9095ad7daaef82b83a74a03a17)
+pinned revision (commit \texttt{aaed969}) without modification and called only its fitting, tuning and simulation
+functions. Its multi-asset models either reorder each asset's draw to the ranks of a copula sample or add
+bootstrapped or Gaussian regression residuals to a market factor, and neither keeps each name's own JumpHMM path in
+order, so we wrote the composition in the study code.
+
+The synthetic market combined three kinds of JumpHMM (Fig.~\ref{fig:multiasset}). The market model, fitted in
+% ~/Desktop/julia_work/eCornell-AI-finance-lectures/code/scripts/train-market-surrogate.jl; generator.jld2 (market.jump)
+earlier work to SPY closing prices over 2014--2024 (the study's series), has $\epsilon = 10^{-4}$ and
+$\lambda = 118.9$ trading days. Its draw is the growth rate $g_m(t)$ (yr$^{-1}$) of synthetic SPY on day $t$, with a
+flag $J(t)$ that marks the days of a jump episode. For the sector models, we took the residual
+$e_i(t) = g_i(t) - \hat\alpha_i - \hat\beta_i\, g_M(t)$ (yr$^{-1}$) of each name from its ordinary least-squares
+(OLS) single-index fit to SPY over 2014--2024~\cite{sharpe1963}, where $g_i(t)$ and $g_M(t)$ are the real growth rates
+of name $i$ and SPY and $\hat\alpha_i$ (yr$^{-1}$) and $\hat\beta_i$ are the fitted intercept and slope. The sector
+factor $f_s(t)$ (yr$^{-1}$) is the equal-weight mean residual of the names in sector $s$, and because JumpHMM.jl fits
+price series, each sector model was fitted to the compounded index $\exp(\Delta t \sum_{u \le t} f_s(u))$. As in the
+JumpHMM paper, $g_i$ and $f_s$ denote real series when we estimate and synthetic ones when we compose. Finally, one
+JumpHMM was fitted to each name's 2014--2024 closing prices. We refitted all $373$ name models on the study's data
+rather than reuse models stored from earlier work, whose training file held nine unadjusted stock splits, and each
+% results/synthetic/generator_summary.toml [model_sd_ratio]; scripts/20_synthetic_fit.jl (SD_GATE = 0.5 to 2.0)
+model's draws had a standard deviation within $0.5$ to $2$ times the real one (median ratio $1.037$).
+
+For name $i$ in sector $s = s(i)$ on day $t$, let $\alpha_i$ (yr$^{-1}$) be its synthetic intercept, $\beta_i(t)$ its
+market loading, $\delta_i$ its sector loading, $f_s(t)$ (yr$^{-1}$) the draw of its sector's model,
+$\tilde\varepsilon_i(t)$ (yr$^{-1}$) the centered draw of its own model and $s_i$ a scale on that draw. The synthetic
+growth rate is
+% code/src/SyntheticMarket.jl (compose_name); generator.jld2 (dates: 3,187 trading days, so 3,186 growth days)
+\begin{equation}
+  g_i(t) = \alpha_i + \beta_i(t)\, g_m(t) + \delta_i\, f_s(t) + s_i\, \tilde\varepsilon_i(t),
+  \qquad t = 1, \dots, 3{,}186,
+  \label{eq:compose}
+\end{equation}
+over every trading day of the real calendar from 2014-01-03 to 2026-09-04, so one continuous path covers both the
+calibration and the trading window and every date-based setting of the method applies unchanged. Closes start at each
+name's real close on 2014-01-03 and compound as $S_i(t) = S_i(t-1)\exp(g_i(t)\,\Delta t)$, and synthetic SPY
+compounds from its real close with $g_m(t)$ (Algorithm~\ref{alg:generator}).
+
+The intercept is the name's real 2014--2024 OLS intercept pulled toward the universe mean $\bar\alpha$,
+% results/synthetic/generator_summary.toml [alpha] phi = 0.6, k_alpha_fixed_zero = true
+$\alpha_i = \bar\alpha + \phi(\hat\alpha_i - \bar\alpha)$ with $\phi = 0.6$, constant in time, so names keep their
+2014--2024 order at $60\%$ of their real distance from the mean. The pull reflects how little of the real spread
+% spec section 4.3 (spread 0.076, RMS standard error 0.075); generator_summary.toml [targets] alpha_corr = 0.1748
+persists. In 2014--2024 the spread of $\hat\alpha_i$ across names was $0.076$~yr$^{-1}$, against a root-mean-square
+standard error of $0.075$~yr$^{-1}$, and the intercepts of 2014--2019 and 2020--2024 correlated $0.175$ across names.
+We fitted $\phi$ so that OLS intercepts estimated on synthetic paths reproduced both statistics
+(Appendix~\ref{app:synthetic}). We dropped a planned drift in $\alpha_i$, of the same form as that of $\beta_i(t)$,
+because its fitted size was zero and real intercepts changed between the halves of 2014--2024 by no more than their
+estimation noise. We also set aside the raw estimates, which overstate the real spread and persistence, and a common
+intercept for every name, which removes them. Because each name keeps a persistent intercept, the synthetic markets
+favor selection by $\gamma$ more than real 2025--2026 did, whose intercepts correlated $-0.12$ across names with
+% results/synthetic/checks.csv (V9 report row: 0.100 synthetic, -0.121 real)
+real 2014--2024 intercepts, against $0.10$ on synthetic paths (Table~\ref{tab:S-checks}).
+
+The market loading drifts as $\beta_i(t) = \hat\beta_i + x_i(t)$, where $x_i(t)$ is an exponential moving average
+(EMA) of independent standard normal shocks $z_i(t)$ with weight $a$, half-life $h_\beta$ (trading days) and scale
+$k_i$:
+\begin{equation}
+  x_i(t) = (1 - a)\, x_i(t-1) + a\, k_i\, z_i(t), \qquad a = 1 - 2^{-1/h_\beta}.
+  \label{eq:beta-drift}
+\end{equation}
+The first value is drawn from the stationary distribution, whose standard deviation is $k_i\sqrt{a/(2-a)}$, so the
+synthetic calibration window already contains drift. We calibrated the drift against the method's own online
+estimate $\hat\beta_i(t)$ (exponentially weighted least squares with a half-life of $63$ trading days) rather than an
+% config/study.toml [sim] ewls_half_life = 63; generator_summary.toml [targets] beta_acf252 = 0.2062
+assumed truth. Each $k_i$ reproduces on synthetic 2014--2024 the standard deviation of the name's real
+$\hat\beta_i(t)$, and the common half-life reproduces the median lag-$252$ autocorrelation of $\hat\beta_i(t)$,
+$0.206$ (Appendix~\ref{app:synthetic}). The fit chose $h_\beta = 126$ trading days, and the stationary standard
+% generator_summary.toml [beta] h_beta = 126; generator.jld2 (k_beta: stationary SD quartiles 0.196, 0.261, 0.338)
+deviation of the drift had a median of $0.26$ across names (interquartile range $0.20$ to $0.34$). The synthetic
+$\hat\beta_i(t)$ thus carries the estimation noise of the real one, and a name whose $\beta_i(t)$ drifts below zero
+becomes a hedge candidate on that path.
+
+The sector loading $\delta_i$ is the OLS slope of the name's real residual $e_i(t)$ on the mean residual of the other
+% results/synthetic/generator.jld2 (sector sizes 15 to 60)
+names in its sector, which keeps its own noise out of the regressor in sectors with as few as $15$ names, times one
+factor $\kappa_s$ per sector. The slope on this noisy proxy for the common factor is biased toward zero, yet it
+multiplies a factor drawn with the variance of the full sector mean, and the unscaled loadings undercounted the shared
+% rulings.md (Ruling 14: Communication Services 0.052 vs 0.094)
+co-movement in every sector (in Communication Services, a mean residual correlation of $0.052$ against a real $0.094$).
+We chose $\kappa_s$ so that $\delta_i \delta_j \sigma_s^2$, averaged over the pairs $i \ne j$ of the sector, equals
+the mean pairwise covariance of the real residuals, where $\sigma_s^2$ (yr$^{-2}$) is the variance of the real sector
+% generator_summary.toml [sectors.*] loading_scale (1.020 to 1.337)
+factor. The factors ran from $1.02$ in Financials to $1.34$ in Communication Services
+(Table~\ref{tab:S-sector-params}), and the sector models were drawn independently of each other and of the market.
+
+The own draw is centered on its model's long-run mean, $\tilde\varepsilon_i(t) = \varepsilon_i(t) - \bar\varepsilon_i$,
+% code/src/SyntheticMarket.jl (model_long_run_mean, n_steps = 1,000,000, center_seed)
+where $\varepsilon_i(t)$ is a path of the name's JumpHMM and $\bar\varepsilon_i$ (yr$^{-1}$) the mean of one
+$10^6$-day draw with a fixed seed. Let $\sigma_m^2$, $\sigma_s^2$ and $\sigma_i^2$ (yr$^{-2}$) be the variances of the
+real 2014--2024 growth rates of SPY, the sector factor and the name, held fixed rather than measured on each path. The
+factor share of the name's variance, averaged over the drift in $\beta_i(t)$, is
+\begin{equation}
+  \bar\rho_i = \frac{\left(\hat\beta_i^2 + k_i^2\, a/(2-a)\right)\sigma_m^2 + \delta_i^2\, \sigma_s^2}{\sigma_i^2},
+  \label{eq:rho-bar}
+\end{equation}
+where the term in parentheses is the long-run mean of $\beta_i(t)^2$. With the JumpHMM paper's floor
+% code/src/SyntheticMarket.jl (SYNTH_FLOOR = 0.10, SYNTH_R2_PRESERVE = 0.80)
+$s_{\min}^2 = 0.10$ on the own draw's share, we set $s_i^2 = 1 - \bar\rho_i$ when $\bar\rho_i \le 1 - s_{\min}^2$.
+Otherwise we multiplied $\beta_i(t)$ and $\delta_i$ by $\theta_i = \sqrt{(1 - s_{\min}^2)/\bar\rho_i}$ for the whole
+path, which keeps their signs, and set $s_i^2 = s_{\min}^2$. This happened for two Utilities names
+% generator.jld2 (rho_bar 0.917 and 0.918; r2 largest 0.645); results/synthetic/rows/meta_*.csv (clip_share 0.00536)
+($\bar\rho_i = 0.917$ and $0.918$), or $0.54\%$ of name-days on every path, and the paper's branch that keeps the real
+$R^2$ for names with $R^2 \ge 0.80$ was never used (largest $R^2 = 0.65$). Because the shares are real and each
+JumpHMM draws slightly more variance than its training series, the composed variance sat at the level of the name's
+% results/synthetic/checks.csv (V3 rows: 0.9939, 1.0660)
+own draw, with median ratios of $0.994$ to the draw's variance and $1.066$ to the real variance
+(Table~\ref{tab:S-checks}).
+
+We did not reorder the residuals with a copula. The rank reorder that the JumpHMM paper offers as an option imposes a
+fitted cross-asset dependence~\cite{patton2006,cherubiniLucianoVecchiato2004}, but it permutes each residual path over
+days and so destroys the name's volatility clustering and the timing of its jump episodes. Each name here keeps its
+own draw in the order it was produced, and cross-sectional dependence enters only through the shared terms of
+Eq.~\eqref{eq:compose}. Names in one sector share $g_m(t)$ and $f_s(t)$, names in different sectors share only
+$g_m(t)$, and all dependence is contemporaneous. The mean residual correlation across sectors was therefore $0.0002$
+% results/synthetic/checks.csv (V5 across sectors: 0.00015 synthetic, 0.0309 real)
+on synthetic paths against $0.031$ in real 2014--2024, and correlations between names rise in a sell-off only through
+the market term, whereas real equity correlations rise further in down markets~\cite{longinSolnik2001,angChen2002}.
+
+The composition extends the variance-corrected single-index composition of the JumpHMM
+paper~\cite{alswaidan2026variance} and departs from it in six ways. First, the paper centered each draw on its
+realized mean, which forces the residuals to sum to zero over the path. On a path that spans both windows, that sum
+ties the noise of the trading window to minus the noise of the calibration window, and on $20$ test paths the noise
+% rulings.md (Ruling 11: -0.48 under path centering, 0.003 centered on the model mean)
+parts of each name's intercepts in the two windows correlated $-0.48$ across names under path centering against
+$0.003$ under centering on the model mean. Second, the paper's variance target was each draw's own sample variance,
+whereas the variances in Eq.~\eqref{eq:rho-bar} are fixed, so a market jump burst raises a name's variance through
+its market term instead of shrinking its own noise and loadings over the whole path, calibration years included.
+Third, the paper composed with the market alone, and Eq.~\eqref{eq:compose} adds the sector term. Fourth, the paper's
+loading was constant, whereas $\beta_i(t)$ drifts here and the variance is matched on average over the drift with one
+% rulings.md (Ruling 14: 15 to 24%); .superpowers/sdd/2026-10-26-synthetic-market-stress-test/checks.before.md (0.0883)
+$s_i$ per path. Matching it day by day, as an earlier version did, scaled down $15$ to $24\%$ of name-days in Energy,
+Utilities, Financials and Real Estate, weakened the sector co-movement, and scaled $8.8\%$ of all name-days rather
+than $0.54\%$. Fifth, when the floor binds, the paper reduced the market loading alone, whereas here the market and
+sector loadings shrink by one factor $\theta_i$. Sixth, the paper kept the fitted intercept, and here it is pulled
+toward the universe mean. The paper also compared its centered and rescaled full-growth draws with comparators fitted
+to regression residuals. Our name terms follow the full-growth approach, whereas our sector terms are residual-fit
+models, since each sector JumpHMM is fitted to a mean of regression residuals.
+
+Before running the method on any synthetic path, we compared the generator with the real market on $22$ gated
+checks of SPY's growth, the gain from daily rebalancing (a guard against a market that rewards trading more than the
+real one), each name's variance, market loading and clustering, the co-movement within sectors, the spread of
+$\hat\beta_i(t)$, reproducibility from seeds and the OLS intercepts (Table~\ref{tab:S-checks}). Twenty-one checks
+passed. The cross-name standard deviation of OLS intercepts failed, at $0.089$~yr$^{-1}$ against $0.076$~yr$^{-1}$
+% results/synthetic/checks.csv (V9 spread: 0.0891 synthetic, 0.0764 real, tolerance 0.01)
+with a tolerance of $0.01$~yr$^{-1}$. Estimation noise in synthetic intercepts adds spread, and a smaller $\phi$
+would push the correlation between the halves of 2014--2024 further below its target, so we reported the failure
+rather than tune the generator to pass. Two reported statistics limit what the synthetic market can show. The
+composed names clustered as their own draws did but less than real names, with absolute-growth autocorrelations below
+% results/synthetic/checks.csv (V4 synthetic minus real: -0.097, -0.171, -0.097)
+the real ones by a median of $0.10$, $0.17$ and $0.10$ at lags $1$, $5$ and $20$. A median of $7$ names per path had
+% results/synthetic/checks.csv (V6 count rows: 7 synthetic; 120 real 2025-26; median 5 over 112 real windows)
+$\hat\beta_i(t) \le 0$ at some point in the trading window, near the median of $5$ over real windows of that length
+in 2014--2024 but against $120$ in real 2025--2026, so the hedge had fewer candidates than in the backtest. The
+% .superpowers/sdd/2026-10-26-synthetic-market-stress-test/progress.md (suite exit 0, 1,612 passes)
+study's test suite, including its look-ahead tests, passed with the synthetic code in place.
+
+\begin{algorithm}[t]
+\caption{One synthetic future of the $373$-name market over the full calendar, 2014-01-03 to 2026-09-04.}
+\label{alg:generator}
+\small
+\begin{algorithmic}[1]
+  \REQUIRE Path number $p$; JumpHMMs of the market, of each sector $s = 1, \dots, 11$ and of each name
+    $i = 1, \dots, N$; real 2014--2024 estimates $\hat\alpha_i$, $\hat\beta_i$, $R_i^2$ and loadings $\delta_i$; real
+    variances $\sigma_m^2$, $\sigma_s^2$, $\sigma_i^2$; long-run means $\bar\varepsilon_i$; pull $\phi$; drift
+    half-life $h_\beta$ and scales $k_i$; floor $s_{\min}^2$; real closes $S_{\rm SPY}(0)$, $S_i(0)$ on 2014-01-03.
+  \ENSURE Closes $S_{\rm SPY}(t)$ and $S_i(t)$ and jump flags $J(t)$ for $t = 1, \dots, 3{,}186$.
+  \STATE $a \gets 1 - 2^{-1/h_\beta}$;\quad $\bar\alpha \gets N^{-1}\sum_i \hat\alpha_i$
+  \STATE Draw $g_m(t)$ and $J(t)$ from the market JumpHMM with seed $p$
+    \hfill \COMMENT{JumpHMM simulation~\cite{alswaidan2026variance}}
+  \FOR{$s = 1, \dots, 11$}
+    \STATE Draw $f_s(t)$ from the JumpHMM of sector $s$ with a seed set by $(p, s)$
+  \ENDFOR
+  \FOR{$i = 1, \dots, N$}
+    \STATE Draw $\varepsilon_i(t)$ from the JumpHMM of name $i$ with a seed set by $(p, i)$;\quad
+      draw $z_i(t) \sim \mathcal{N}(0, 1)$
+    \STATE $\alpha_i \gets \bar\alpha + \phi(\hat\alpha_i - \bar\alpha)$
+    \STATE $x_i(1) \gets k_i\sqrt{a/(2-a)}\, z_i(1)$;\quad
+      $x_i(t) \gets (1-a)\, x_i(t-1) + a\, k_i\, z_i(t)$ for $t \ge 2$;\quad
+      $\beta_i(t) \gets \hat\beta_i + x_i(t)$
+      \hfill \COMMENT{Eq.~\eqref{eq:beta-drift}}
+    \STATE $\bar\rho_i \gets \big[(\hat\beta_i^2 + k_i^2 a/(2-a))\,\sigma_m^2 + \delta_i^2\,\sigma_{s(i)}^2\big]
+      / \sigma_i^2$
+      \hfill \COMMENT{Eq.~\eqref{eq:rho-bar}}
+    \IF{$R_i^2 \ge 0.80$}
+      \STATE $\theta_i \gets 1$;\quad $s_i^2 \gets \bar\rho_i (1 - R_i^2)/R_i^2$
+        \hfill \COMMENT{keeps the real $R^2$; no name qualified}
+    \ELSIF{$\bar\rho_i \le 1 - s_{\min}^2$}
+      \STATE $\theta_i \gets 1$;\quad $s_i^2 \gets 1 - \bar\rho_i$
+    \ELSE
+      \STATE $\theta_i \gets \sqrt{(1 - s_{\min}^2)/\bar\rho_i}$;\quad $s_i^2 \gets s_{\min}^2$
+        \hfill \COMMENT{one scale for the whole path}
+    \ENDIF
+    \STATE $g_i(t) \gets \alpha_i + \theta_i \beta_i(t)\, g_m(t) + \theta_i \delta_i\, f_{s(i)}(t)
+      + s_i\big(\varepsilon_i(t) - \bar\varepsilon_i\big)$ for every $t$
+      \hfill \COMMENT{Eq.~\eqref{eq:compose}}
+  \ENDFOR
+  \STATE $S_{\rm SPY}(t) \gets S_{\rm SPY}(0)\exp\big(\Delta t \sum_{u \le t} g_m(u)\big)$;\quad
+    $S_i(t) \gets S_i(0)\exp\big(\Delta t \sum_{u \le t} g_i(u)\big)$
+  \RETURN $S_{\rm SPY}$, $S_i$ for every name, and $J$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Evaluation on synthetic futures}\label{sec:method-evaluation}
+
+% code/src/SyntheticRunner.jl (market_path_stats, path_sets); scripts/21_synthetic_paths.jl
+We drew $10{,}000$ market paths over the full calendar, seeding path $p$ with $p$, and ranked them by the maximum
+drawdown of synthetic SPY within the trading window, 2025-01-02 to 2026-09-04, with the peak reset on the window's
+first day (Algorithm~\ref{alg:evaluation}). We tagged a window as containing a jump burst when the market model's flag
+$J(t)$ was set on any of its growth days, which happened in $523$ of the $10{,}000$ windows ($5.2\%$), as the market
+% results/synthetic/paths.csv (has_burst: 523 of 10,000; 30 of the 50 deepest window drawdowns)
+model's jump settings imply (Appendix~\ref{app:synthetic}), and in $30$ of the $50$ deepest drawdowns. The typical
+set holds $600$ paths drawn at random from all $10{,}000$, the burst-stress set holds the $200$ deepest drawdowns among
+windows with a burst, and the bear-stress set holds the $200$ deepest among windows without one. Since $22$ typical
+% results/synthetic/paths.csv (typical and burst_stress: 10; typical and bear_stress: 12; run_order set on 978)
+paths also fell in a stress set, the sets hold $978$ distinct paths. Synthetic SPY's median window drawdown was
+% results/synthetic/paths.csv (window_max_drawdown and window_growth, medians by set)
+$0.176$, $0.364$ and $0.406$ in the typical, burst-stress and bear-stress sets, and its median growth rate over the
+window was $0.102$, $-0.087$ and $-0.199$~yr$^{-1}$, so a burst window holds months of large moves of both signs with
+less net decline than the sustained falls of the bear-stress set. Because the sector, drift and name draws are
+independent of the market draw, we drew them only for the chosen paths, from seeds derived from the path number, and
+any path can be rebuilt bit for bit.
+
+On each of the $978$ paths, we treated the synthetic history as if it were real and ran the whole method on it. We
+first recalibrated every estimated input on synthetic 2014-01-03 to 2024-12-31 with the code of the real run, namely
+the OLS single-index fit of each name to synthetic SPY, SPY's growth moments and the volatility cap
+$\sigma_{\rm SPY}$, the gain $G$ of the market state $\xi$, and the shrinkage of the residual correlation toward its
+% results/synthetic/rows/meta_*.csv (lambda: 0 on 664 of 978 paths, largest 0.2; lambda_fixed false on all 978)
+diagonal, which the calibration chose anew on every path (zero on $664$ of the $978$ paths, at most $0.2$). The method
+thus estimated $\alpha_i$ and $\beta_i(t)$ from synthetic prices without seeing the generator's values. We then traded
+the trading window with the controller and settings of the real backtest. The controller still forecast the
+portfolio value with a multi-asset geometric Brownian motion (GBM), now calibrated on the synthetic history, and the
+plant it acted on was the synthetic closes, so JumpHMM played the market and not the forecast model. The synthetic
+data kept the real calendar, sectors and 3-month Treasury bill rate, held each name's daily share volume at its real
+2014--2024 median, so that the dollar volume ranked by the liquidity-based rule moves with the synthetic price, and
+set opens equal to closes, which the method does not use.
+
+% code/src/SyntheticRunner.jl (synthetic_runs: 154 + 182 + 168 + 28 = 532); config/study.toml [grid], [screens]
+Each path received $532$ runs, a subset of the real grid sized to the compute budget. All seven weighting rules, with
+the hedge off and on, were run under the three per-sector selection rules ($\gamma$, bandit and random, each picking
+three names in each of the $11$ sectors), under five universe-wide rules at $K = 13$ (global $\gamma$,
+correlation-aware $\gamma$, liquid then $\gamma$, random from the whole universe and random from the $100$ most liquid
+names), under global $\gamma$ and random selection from the whole universe at $K = 5$ and $K = 34$, and on the two
+lists of $13$ and $15$ names that the author chose in advance. The randomized rules, bandit and random, used $5$ seeds
+% config/study.toml [grid] base_seed = 5660, n_seeds = 30; code/src/SyntheticRunner.jl (n_seeds = 5)
+($5660$ to $5664$) per path instead of the $30$ of the real backtest, and the other rules ran once. Each path also
+recorded synthetic SPY bought and held and the equal-weight universe bought once and held. The $978$ paths gave
+% results/synthetic/tables.md (978 of 978 paths, 0 failed; 0 of 520,296 runs failed); rows/path_*.csv (532 rows each)
+$520{,}296$ runs, all of which finished without error.
+% scripts/dev/calendar_baseline_synthetic.jl; results/calendar_baseline/synthetic/cal_<p>.csv (400 files x 364 rows,
+% every row ok, z = Inf, D_max = Inf, 19 re-plans per run, n_band_exit = n_drawdown = 0); every triggered twin's hash
+% was rebuilt from the path and matched its row in results/synthetic/rows/path_<p>.csv before the path ran
+On each of the $400$ stress paths, the $364$ runs of the ten main selection rules were repeated with the band exit
+and the drawdown stop switched off, as in the calendar-only grid on real prices, and each was paired with the
+triggered run of the same selection rule, weighting rule, hedge setting and seed on the same path ($145{,}600$ runs,
+all of which finished without error).
+
+For each set and hedge setting, we summarized the terminal wealth ratio $W_T/W_0$, the realized growth rate, the
+maximum drawdown and the Sharpe ratio in selection rule by weighting rule grids with the two benchmark rows, never
+pooling across selection rules (Fig.~\ref{fig:synthetic}). We took the median over seeds within a path and then,
+across paths, the median, the $10$th and $90$th percentiles, and the share of paths on which the cell's terminal
+wealth ratio exceeded that of the path's own synthetic SPY. That share is a paired comparison, so a cell can beat SPY
+on most paths while its median lies below that of the SPY row. We also formed paired differences across paths between
+global $\gamma$ and random selection at $K = 5$, $13$ and $34$, between $\gamma$ per sector and random per sector, and
+between hedge on and hedge off, and we located each real backtest result among the $600$ typical futures as the share
+of typical paths that ended at or below it (Fig.~\ref{fig:S-percentile}). These summaries describe this generator
+combined with this method and are not forecasts.
+
+\begin{algorithm}[t]
+\caption{Evaluation of the method on synthetic futures.}
+\label{alg:evaluation}
+\small
+\begin{algorithmic}[1]
+  \REQUIRE Generator of Algorithm~\ref{alg:generator}; $P = 10{,}000$ market paths; calibration window
+    $\mathcal{C}$ (2014-01-03 to 2024-12-31); trading window $\mathcal{W}$ (2025-01-02 to 2026-09-04); run grid
+    $\mathcal{R}$ of $532$ runs; seeds $5660$ to $5664$ for the randomized selection rules.
+  \ENSURE Selection rule by weighting rule summaries for the typical, burst-stress and bear-stress sets.
+  \FOR{$p = 1, \dots, P$}
+    \STATE Draw $g_m(t)$ and $J(t)$ with seed $p$ and compound synthetic SPY closes
+    \STATE $d_p \gets$ maximum drawdown of synthetic SPY over $\mathcal{W}$, peak reset at the start of
+      $\mathcal{W}$
+    \STATE $b_p \gets$ true if $J(t)$ is set on any growth day of $\mathcal{W}$
+  \ENDFOR
+  \STATE Burst stress $\gets$ the $200$ paths with the largest $d_p$ among those with $b_p$ true
+  \STATE Bear stress $\gets$ the $200$ paths with the largest $d_p$ among those with $b_p$ false
+  \STATE Typical $\gets$ the first $600$ paths of a seeded random permutation of $1, \dots, P$
+  \FOR{each path $p$ in the union of the three sets}
+    \STATE Build the synthetic market of path $p$
+      \hfill \COMMENT{Algorithm~\ref{alg:generator}}
+    \STATE Recalibrate on synthetic $\mathcal{C}$: single-index fits, SPY moments and volatility cap, gain $G$ of
+      $\xi$, residual shrinkage
+    \FOR{each run in $\mathcal{R}$ (selection rule, weighting rule, hedge setting, seed)}
+      \STATE Trade $\mathcal{W}$ with the rebalancing controller, forecasting with GBM calibrated on synthetic
+        data and acting on the synthetic closes
+      \STATE Record $W_T/W_0$, growth rate, maximum drawdown and Sharpe ratio
+    \ENDFOR
+    \STATE Record synthetic SPY and the equal-weight universe, each bought and held over $\mathcal{W}$
+  \ENDFOR
+  \STATE For each set, hedge setting and cell: median over seeds within a path, then the median, the $10$th and
+    $90$th percentiles, and the share of paths above the path's own synthetic SPY
+\end{algorithmic}
+\end{algorithm}
+

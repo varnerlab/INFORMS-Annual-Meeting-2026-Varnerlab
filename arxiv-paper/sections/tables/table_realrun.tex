@@ -1,0 +1,44 @@
+% Source: results/tier1_summary.csv, results/universe_summary.csv and results/gamma_seeds/gamma_seeds_summary.csv
+% (ok rows, seeds 5660--5689, each run label once), terminal / W0, median per cell, as in
+% talk/data/b3_rows_hedge_off.tex; SPY and equal weight from talk/data/realrun_refs.csv.
+% Range columns: highest minus lowest of the rounded medians in the row (last column) or column (last row).
+\begin{table}[H]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\caption{\textbf{Real-data backtest, hedge off.} Terminal wealth ratio $W_T/W_0$ from 2 January 2025 to 4 September 2026, the median
+of 30 runs (seeds 5660--5689) for each selection rule (row) and weighting rule (column). Range is the highest minus
+the lowest median in a row; the last row gives the same quantity within each column, across the ten selection
+rules. SPY buy-and-hold and the equal-weight universe (each of the 373 names bought at the first close and held) do
+not depend on the weighting rule. CD, Cobb--Douglas; CES, constant elasticity of substitution (CES) utility on share
+counts; CESw, CES utility on portfolio weights; SG, Stone--Geary; MinVar, minimum variance; Tangent, tangency
+portfolio; LS, 130/30 long-short Cobb--Douglas. With the market hedge off, no cap on portfolio $\beta$ applied and no
+hedge names were held. Hedge-on values are in Table~\ref{tab:S-realrun-on}.}
+\label{tab:realrun}
+\begin{tabular}{l*{8}{r}}
+\toprule
+Selection rule & CD & CES & CESw & SG & MinVar & Tangent & LS & Range \\
+\midrule
+\multicolumn{9}{l}{\emph{33 names, 3 per sector}} \\
+$\gamma$ per sector & 1.230 & 1.219 & 1.221 & 1.234 & 1.086 & 1.227 & 1.110 & 0.148 \\
+Bandit per sector & 1.226 & 1.234 & 1.223 & 1.239 & 1.162 & 1.229 & 1.140 & 0.099 \\
+Random per sector & 1.205 & 1.183 & 1.201 & 1.183 & 1.128 & 1.158 & 1.127 & 0.078 \\
+\addlinespace
+\multicolumn{9}{l}{\emph{13 names}} \\
+Global $\gamma$ & 1.520 & 1.384 & 1.460 & 1.441 & 1.355 & 1.341 & 1.248 & 0.272 \\
+Correlation-aware $\gamma$ & 1.352 & 1.386 & 1.421 & 1.380 & 1.284 & 1.404 & 1.219 & 0.202 \\
+Liquid then $\gamma$ & 1.333 & 1.310 & 1.379 & 1.350 & 1.238 & 1.361 & 1.305 & 0.141 \\
+Random liquid 100 & 1.216 & 1.173 & 1.211 & 1.212 & 1.158 & 1.274 & 1.152 & 0.122 \\
+Random whole universe & 1.098 & 1.132 & 1.138 & 1.112 & 1.104 & 1.160 & 1.031 & 0.129 \\
+\addlinespace
+\multicolumn{9}{l}{\emph{Hand-picked}} \\
+Hand-picked 13 & 1.548 & 1.571 & 1.614 & 1.631 & 1.443 & 1.697 & 1.549 & 0.254 \\
+Hand-picked 13 + WMT, PG & 1.616 & 1.646 & 1.637 & 1.639 & 1.362 & 1.642 & 1.622 & 0.284 \\
+\midrule
+SPY buy-and-hold & \multicolumn{7}{c}{1.317} & \\
+Equal-weight universe & \multicolumn{7}{c}{1.296} & \\
+\midrule
+Range across selection rules & 0.518 & 0.514 & 0.499 & 0.527 & 0.357 & 0.539 & 0.591 & \\
+\bottomrule
+\end{tabular}
+\end{table}
