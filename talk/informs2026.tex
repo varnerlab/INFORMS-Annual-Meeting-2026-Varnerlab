@@ -7,6 +7,10 @@
 \providecommand{\vntheme}{white}
 
 \usepackage{vnslides}
+% speaker notes stay hidden in the deck; `make notes` defines \vnshownotes and prints only the note pages
+\ifdefined\vnshownotes
+  \setbeameroption{show only notes}
+\fi
 \usepackage{booktabs}
 \usepackage{catchfile}
 \input{data/numbers.tex}

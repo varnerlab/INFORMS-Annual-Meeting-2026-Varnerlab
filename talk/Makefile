@@ -13,9 +13,16 @@ both: $(DECK)-navy.pdf $(DECK)-white.pdf
 $(DECK)-%.pdf: $(SOURCES)
 	latexmk -xelatex -interaction=nonstopmode -halt-on-error -jobname=$(DECK)-$* -usepretex='\def\vntheme{$*}' $(DECK).tex
 
+# the speaker notes alone, one page per note, in the configured theme
+notes: $(DECK)-notes.pdf
+
+$(DECK)-notes.pdf: $(SOURCES)
+	latexmk -xelatex -interaction=nonstopmode -halt-on-error -jobname=$(DECK)-notes -usepretex='\def\vnshownotes{}' $(DECK).tex
+
 clean:
 	latexmk -C $(DECK).tex
 	latexmk -C -jobname=$(DECK)-navy $(DECK).tex
 	latexmk -C -jobname=$(DECK)-white $(DECK).tex
+	latexmk -C -jobname=$(DECK)-notes $(DECK).tex
 
-.PHONY: both clean
+.PHONY: both notes clean
