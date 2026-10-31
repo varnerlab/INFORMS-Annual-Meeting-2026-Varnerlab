@@ -1,0 +1,24 @@
+% Backup (user, 2026-10-31: mock-up 3 of the multi-asset slide, kept for questions): each name's volatility, β and
+% bottom tail, real 2014–2024 against the first typical synthetic path over the same dates. The figure and its data
+% are in figs/name_scatter.tex. The tail panel is the loosest match and is shown as it is: every name is fat-tailed in
+% both markets, but name by name the two agree only loosely.
+{\renewcommand{\vnfootleft}{Each dot is a name, real 2014–2024 against one simulated path. IQR: interquartile range of
+  daily growth.}
+\begin{frame}{Each synthetic name resembles its real counterpart}
+  \vnmultiassetequation
+  \vspace{4pt}
+  {\centering\vnnamescatter\par}
+  % speaker note. Data: talk/data/numbers.tex and ma_names.csv (scripts/30_talk_data.jl, talk_name_stats).
+  \note{\footnotesize
+    \vnnotehead{Name by name}
+    \vnnoterow{Volatility}{Annualized SD of the daily growth rate. Correlation across names \MaVolCorr.}
+    \vnnoterow{β against SPY}{Real names against real SPY, synthetic names against synthetic SPY, over 2014–2024.
+      Correlation across names \MaBetaCorr.}
+    \vnnoterow{Worst day in 200}{The 0.5\% quantile of a name's daily growth rate, measured from its median in
+      interquartile ranges, so calm and volatile names read alike. A normal distribution gives
+      −1.91.}
+    \vnnoterow{Tails}{Median \MaTailReal{} real against \MaTailSyn{} synthetic: every name is fat-tailed in both
+      markets, the synthetic tails slightly thinner, and name by name the two agree only loosely (correlation
+      \MaTailCorr).}
+    \vnnoterow{Path}{One path, path 19, the first typical path, as on the multi-asset slide.}}
+\end{frame}}

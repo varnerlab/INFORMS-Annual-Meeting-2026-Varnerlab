@@ -1,6 +1,7 @@
 # Data behind the INFORMS 2026 talk figures (docs/superpowers/specs/2026-10-28-informs-talk-slides-design.md): the
-# real-run picker × utility grid, the large-book head-to-heads and the numbers quoted in the slide text. Every
-# function returns plain tables that scripts/30_talk_data.jl writes to talk/data/.
+# real-run picker × utility grid, the large-book head-to-heads, the multi-asset correlation maps and name statistics,
+# and the numbers quoted in the slide text. Every function returns plain tables (or, for the maps, an image) that
+# scripts/30_talk_data.jl writes to talk/data/.
 
 """
     TALK_REALRUN_ROWS
@@ -599,4 +600,240 @@ function talk_stylized_facts(g_real::AbstractVector{<:Real}, g_syn::AbstractVect
     summary = DataFrame(series=["real", "synthetic median"], kurtosis=[_talk_kurtosis(g_real), median(kurt)],
         acf1=[real_acf[1], median(A[1, :])], abs_acf1=[real_abs[1], median(B[1, :])])
     return (density=density, qq=qq, acf=acf, abs_acf=absacf, summary=summary)
+end
+
+# ---------------------------------------------------------------------------------------------------------------------
+# The multi-asset slide and its backup (user, 2026-10-31: the audience should leave believing the synthetic market
+# looks like the real one): the growth correlation maps of all names, real against synthetic, sorted by sector, and
+# each name's volatility, β and bottom tail, real against synthetic.
+
+"""
+    TALK_HEAT_STOPS
+
+The color ramps of the correlation maps, one per deck theme (`"white"`, `"navy"`), as `(correlation, (r, g, b))`
+stops: correlation 0 is the near-white (white theme) or the plot panel (navy theme), 1 is the slide's heading ink,
+through the deck's link blue. Colors are linear in RGB between stops; a correlation below 0 takes the first stop's
+color and one above 1 the last.
+"""
+const TALK_HEAT_STOPS = Dict(
+    "white" => [(0.0, (247, 249, 252)), (0.35, (158, 197, 232)), (0.7, (47, 107, 154)), (1.0, (13, 27, 42))],
+    "navy" => [(0.0, (20, 40, 60)), (0.35, (63, 127, 192)), (0.7, (141, 180, 221)), (1.0, (244, 241, 234))])
+
+"""
+    TALK_TAIL_P
+
+The bottom-tail probability of the backup's tail panel: the 0.5% quantile, the worst day in 200.
+"""
+const TALK_TAIL_P = 0.005
+
+"""
+    TALK_TAIL_NORMAL
+
+The `TALK_TAIL_P` quantile of a normal distribution in units of its interquartile range, measured from its median:
+z₀.₀₀₅ / (2 z₀.₇₅) = −2.5758 / 1.3490 ≈ −1.91. The tail panel marks it for scale.
+"""
+const TALK_TAIL_NORMAL = -2.5758293035489004 / (2 * 0.6744897501960817)
+
+"""
+    talk_sector_order(sector::AbstractVector{<:AbstractString}, tickers::AbstractVector{<:AbstractString})::Vector{Int}
+
+The column order of the correlation maps: the names sorted by sector, then by ticker.
+"""
+function talk_sector_order(sector::AbstractVector{<:AbstractString},
+        tickers::AbstractVector{<:AbstractString})::Vector{Int}
+    keys_ = Tuple{String,String}[]
+    for i in eachindex(sector)
+        push!(keys_, (String(sector[i]), String(tickers[i])))
+    end
+    return sortperm(keys_)
+end
+
+"""
+    talk_sector_blocks(sector::AbstractVector{<:AbstractString})::Vector{Tuple{Int,Int}}
+
+The sector blocks on the diagonal of a correlation map whose names are in the order of `sector` (as
+`talk_sector_order` sorts them), one `(before, through)` pair per run of equal sectors: the block covers map
+positions `before + 1` to `through`. Throws `ArgumentError` if `sector` is empty.
+"""
+function talk_sector_blocks(sector::AbstractVector{<:AbstractString})::Vector{Tuple{Int,Int}}
+    n = length(sector)
+    if n == 0
+        throw(ArgumentError("talk_sector_blocks: no names"))
+    end
+    blocks = Tuple{Int,Int}[]
+    before = 0
+    for i in 2:n
+        if sector[i] != sector[i - 1]
+            push!(blocks, (before, i - 1))
+            before = i - 1
+        end
+    end
+    push!(blocks, (before, n))
+    return blocks
+end
+
+"""
+    talk_block_means(C::AbstractMatrix, sector::AbstractVector{<:AbstractString})::NamedTuple{(:within, :across)}
+
+The mean (dimensionless) of the off-diagonal entries of the correlation matrix `C` over the pairs of names in the
+same sector (`within`) and in different sectors (`across`); `sector[i]` is the sector of row and column `i`.
+Throws `ArgumentError` if either set of pairs is empty.
+"""
+function talk_block_means(C::AbstractMatrix, sector::AbstractVector{<:AbstractString})::NamedTuple{(:within, :across)}
+    within = 0.0
+    across = 0.0
+    n_within = 0
+    n_across = 0
+    n = size(C, 1)
+    for i in 1:n
+        for j in (i + 1):n
+            if sector[i] == sector[j]
+                within += C[i, j]
+                n_within += 1
+            else
+                across += C[i, j]
+                n_across += 1
+            end
+        end
+    end
+    if n_within == 0 || n_across == 0
+        throw(ArgumentError("talk_block_means: needs pairs within a sector and across sectors"))
+    end
+    return (within=within / n_within, across=across / n_across)
+end
+
+"""
+    talk_heat_rgb(C::AbstractMatrix, stops)::Array{UInt8,3}
+
+The correlation map of `C` as an image, one pixel per entry (rows × columns × 3, 8-bit RGB), colored by the ramp
+`stops` (a `TALK_HEAT_STOPS` entry). Entries outside the ramp take the color of its nearer end.
+"""
+function talk_heat_rgb(C::AbstractMatrix, stops)::Array{UInt8,3}
+    img = Array{UInt8,3}(undef, size(C, 1), size(C, 2), 3)
+    lo = stops[1][1]
+    hi = stops[end][1]
+    for i in 1:size(C, 1)
+        for j in 1:size(C, 2)
+            c = clamp(Float64(C[i, j]), lo, hi)
+            # the stop interval that holds c
+            k = 1
+            while k < length(stops) - 1 && c > stops[k + 1][1]
+                k += 1
+            end
+            (a, ca) = stops[k]
+            (b, cb) = stops[k + 1]
+            t = (c - a) / (b - a)
+            for ch in 1:3
+                img[i, j, ch] = round(UInt8, ca[ch] + t * (cb[ch] - ca[ch]))
+            end
+        end
+    end
+    return img
+end
+
+# One PNG chunk: its length, type, data and the CRC-32 of type and data, as the PNG format lays them out.
+function _talk_png_chunk(io::IO, kind::String, data::Vector{UInt8})::Nothing
+    body = vcat(Vector{UInt8}(kind), data)
+    crc = ccall((:crc32, Zlib_jll.libz), Culong, (Culong, Ptr{UInt8}, Cuint), 0, body, length(body))
+    write(io, hton(UInt32(length(data))))
+    write(io, body)
+    write(io, hton(UInt32(crc)))
+    return nothing
+end
+
+"""
+    write_png(path::AbstractString, img::Array{UInt8,3})::Nothing
+
+Write the 8-bit RGB image `img` (rows × columns × 3, the first row at the top) to `path` as a PNG, with zlib's
+best compression and no row filter.
+"""
+function write_png(path::AbstractString, img::Array{UInt8,3})::Nothing
+    h = size(img, 1)
+    w = size(img, 2)
+    if size(img, 3) != 3 || h == 0 || w == 0
+        throw(ArgumentError("write_png: img must be rows × columns × 3 and not empty; got $(size(img))"))
+    end
+    # each row is a filter byte (0, none) and its pixels as r, g, b
+    raw = UInt8[]
+    for i in 1:h
+        push!(raw, 0x00)
+        for j in 1:w
+            push!(raw, img[i, j, 1], img[i, j, 2], img[i, j, 3])
+        end
+    end
+    bound = ccall((:compressBound, Zlib_jll.libz), Culong, (Culong,), length(raw))
+    packed = Vector{UInt8}(undef, bound)
+    n = Ref{Culong}(bound)
+    status = ccall((:compress2, Zlib_jll.libz), Cint, (Ptr{UInt8}, Ref{Culong}, Ptr{UInt8}, Culong, Cint),
+        packed, n, raw, length(raw), 9)
+    if status != 0
+        error("write_png: zlib compress2 failed with status ", status)
+    end
+    # the header: width, height, 8 bits per channel, color type 2 (RGB), deflate, no filter method, no interlace
+    header = vcat(reinterpret(UInt8, [hton(UInt32(w)), hton(UInt32(h))]), UInt8[8, 2, 0, 0, 0])
+    io = open(path, "w")
+    try
+        write(io, UInt8[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+        _talk_png_chunk(io, "IHDR", header)
+        _talk_png_chunk(io, "IDAT", packed[1:n[]])
+        _talk_png_chunk(io, "IEND", UInt8[])
+    finally
+        close(io)
+    end
+    return nothing
+end
+
+"""
+    talk_name_stats(G::AbstractMatrix, g_m::AbstractVector; Δt::Real=1/252)::DataFrame
+
+Each name's statistics on the backup slide, from its daily growth rates `G` (yr⁻¹, days × names) and the market's
+`g_m` (yr⁻¹) over the same days, one row per name:
+- `vol`: annualized volatility of the log price, percent per year: 100·SD(g)·√Δt;
+- `beta`: cov(g, g_m)/var(g_m), dimensionless;
+- `tail`: the `TALK_TAIL_P` quantile of (g − median g)/IQR(g), in interquartile ranges (a normal gives
+  `TALK_TAIL_NORMAL`).
+"""
+function talk_name_stats(G::AbstractMatrix, g_m::AbstractVector; Δt::Real=1/252)::DataFrame
+    if size(G, 1) != length(g_m)
+        throw(ArgumentError("talk_name_stats: G has $(size(G, 1)) days and g_m $(length(g_m))"))
+    end
+    out = DataFrame(vol=Float64[], beta=Float64[], tail=Float64[])
+    for j in 1:size(G, 2)
+        g = G[:, j]
+        iqr = quantile(g, 0.75) - quantile(g, 0.25)
+        z = (g .- median(g)) ./ iqr
+        push!(out, (100 * std(g) * sqrt(Δt), cov(g, g_m) / var(g_m), quantile(z, TALK_TAIL_P)))
+    end
+    return out
+end
+
+"""
+    talk_multiasset_numbers(real_means, syn_means, real_stats::DataFrame, syn_stats::DataFrame,
+        blocks::Vector{Tuple{Int,Int}})::Vector{Pair{String,String}}
+
+The numbers of the multi-asset slide and its backup, as LaTeX macro name => text:
+- `MaWithinReal`, `MaWithinSyn`, `MaAcrossReal`, `MaAcrossSyn`: the mean growth correlation within a sector and
+  across sectors (`talk_block_means`), real and synthetic, 2 decimals;
+- `MaVolCorr`, `MaBetaCorr`, `MaTailCorr`: the correlation across names between the real and the synthetic
+  `vol`, `beta` and `tail` of `talk_name_stats`, 2 decimals;
+- `MaTailReal`, `MaTailSyn`: the median `tail` across names, 2 decimals, with a true minus sign;
+- `MaTailNormal`: `TALK_TAIL_NORMAL`, 2 decimals, with a hyphen-minus, as a plot coordinate;
+- `MaBlocks`: the sector blocks (`talk_sector_blocks`) as `before/through` pairs separated by commas, for a TikZ
+  `\\foreach`.
+"""
+function talk_multiasset_numbers(real_means, syn_means, real_stats::DataFrame, syn_stats::DataFrame,
+        blocks::Vector{Tuple{Int,Int}})::Vector{Pair{String,String}}
+    pairs_ = String[]
+    for (before, through) in blocks
+        push!(pairs_, string(before, "/", through))
+    end
+    return ["MaWithinReal" => _talk_decimals(real_means.within, 2), "MaWithinSyn" => _talk_decimals(syn_means.within, 2),
+        "MaAcrossReal" => _talk_decimals(real_means.across, 2), "MaAcrossSyn" => _talk_decimals(syn_means.across, 2),
+        "MaVolCorr" => _talk_decimals(cor(real_stats.vol, syn_stats.vol), 2),
+        "MaBetaCorr" => _talk_decimals(cor(real_stats.beta, syn_stats.beta), 2),
+        "MaTailCorr" => _talk_decimals(cor(real_stats.tail, syn_stats.tail), 2),
+        "MaTailReal" => replace(_talk_decimals(median(real_stats.tail), 2), "-" => "−"),
+        "MaTailSyn" => replace(_talk_decimals(median(syn_stats.tail), 2), "-" => "−"),
+        "MaTailNormal" => _talk_decimals(TALK_TAIL_NORMAL, 2),
+        "MaBlocks" => join(pairs_, ",")]
 end

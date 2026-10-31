@@ -1,0 +1,71 @@
+% The name-by-name backup (user, 2026-10-31: mock-up 3 of the multi-asset slide, kept for questions). Input once in
+% the preamble, after vnslides and data/numbers.tex.
+%
+% \vnnamescatter draws three panels side by side, one dot per name, real 2014–2024 (x) against the first typical
+% synthetic path over the same dates (y), from talk/data/ma_names.csv (scripts/30_talk_data.jl, talk_name_stats):
+%   (a) volatility: annualized SD of the daily growth rate, percent per year;
+%   (b) β against SPY: real names against real SPY, synthetic names against synthetic SPY;
+%   (c) worst day in 200: the 0.5% quantile of the daily growth rate, measured from its median in interquartile
+%       ranges, so calm and volatile names read alike; the normal distribution's value (\MaTailNormal) is the ring.
+% Each panel has the 45° line and the correlation across names (\MaVolCorr, \MaBetaCorr, \MaTailCorr). The axis
+% ranges are fixed here; the data script checks that every point falls inside them (MA_VOL_LIMITS, MA_BETA_LIMITS,
+% MA_TAIL_LIMITS) and that every tail, real and synthetic, is beyond the normal value.
+
+% the look shared by the three panels, as on the JumpHMM slide's stylized facts
+\pgfplotsset{
+  vnns/.style={
+    scale only axis, width=3.2cm, height=3.0cm,
+    axis background/.style={fill=vnplotpanel},
+    axis line style={draw=none},
+    grid=major, major grid style={draw=vnplotgrid, line width=0.6pt},
+    tick style={draw=none},
+    tick label style={font=\fontsize{7}{8.4}\selectfont, color=vndottick},
+    xticklabel style={/pgf/number format/assume math mode=true, /pgf/number format/fixed},
+    yticklabel style={/pgf/number format/assume math mode=true, /pgf/number format/fixed},
+    label style={font=\fontsize{7.5}{9}\selectfont, color=vnslidebody},
+    xlabel style={yshift=3pt},
+    ylabel style={yshift=-3pt},
+    title style={font=\fontsize{8.5}{10}\vnmedium, text=vnslideink, yshift=-3pt, text height=1.6ex,
+      text depth=0.45ex},
+  },
+  % the names, light enough that the dense middle still shows its spread
+  vnns dots/.style={only marks, mark=*, mark size=1pt, color=vnslidelink,
+    mark options={fill=vnslidelink, fill opacity=0.45, draw opacity=0}},
+  vnns diag/.style={draw=vndottick, line width=0.6pt},
+}
+
+% the correlation across names, in a panel's upper left corner
+\newcommand{\vnnscorr}[1]{%
+  \node[anchor=north west, font=\fontsize{7}{8.4}\selectfont, text=vnslidebody] at (rel axis cs:0.02,0.98)
+    {correlation #1};}
+
+\newcommand{\vnnamescatter}{%
+  \begin{tikzpicture}
+    \begin{axis}[vnns, name=vnnsa, title={volatility},
+      xmin=12, xmax=70, ymin=12, ymax=70, xtick={20,40,60}, ytick={20,40,60},
+      xlabel={real, \% per yr}, ylabel={synthetic, \% per yr}]
+      \addplot[vnns diag] coordinates {(12,12) (70,70)};
+      \addplot[vnns dots] table[col sep=comma, x=vol_real, y=vol_syn] {data/ma_names.csv};
+      \vnnscorr{\MaVolCorr}
+    \end{axis}
+    \begin{axis}[vnns, name=vnnsb, at={(vnnsa.south east)}, anchor=south west, xshift=1.2cm,
+      title={β against SPY}, xmin=0.1, xmax=2, ymin=0.1, ymax=2, xtick={0.5,1,1.5}, ytick={0.5,1,1.5},
+      xlabel={real}, ylabel={synthetic}]
+      \addplot[vnns diag] coordinates {(0.1,0.1) (2,2)};
+      \addplot[vnns dots] table[col sep=comma, x=beta_real, y=beta_syn] {data/ma_names.csv};
+      \vnnscorr{\MaBetaCorr}
+    \end{axis}
+    \begin{axis}[vnns, name=vnnsc, at={(vnnsb.south east)}, anchor=south west, xshift=1.2cm,
+      title={worst day in 200}, xmin=-7, xmax=-1.5, ymin=-7, ymax=-1.5, xtick={-6,-4,-2}, ytick={-6,-4,-2},
+      xticklabels={−6,−4,−2}, yticklabels={−6,−4,−2},
+      xlabel={real, IQRs}, ylabel={synthetic, IQRs}]
+      \addplot[vnns diag] coordinates {(-7,-7) (-1.5,-1.5)};
+      \addplot[vnns dots] table[col sep=comma, x=tail_real, y=tail_syn] {data/ma_names.csv};
+      % the normal distribution's value, for scale
+      \addplot[only marks, mark=*, mark size=1.6pt, mark options={fill=vnbg, draw=vndottick, line width=0.7pt}]
+        coordinates {(\MaTailNormal,\MaTailNormal)};
+      \node[anchor=east, font=\fontsize{7}{8.4}\selectfont, text=vnslidebody, xshift=-3pt]
+        at (axis cs:\MaTailNormal,\MaTailNormal) {normal};
+      \vnnscorr{\MaTailCorr}
+    \end{axis}
+  \end{tikzpicture}}

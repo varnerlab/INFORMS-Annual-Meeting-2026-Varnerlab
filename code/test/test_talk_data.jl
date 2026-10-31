@@ -227,4 +227,59 @@ end
         s3 = talk_stylized_facts(3 .* x .+ 1, [x])
         @test isapprox(s3.density.normal[findmin(abs.(s3.density.x .- 1))[2]], 1 / (3 * sqrt(2π)); atol=0.005)
     end
+
+    @testset "multi-asset maps and name statistics" begin
+        # names sorted by sector, then ticker; the sector blocks of that order
+        @test talk_sector_order(["B", "A", "B", "A"], ["x", "z", "a", "y"]) == [4, 2, 3, 1]
+        @test talk_sector_blocks(["A", "A", "B", "C", "C", "C"]) == [(0, 2), (2, 3), (3, 6)]
+        @test_throws ArgumentError talk_sector_blocks(String[])
+        # one pair within sector A, two pairs across
+        C = [1.0 0.8 0.2; 0.8 1.0 0.4; 0.2 0.4 1.0]
+        m = talk_block_means(C, ["A", "A", "B"])
+        @test m.within ≈ 0.8 && m.across ≈ 0.3
+        @test_throws ArgumentError talk_block_means(C, ["A", "B", "C"])
+        # the ramp: a stop takes its own color; values outside the ramp take the nearer end
+        img = talk_heat_rgb([0.0 1.0; 0.35 -0.2], TALK_HEAT_STOPS["white"])
+        @test img[1, 1, :] == [247, 249, 252] && img[1, 2, :] == [13, 27, 42] && img[2, 1, :] == [158, 197, 232]
+        @test img[2, 2, :] == img[1, 1, :]
+        @test talk_heat_rgb(fill(1.5, 1, 1), TALK_HEAT_STOPS["navy"])[1, 1, :] == [244, 241, 234]
+        # the PNG: signature, a 3 × 2 RGB header, and the rows read back through zlib, each after filter byte 0
+        px = reshape(UInt8.(1:18), 2, 3, 3)
+        path = tempname() * ".png"
+        write_png(path, px)
+        b = read(path)
+        @test b[1:8] == UInt8[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] && String(b[13:16]) == "IHDR"
+        @test ntoh(reinterpret(UInt32, b[17:20])[1]) == 3 && ntoh(reinterpret(UInt32, b[21:24])[1]) == 2
+        @test b[25] == 8 && b[26] == 2 && String(b[38:41]) == "IDAT" && String(b[(end - 7):(end - 4)]) == "IEND"
+        n = Int(ntoh(reinterpret(UInt32, b[34:37])[1]))
+        raw = Vector{UInt8}(undef, 2 * (1 + 3 * 3))
+        len = Ref{Culong}(length(raw))
+        status = ccall((:uncompress, VLINFORMS2026.Zlib_jll.libz), Cint, (Ptr{UInt8}, Ref{Culong}, Ptr{UInt8}, Culong),
+            raw, len, b[42:(41 + n)], n)
+        expected = UInt8[]
+        for i in 1:2
+            push!(expected, 0x00)
+            for j in 1:3
+                push!(expected, px[i, j, 1], px[i, j, 2], px[i, j, 3])
+            end
+        end
+        @test status == 0 && raw == expected
+        rm(path)
+        @test_throws ArgumentError write_png(tempname(), zeros(UInt8, 2, 2, 4))
+        # β of a name that is twice the market is 2; normal growth has the normal tail, whatever its scale
+        gm = randn(MersenneTwister(3), 20_000)
+        e = randn(MersenneTwister(4), 20_000)
+        G = hcat(2 .* gm, gm .+ e)
+        st = talk_name_stats(G, gm)
+        @test st.beta[1] ≈ 2 && isapprox(st.beta[2], 1; atol=0.03)
+        @test st.vol[1] ≈ 100 * std(2 .* gm) / sqrt(252)
+        @test isapprox(st.tail[1], TALK_TAIL_NORMAL; atol=0.1) && isapprox(TALK_TAIL_NORMAL, -1.9095; atol=1e-4)
+        @test talk_name_stats(3 .* G, gm).tail ≈ st.tail
+        @test_throws ArgumentError talk_name_stats(G, gm[1:10])
+        # the slide numbers
+        nums = Dict(talk_multiasset_numbers((within=0.472, across=0.345), (within=0.454, across=0.308), st, st,
+            [(0, 2), (2, 5)]))
+        @test nums["MaWithinReal"] == "0.47" && nums["MaAcrossSyn"] == "0.31" && nums["MaVolCorr"] == "1.00"
+        @test nums["MaBlocks"] == "0/2,2/5" && nums["MaTailNormal"] == "-1.91" && startswith(nums["MaTailReal"], "−")
+    end
 end

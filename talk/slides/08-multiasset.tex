@@ -1,38 +1,53 @@
-% From one market to 373 names (user, 2026-10-30): the JumpHMM slide shows the market model on SPY but not how the
-% other names are made, so this slide shows it, as a flow (mock-up B, chosen over the equation with each part named
-% and the equation with the sector co-movement check). The figure and its sources are in figs/multiasset.tex. The
-% line under it says why the residuals are not reordered: a copula reorder would break their clustering and jumps
-% (design §3). Each future's protocol, recalibrate on the synthetic 2014–2024 and trade the synthetic 2025–26 (design
-% §5), sits at the lower left, on the page number's line.
-{\renewcommand{\vnfootleft}{Each future: recalibrated on synthetic 2014–2024, traded on synthetic 2025–26.}
-\begin{frame}{From one market to 373 names}
-  \begingroup\small Three kinds of JumpHMM, composed into each name’s daily growth rate.\par\endgroup
-  \vspace{6pt}
-  {\centering\vnmultiasset\par}
+% The multi-asset slide (user, 2026-10-31: the audience should leave believing the synthetic market looks like the
+% real one). Of three mock-ups, the correlation maps replaced the flow of 2026-10-30 (mock-up B, still the paper's
+% Fig. multiasset); the name-by-name scatters are backup B4. The composition is one line above the evidence; the
+% figure and its data are in figs/corrmaps.tex. The maps' source sits at the lower left, on the page number's line.
+% Each future's protocol (recalibrate on synthetic 2014–2024, trade synthetic 2025–26) and the reason the residuals
+% are not reordered moved to the speaker notes.
+{\renewcommand{\vnfootleft}{Real: 373 names, 2014–2024. Synthetic: one simulated path, same dates. Names sorted by
+  sector; sectors outlined.}
+\begin{frame}{Synthetic names move together like the real ones}
+  \vnmultiassetequation
   \vspace{8pt}
-  {\small Residuals are not reordered: each keeps its own clustering and jump timing.\par}
-  % speaker notes (user, 2026-10-31: how the JumpHMM extension to many assets works), four pages. Sources:
-  % arxiv-paper/sections/method_synthetic.tex and appendix_c.tex, verified against code/src/SyntheticMarket.jl
-  % (compose_name, SYNTH_FLOOR = 0.10) and SyntheticCalibration.jl; results/synthetic/generator_summary.toml
-  % (phi = 0.6, h_beta = 126, beta_acf252 = 0.2062, alpha_corr = 0.1748, loading_scale 1.020 to 1.337);
-  % results/synthetic/generator.jld2 (k_beta stationary SD quartiles 0.196, 0.261, 0.338; rho_bar 0.917, 0.918);
-  % results/synthetic/rows/meta_*.csv (clip_share 0.00536); results/synthetic/checks.csv (V5, V6, V9);
-  % .superpowers/sdd/2026-10-26-synthetic-market-stress-test/rulings.md (Ruling 11: -0.48 vs 0.003).
+  \vncorrmaps
+  % speaker notes, five pages: the first reads the slide (data: talk/data/numbers.tex, results/synthetic/paths.csv,
+  % 600 typical paths, path 19 the first; checks.csv V5 for the residual correlation across sectors)
   \note{\footnotesize
-    \vnnotehead{Many assets: the composition}
-    \vnnoterow{Each name}{$g_i(t) = \alpha_i + \beta_i(t)\, g_m(t) + \delta_i\, f_s(t) + s_i\, \tilde\varepsilon_i(t)$,
-      the daily growth rate of name $i$ in sector $s$.}
-    \vnnoterow{Market $g_m$}{One draw of the SPY JumpHMM, with its jump-episode flag. Synthetic SPY compounds from
-      it.}
-    \vnnoterow{Sector $f_s$}{One JumpHMM for each of the 11 sectors, fitted to the compounded equal-weight mean of
-      the sector's single-index residuals; drawn independently of each other and of the market.}
-    \vnnoterow{Own draw $\tilde\varepsilon_i$}{The name's own JumpHMM, fitted to its 2014–2024 closes (all 373
-      refitted), centered on the model's long-run mean (one $10^6$-day draw), not the path mean.}
-    \vnnoterow{One long path}{Every trading day from 3 Jan 2014 to 4 Sep 2026, compounding from the real 2014 closes,
-      so the method recalibrates on synthetic 2014–2024 and trades synthetic 2025–26.}
-    \vnnoterow{Seeds}{The market path uses seed $p$; the sector and name draws use seeds derived from $p$, so any
-      path rebuilds bit for bit.}}
+    \vnnotehead{Many assets: reading the slide}
+    \vnnoterow{Left map}{The correlation of daily growth for every pair of the 373 names, real 2014–2024. Names are
+      sorted by sector, then ticker.}
+    \vnnoterow{Right map}{The same on one simulated path over the same dates: path 19, the first of the 600 typical
+      paths, also the first of the 100 on the JumpHMM slide. One path, not an average.}
+    \vnnoterow{Blocks}{The 11 sectors, outlined. A darker block: names in that sector move together more than with
+      the rest. Energy and Utilities are the darkest in both maps.}
+    \vnnoterow{Means}{Within a sector \MaWithinReal{} real against \MaWithinSyn{} synthetic; across sectors
+      \MaAcrossReal{} against \MaAcrossSyn. Most of the correlation across sectors is the shared market term.}
+    \vnnoterow{The gap}{Across sectors the synthetic value is a little lower: the sector models are drawn
+      independently, so only the market links two sectors (last page).}
+    \vnnoterow{Name by name}{Volatility, β and the bottom tail, real against synthetic, are on the backup slide
+      after the tables.}}
 \end{frame}
+% pages 2-5 (user, 2026-10-31: how the JumpHMM extension to many assets works). Sources:
+% arxiv-paper/sections/method_synthetic.tex and appendix_c.tex, verified against code/src/SyntheticMarket.jl
+% (compose_name, SYNTH_FLOOR = 0.10) and SyntheticCalibration.jl; results/synthetic/generator_summary.toml
+% (phi = 0.6, h_beta = 126, beta_acf252 = 0.2062, alpha_corr = 0.1748, loading_scale 1.020 to 1.337);
+% results/synthetic/generator.jld2 (k_beta stationary SD quartiles 0.196, 0.261, 0.338; rho_bar 0.917, 0.918);
+% results/synthetic/rows/meta_*.csv (clip_share 0.00536); results/synthetic/checks.csv (V5, V6, V9);
+% .superpowers/sdd/2026-10-26-synthetic-market-stress-test/rulings.md (Ruling 11: -0.48 vs 0.003).
+\note{\footnotesize
+  \vnnotehead{Many assets: the composition}
+  \vnnoterow{Each name}{$g_i(t) = \alpha_i + \beta_i(t)\, g_m(t) + \delta_i\, f_s(t) + s_i\, \tilde\varepsilon_i(t)$,
+    the daily growth rate of name $i$ in sector $s$.}
+  \vnnoterow{Market $g_m$}{One draw of the SPY JumpHMM, with its jump-episode flag. Synthetic SPY compounds from
+    it.}
+  \vnnoterow{Sector $f_s$}{One JumpHMM for each of the 11 sectors, fitted to the compounded equal-weight mean of
+    the sector's single-index residuals; drawn independently of each other and of the market.}
+  \vnnoterow{Own draw $\tilde\varepsilon_i$}{The name's own JumpHMM, fitted to its 2014–2024 closes (all 373
+    refitted), centered on the model's long-run mean (one $10^6$-day draw), not the path mean.}
+  \vnnoterow{One long path}{Every trading day from 3 Jan 2014 to 4 Sep 2026, compounding from the real 2014 closes,
+    so the method recalibrates on synthetic 2014–2024 and trades synthetic 2025–26.}
+  \vnnoterow{Seeds}{The market path uses seed $p$; the sector and name draws use seeds derived from $p$, so any
+    path rebuilds bit for bit.}}
 \note{\footnotesize
   \vnnotehead{Many assets: intercepts and a drifting β}
   \vnnoterow{Intercept}{$\alpha_i = \bar\alpha + 0.6\,(\hat\alpha_i - \bar\alpha)$, constant in time: names keep

@@ -23,6 +23,12 @@ const N_SYN_PATHS = 100                                        # generator paths
 const CLAIM_KURTOSIS, CLAIM_ACF1, CLAIM_ABS_ACF = 4.0, 0.15, 0.10   # fat tails, little autocorrelation, clustering
 const XI_LIMIT = 1.0                                           # the γ slide's ξ strip runs from −1 to 1
 const SPY_LIMITS = (0.8, 1.4)                                  # its SPY strip, prices ÷ the first day's close
+const MA_THEMES = ["white", "navy"]                            # one set of correlation maps per deck theme
+const MA_VOL_LIMITS = (12.0, 70.0)                             # the backup's volatility axes, percent per year
+const MA_BETA_LIMITS = (0.1, 2.0)                              # its β axes
+const MA_TAIL_LIMITS = (-7.0, -1.5)                            # its tail axes, interquartile ranges
+const MA_MATCH = 0.05            # the multi-asset slide: real and synthetic mean correlations at most this far apart
+const MA_NAME_CORR = 0.9         # the backup: real and synthetic volatility and β correlate at least this across names
 const ROW_COLUMNS = [:hash, :label, :status, :allocator, :screen, :seed, :hedge, :basket_K, :W0, :terminal, :n_decisions]
 
 """
@@ -148,6 +154,36 @@ function check_crossings(ms::DataFrame, crossings::DataFrame)::Nothing
     return nothing
 end
 
+"""
+    check_multiasset(real_means, syn_means, real_stats::DataFrame, syn_stats::DataFrame)::Nothing
+
+Throw an error unless the data supports what the multi-asset slide and its backup show: the mean growth correlation
+within a sector and across sectors, real and synthetic, at most `MA_MATCH` apart; each name's volatility and β, real
+against synthetic, correlated at least `MA_NAME_CORR` across names; every name's tail, real and synthetic, beyond the
+normal value `TALK_TAIL_NORMAL`; and every point inside the backup's axes.
+"""
+function check_multiasset(real_means, syn_means, real_stats::DataFrame, syn_stats::DataFrame)::Nothing
+    if abs(real_means.within - syn_means.within) > MA_MATCH || abs(real_means.across - syn_means.across) > MA_MATCH
+        error("mean correlations do not match as the slide says: real ", real_means, ", synthetic ", syn_means)
+    end
+    if cor(real_stats.vol, syn_stats.vol) < MA_NAME_CORR || cor(real_stats.beta, syn_stats.beta) < MA_NAME_CORR
+        error("volatility or β do not agree name by name as the backup says")
+    end
+    for st in (real_stats, syn_stats)
+        for i in 1:nrow(st)
+            if !(st.tail[i] < TALK_TAIL_NORMAL)
+                error("name ", i, " has a tail of ", st.tail[i], ", not beyond the normal ", TALK_TAIL_NORMAL)
+            end
+            for (col, lim) in ((:vol, MA_VOL_LIMITS), (:beta, MA_BETA_LIMITS), (:tail, MA_TAIL_LIMITS))
+                if st[i, col] < lim[1] || st[i, col] > lim[2]
+                    error(col, " of name ", i, " is ", st[i, col], ", outside the backup's axes ", lim)
+                end
+            end
+        end
+    end
+    return nothing
+end
+
 function main()
     mkpath(OUT)
 
@@ -225,9 +261,8 @@ function main()
         end
     end
     h2h = CSV.read(joinpath(RESULTS, "synthetic", "tables", "typical_head_to_head.csv"), DataFrame)
+    # written with the multi-asset numbers, below
     numbers = talk_numbers(grid, n_decisions, h2h)
-    write_tex_macros(joinpath(OUT, "numbers.tex"), numbers)
-    println("wrote talk/data/numbers.tex: ", join([string(k, "=", v) for (k, v) in numbers], ", "))
 
     # the MPC slide: one real episode of the hand-picked 13, read from the run's cache file
     k = findfirst(isequal(MPC_LABEL), string.(gs.label))
@@ -265,6 +300,45 @@ function main()
     wrote("sf_acf.csv", sf.acf)
     wrote("sf_abs_acf.csv", sf.abs_acf)
     wrote("sf_summary.csv", sf.summary)
+
+    # the multi-asset slide and its backup: real 2014–2024 against the first of those typical paths over the same
+    # dates; the correlation maps sort the names by sector, then by ticker
+    syn = synthetic_market(gen, ids[1]).md
+    if syn.tickers != md.tickers
+        error("the synthetic market's names differ from the real market's")
+    end
+    train = growth_window(md.dates, TRAIN_START, TRAIN_STOP)
+    span = first(train):(last(train) + 1)
+    syn_train = growth_window(syn.dates, TRAIN_START, TRAIN_STOP)
+    syn_span = first(syn_train):(last(syn_train) + 1)
+    order = talk_sector_order(md.sector, md.tickers)
+    sector = md.sector[order]
+    G_real = growth_rates(md.close[span, :])
+    G_syn = growth_rates(syn.close[syn_span, :])
+    C_real = cor(G_real[:, order])
+    C_syn = cor(G_syn[:, order])
+    # the color bar runs from correlation 1 at the top to 0 at the bottom
+    bar = repeat(collect(range(1.0, 0.0; length=256)), 1, 8)
+    for theme in MA_THEMES
+        stops = TALK_HEAT_STOPS[theme]
+        write_png(joinpath(OUT, "ma_corr_real_$(theme).png"), talk_heat_rgb(C_real, stops))
+        write_png(joinpath(OUT, "ma_corr_syn_$(theme).png"), talk_heat_rgb(C_syn, stops))
+        write_png(joinpath(OUT, "ma_corr_bar_$(theme).png"), talk_heat_rgb(bar, stops))
+        println("wrote talk/data/ma_corr_{real,syn,bar}_", theme, ".png")
+    end
+    real_means = talk_block_means(C_real, sector)
+    syn_means = talk_block_means(C_syn, sector)
+    real_stats = talk_name_stats(G_real, growth_rates(md.spy_close[span]))
+    syn_stats = talk_name_stats(G_syn, growth_rates(syn.spy_close[syn_span]))
+    check_multiasset(real_means, syn_means, real_stats, syn_stats)
+    wrote("ma_names.csv", DataFrame(ticker=md.tickers, vol_real=real_stats.vol, vol_syn=syn_stats.vol,
+        beta_real=real_stats.beta, beta_syn=syn_stats.beta, tail_real=real_stats.tail, tail_syn=syn_stats.tail))
+    println("multi-asset: path ", ids[1], "; within a sector ", real_means.within, " real, ", syn_means.within,
+        " synthetic; across sectors ", real_means.across, " real, ", syn_means.across, " synthetic")
+    numbers = vcat(numbers, talk_multiasset_numbers(real_means, syn_means, real_stats, syn_stats,
+        talk_sector_blocks(sector)))
+    write_tex_macros(joinpath(OUT, "numbers.tex"), numbers)
+    println("wrote talk/data/numbers.tex: ", join([string(k, "=", v) for (k, v) in numbers], ", "))
 
     # the γ slide: SPY, its two EMAs and the market state ξ over the real window, ξ as the backtest computes it
     # (build_context in code/src/Context.jl): the gain G from the training closes, both EMAs from the first close of

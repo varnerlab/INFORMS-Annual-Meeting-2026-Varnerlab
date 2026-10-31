@@ -1,0 +1,68 @@
+% The multi-asset slide (user, 2026-10-31: the audience should leave believing the synthetic market looks like the
+% real one; of three mock-ups, the correlation maps, with the name-by-name scatters as a backup). It replaced the flow
+% in figs/multiasset.tex, which the paper's Fig. multiasset still draws. Input once in the preamble, after vnslides
+% and data/numbers.tex.
+%
+% \vnmultiassetequation sets each name's daily growth rate on one line, each part named beneath it in gray (design:
+% docs/superpowers/specs/2026-10-26-synthetic-market-stress-test-design.md §4; code: compose_name in
+% code/src/SyntheticMarket.jl): the trend α_i; β_i(t) g_m(t), the market JumpHMM fit to SPY; δ_i f_s(t), one
+% JumpHMM per sector, 11 in all; s_i ε̃_i(t), one JumpHMM per name, 373 in all. The evidence below it is the point, so
+% the equation is in body color (one focus per slide). The backup slide of name-by-name scatters uses it too.
+%
+% \vncorrmaps draws the evidence: the correlation of daily growth between every pair of the 373 names over
+% 2014–2024, real (left) and on the first typical synthetic path over the same dates (right), from
+% talk/data/ma_corr_{real,syn,bar}_<theme>.png, one pixel per pair (scripts/30_talk_data.jl). Names are sorted by
+% sector, then ticker; the 11 sector blocks on the diagonal (\MaBlocks) are outlined in the slide color. Beside them:
+% the color bar, and the mean correlation within a sector and across sectors, real and synthetic (\MaWithinReal,
+% \MaWithinSyn, \MaAcrossReal, \MaAcrossSyn), which the data script checks agree within 0.05.
+
+% a part's name beneath the equation
+\newcommand{\vnmultiassetlabel}[1]{\text{\fontsize{7.5}{9}\selectfont\color{vnquiet}#1}}
+\newcommand{\vnmultiassetequation}{%
+  {\centering\color{vnslidebody}$\displaystyle g_i(t) = \underbrace{\alpha_i}_{\vnmultiassetlabel{trend}}
+    + \underbrace{\beta_i(t)\, g_m(t)}_{\vnmultiassetlabel{market: 1 JumpHMM}}
+    + \underbrace{\delta_i\, f_s(t)}_{\vnmultiassetlabel{sector: 11 JumpHMMs}}
+    + \underbrace{s_i\, \tilde\varepsilon_i(t)}_{\vnmultiassetlabel{own: 373 JumpHMMs}}$\par}}
+
+% the side of each map
+\newlength{\vncorrside}
+\setlength{\vncorrside}{3.55cm}
+
+% \vncorrmap{<real or syn>}{<title>}: one map, its sector blocks outlined, its title above it
+\newcommand{\vncorrmap}[2]{%
+  \begin{tikzpicture}
+    \node[inner sep=0pt, anchor=north west] (vncmimg) at (0,0)
+      {\includegraphics[width=\vncorrside, height=\vncorrside]{data/ma_corr_#1_\vntheme.png}};
+    % one unit per name, counted from the top left corner
+    \begin{scope}[x=\vncorrside/373, y=-\vncorrside/373]
+      \foreach \vncmA/\vncmB in \MaBlocks
+        \draw[vnbg, line width=0.5pt] (\vncmA,\vncmA) rectangle (\vncmB,\vncmB);
+    \end{scope}
+    \node[anchor=south, inner sep=0pt, font=\fontsize{8.5}{10}\vnmedium, text=vnslideink]
+      at ([yshift=4pt]vncmimg.north) {#2};
+  \end{tikzpicture}}
+
+% the color bar, correlation 0 at the bottom and 1 at the top, with its title turned beside it
+\newcommand{\vncorrbar}{%
+  \begin{tikzpicture}
+    \node[inner sep=0pt, anchor=south west] at (0,0)
+      {\includegraphics[width=0.22cm, height=\vncorrside]{data/ma_corr_bar_\vntheme.png}};
+    \foreach \vncmV/\vncmT in {0/0,0.5/0.5,1/1}
+      \node[anchor=west, inner sep=0pt, font=\fontsize{7}{8.4}\selectfont, text=vndottick]
+        at (0.3cm, \vncmV\vncorrside) {\vncmT};
+    \node[rotate=90, anchor=south, inner sep=0pt, font=\fontsize{7.5}{9}\selectfont, text=vnslidebody]
+      at (1.05cm, 0.5\vncorrside) {growth correlation};
+  \end{tikzpicture}}
+
+\newcommand{\vncorrmaps}{%
+  \hbox{\hspace{0.1cm}\vncorrmap{real}{real}\hspace{0.45cm}\vncorrmap{syn}{synthetic}\hspace{0.25cm}%
+    \vncorrbar\hspace{0.55cm}%
+    % the two means, raised to sit beside the middle of the maps
+    \raisebox{1.25cm}{\begin{minipage}[b]{4.1cm}\small
+      {\fontsize{7.5}{9}\selectfont\color{vnquiet}mean pairwise correlation\par}\vspace{4pt}
+      \begin{tabular}{@{}l@{\hspace{9pt}}r@{\hspace{9pt}}r@{}}
+        & {\footnotesize\vnlabel{within}} & {\footnotesize\vnlabel{across}}\\[-1pt]
+        & {\footnotesize\vnlabel{a sector}} & {\footnotesize\vnlabel{sectors}}\\[2pt]
+        {\footnotesize real} & \MaWithinReal & \MaAcrossReal\\
+        {\footnotesize synthetic} & \MaWithinSyn & \MaAcrossSyn\\
+      \end{tabular}\end{minipage}}}}
