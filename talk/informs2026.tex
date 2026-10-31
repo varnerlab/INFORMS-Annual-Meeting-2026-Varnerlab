@@ -1,6 +1,11 @@
 % INFORMS Annual Meeting 2026, Session TD47 (spec: docs/superpowers/specs/2026-10-28-informs-talk-slides-design.md).
 % Build: make (XeLaTeX). Every number comes from data/, written by scripts/30_talk_data.jl.
 \documentclass[aspectratio=169,11pt]{beamer}
+
+% THE THEME: navy or white. `make` builds informs2026.pdf in this theme. `make both` builds informs2026-navy.pdf and
+% informs2026-white.pdf side by side to compare; each of those sets its own theme and ignores this line.
+\providecommand{\vntheme}{white}
+
 \usepackage{vnslides}
 \usepackage{booktabs}
 \usepackage{catchfile}

@@ -1,7 +1,7 @@
 % The stylized facts on the JumpHMM slide (spec, slide 4), after Fig. 3 of the JumpHMM paper
 % (HMM-w-jumps-paper/arxiv-paper/figs/main/Fig03-Model-Comparison.pdf): real SPY daily growth 2014–2024 against 100
-% generator paths of the same length. Input once in the preamble, after vnslides (for vnplotpanel and vnplotgrid)
-% and mpc.tex (for vnband).
+% generator paths of the same length. Input once in the preamble, after vnslides (for vnplotpanel, vnplotgrid and
+% vnband).
 %
 % \vnstylizedfacts{<width>}{<height>} draws three panels side by side, each with a plot area <width> by <height>,
 % from talk/data/sf_density.csv, sf_qq.csv and sf_abs_acf.csv (scripts/30_talk_data.jl):
@@ -55,7 +55,7 @@
       \vnsfband[2.4pt]{data/sf_density.csv}{x}
       \addplot[draw=vndottick, line width=0.8pt, dash pattern=on 2.5pt off 1.5pt, mark=none]
         table[col sep=comma, x=x, y=normal] {data/sf_density.csv};
-      \addplot[draw=vnaccent, line width=0.9pt, line join=round, mark=none]
+      \addplot[draw=vnfigaccent, line width=0.9pt, line join=round, mark=none]
         table[col sep=comma, x=x, y=real] {data/sf_density.csv};
     \end{axis}
     % (b) the generator's quantiles against SPY's, on the 45° line
@@ -84,7 +84,7 @@
       xlabel={lag, trading days}, ylabel={ACF of $|g|$},
     ]
       \vnsfband{data/sf_abs_acf.csv}{lag}
-      \addplot[draw=vnaccent, line width=1.0pt, line join=round, mark=none]
+      \addplot[draw=vnfigaccent, line width=1.0pt, line join=round, mark=none]
         table[col sep=comma, x=lag, y=real] {data/sf_abs_acf.csv};
     \end{axis}
   \end{tikzpicture}%

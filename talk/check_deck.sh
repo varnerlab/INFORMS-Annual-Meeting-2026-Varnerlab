@@ -1,45 +1,53 @@
 #!/usr/bin/env bash
-# Build the INFORMS 2026 deck and lint it. Usage (from the repo root): bash talk/check_deck.sh <expected pages>
+# Build the INFORMS 2026 deck and lint it. Usage (from the repo root): bash talk/check_deck.sh <expected pages> [theme]
 # Fails on a build error, an overfull box, an undefined reference, a glyph the font does not have, a missing Helvetica
 # Neue font, a page count other than the argument, or a forbidden string in the slide and figure sources. Writes page PNGs to talk/build/png/.
+# With no theme it checks informs2026.pdf, in the theme set in informs2026.tex; with navy or white it checks
+# informs2026-<theme>.pdf, built by `make both`.
 set -euo pipefail
 
-expected="${1:?usage: bash talk/check_deck.sh <expected pages>}"
+expected="${1:?usage: bash talk/check_deck.sh <expected pages> [theme]}"
 here="$(cd "$(dirname "$0")" && pwd)"
 cd "$here"
 fail=0
 
+# the deck to check: the configured one, or one theme's copy
+deck="informs2026"
+if [ -n "${2:-}" ]; then
+    deck="informs2026-$2"
+fi
+
 # build
-if ! make -s >build.log 2>&1; then
-    echo "FAIL: build error (see talk/build.log and talk/informs2026.log)"
-    tail -20 informs2026.log || true
+if ! make -s "$deck.pdf" >build.log 2>&1; then
+    echo "FAIL: build error (see talk/build.log and talk/$deck.log)"
+    tail -20 "$deck.log" || true
     exit 1
 fi
 
 # overfull boxes and undefined references
-if grep -n "Overfull" informs2026.log; then
+if grep -n "Overfull" "$deck.log"; then
     echo "FAIL: overfull box"
     fail=1
 fi
-if grep -n "undefined" informs2026.log | grep -v "fontspec"; then
+if grep -n "undefined" "$deck.log" | grep -v "fontspec"; then
     echo "FAIL: undefined reference"
     fail=1
 fi
 
 # a character the font lacks prints as nothing
-if grep -n "Missing character" informs2026.log; then
+if grep -n "Missing character" "$deck.log"; then
     echo "FAIL: missing glyph"
     fail=1
 fi
 
 # the slide font must be embedded, not a fallback
-if ! pdffonts informs2026.pdf | grep -q "HelveticaNeue-Light"; then
+if ! pdffonts "$deck.pdf" | grep -q "HelveticaNeue-Light"; then
     echo "FAIL: Helvetica Neue Light is not embedded"
     fail=1
 fi
 
 # page count
-pages="$(pdfinfo informs2026.pdf | awk '/^Pages:/ {print $2}')"
+pages="$(pdfinfo "$deck.pdf" | awk '/^Pages:/ {print $2}')"
 if [ "$pages" != "$expected" ]; then
     echo "FAIL: $pages pages, expected $expected"
     fail=1
@@ -66,7 +74,7 @@ fi
 # page images for a visual check
 rm -rf build/png
 mkdir -p build/png
-pdftoppm -r 60 -png informs2026.pdf build/png/page
+pdftoppm -r 60 -png "$deck.pdf" build/png/page
 
 if [ "$fail" -ne 0 ]; then
     exit 1

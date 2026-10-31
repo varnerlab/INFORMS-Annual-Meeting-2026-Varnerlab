@@ -17,7 +17,7 @@
 \begin{tikzpicture}[
   state/.style    = {circle, draw=vnslideink, line width=1.4pt, minimum size=1.8cm,
                      inner sep=0pt, font=\LARGE, text=vnslideink},
-  tailbot/.style  = {state, fill=vnbg, draw=vnaccent},
+  tailbot/.style  = {state, fill=vnbg, draw=vnfigaccent},
   tailtop/.style  = {state, fill=vnbg, draw=vnslidelink},
   midstate/.style = {state, fill=vnbg, draw=vnslideink!70!vnbg},
   dots/.style     = {font=\Huge, text=vnslidebody, yshift=-2pt},
@@ -43,14 +43,14 @@
   \draw[markov] (rd.east |- sNm1) -- (sNm1);
   \draw[markov] (sNm1)-- (sN);
   % each state's emission, a bell above it
-  \draw[vnaccent, thick]
+  \draw[vnfigaccent, thick]
     plot[domain=-0.55:0.55, samples=40, smooth, variable=\t]
     ({ 0.0+\t}, {1.3 + 0.85*exp(-\t*\t/0.04)});
-  \draw[vnaccent!40!vnbg, thin] (-0.55,1.3) -- (0.55,1.3);
-  \draw[vnaccent, thick]
+  \draw[vnfigaccent!40!vnbg, thin] (-0.55,1.3) -- (0.55,1.3);
+  \draw[vnfigaccent, thick]
     plot[domain=-0.55:0.55, samples=40, smooth, variable=\t]
     ({ 4.6+\t}, {1.3 + 0.85*exp(-\t*\t/0.04)});
-  \draw[vnaccent!40!vnbg, thin] (4.05,1.3) -- (5.15,1.3);
+  \draw[vnfigaccent!40!vnbg, thin] (4.05,1.3) -- (5.15,1.3);
   \draw[vnslidebody, thick]
     plot[domain=-0.55:0.55, samples=40, smooth, variable=\t]
     ({13.8+\t}, {1.3 + 0.85*exp(-\t*\t/0.04)});
@@ -72,9 +72,9 @@
     node[note, pos=0.82, right=5pt, anchor=west, text=vnslidebody] {jump triggered};
   % each forced run: straight out of the clock, straight down outside the tail state, and into it from the side, so
   % the arrow crosses no emission bell
-  \draw[jumparc, vnaccent, rounded corners=10pt]
+  \draw[jumparc, vnfigaccent, rounded corners=10pt]
     (clock.west) --
-    node[note, above, text=vnaccent, pos=0.5, yshift=1pt]
+    node[note, above, text=vnfigaccent, pos=0.5, yshift=1pt]
       {$K\!\sim\!\mathrm{Pois}(\lambda)$ forced steps}
     (-1.6, 3.35) -- (-1.6, 0) -- (s1.west);
   \draw[jumparc, vnslidelink, rounded corners=10pt]
@@ -85,9 +85,9 @@
   % the tails, braced right under their states, and the state index between them
   \draw[decorate,
         decoration={brace, amplitude=6pt, mirror},
-        vnaccent, thick]
+        vnfigaccent, thick]
     (-0.8, -1.0) -- (5.4, -1.0)
-    node[midway, below=5pt, vnaccent, font=\LARGE]
+    node[midway, below=5pt, vnfigaccent, font=\LARGE]
       {$\mathcal{S}_{-}$\ (bottom tail)};
   \draw[decorate,
         decoration={brace, amplitude=6pt, mirror},

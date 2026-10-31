@@ -22,3 +22,4 @@ talk/*.fls
 talk/*.xdv
 talk/build/
 talk/informs2026.pdf
+talk/informs2026-*.pdf

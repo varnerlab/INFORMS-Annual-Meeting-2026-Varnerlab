@@ -1,7 +1,7 @@
 % The γ slide's figure (user, 2026-10-29, mock-up option C): SPY and the market state ξ over the real window,
 % Jan 2, 2025 – Sep 4, 2026, from talk/data/market_state.csv and market_state_crossings.csv (scripts/30_talk_data.jl,
 % which checks that every series stays inside its strip's y range and that each crossing is a change in the EMAs'
-% order). Input once in the preamble, after vnslides (for vnplotpanel and vnplotgrid), mpc.tex (for vnband) and
+% order). Input once in the preamble, after vnslides (for vnplotpanel, vnplotgrid and vnband) and
 % stylized_facts.tex (for the vnsf look).
 %
 % \vnmarketstate{<width>}{<SPY height>}{<ξ height>} draws two strips, one above the other, each with a plot area
@@ -54,7 +54,7 @@
     ]
       \vnmsshade{0.8}{1.4}
       % SPY faded, so the EMAs read
-      \addplot[draw=vnaccent, draw opacity=0.55, line width=0.6pt, line join=round, mark=none]
+      \addplot[draw=vnfigaccent, draw opacity=0.55, line width=0.6pt, line join=round, mark=none]
         table[col sep=comma, x=date, y=spy] {data/market_state.csv};
       \addplot[draw=vnslideink, line width=1.0pt, line join=round, mark=none]
         table[col sep=comma, x=date, y=ema_short] {data/market_state.csv};

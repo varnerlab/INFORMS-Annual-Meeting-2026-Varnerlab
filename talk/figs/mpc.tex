@@ -9,9 +9,8 @@
 % x is the trading day of the episode (day 0 = Oct 10, 2025); the event days are 21, 29 and 50. The x axis is titled
 % with the year (review round, 2026-10-30: every axis is labeled). All files come from scripts/30_talk_data.jl.
 
-% the forecast bands and the realized value, for the navy field (the plot panel is vnplotpanel, from vnslides)
-\definecolor{vnband}{HTML}{5DA9E9}
-\definecolor{vnmpcred}{HTML}{FF6F61}
+% the forecast bands (vnband), the realized value (vnmpcred), the plot panel (vnplotpanel) and the bands' opacities
+% come with the theme, from the deck palette in vnslides.sty
 
 % \vnmpcband{<cone>}{<z>}{<opacity>}{<tag>}: the band mean ± z·sd of one cone, filled at that opacity
 \newcommand{\vnmpcband}[4]{%
@@ -22,12 +21,12 @@
   \addplot[fill=vnband, fill opacity=#3, draw=none, forget plot] fill between[of=vnmpc#1#4hi and vnmpc#1#4lo];
 }
 
-% \vnmpccone{<cone>}: the 99, 95 and 68% bands of one cone, widest first so the inner bands layer on top; on the navy
-% panel each band needs more opacity than on white to stand apart from the next
+% \vnmpccone{<cone>}: the 99, 95 and 68% bands of one cone, widest first so the inner bands layer on top, each at the
+% theme's opacity for it
 \newcommand{\vnmpccone}[1]{%
-  \vnmpcband{#1}{2.576}{0.20}{a}%
-  \vnmpcband{#1}{1.96}{0.26}{b}%
-  \vnmpcband{#1}{1.0}{0.38}{c}%
+  \vnmpcband{#1}{2.576}{\vnbandouter}{a}%
+  \vnmpcband{#1}{1.96}{\vnbandmiddle}{b}%
+  \vnmpcband{#1}{1.0}{\vnbandinner}{c}%
 }
 
 % \vnmpcevent{<row>}{<node options>}{<label>}: the ring at the re-plan in row <row> (from 0) of mpc_events.csv, on the
@@ -42,9 +41,9 @@
   \pgfplotstablegetelem{\vnmpcDay}{w}\of\vnmpcPath
   \let\vnmpcW\pgfplotsretval
   \edef\vnmpcCmd{%
-    \noexpand\draw[vnaccent, line width=0.6pt, dash pattern=on 1pt off 1.5pt]
+    \noexpand\draw[vnfigaccent, line width=0.6pt, dash pattern=on 1pt off 1.5pt]
       (axis cs:\vnmpcDay,\vnmpcYtop) -- (axis cs:\vnmpcDay,\vnmpcW);
-    \noexpand\node[circle, draw=vnaccent, line width=1.2pt, fill=vnplotpanel, inner sep=0pt, minimum size=5pt]
+    \noexpand\node[circle, draw=vnfigaccent, line width=1.2pt, fill=vnplotpanel, inner sep=0pt, minimum size=5pt]
       at (axis cs:\vnmpcDay,\vnmpcW) {};
     \noexpand\node[#2, font=\noexpand\fontsize{7.5}{9}\noexpand\selectfont, text=vnslideink, inner sep=0pt,
       yshift=3pt]

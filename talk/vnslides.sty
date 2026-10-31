@@ -69,17 +69,72 @@
 \input{vnflow.sty}
 
 % ---------- deck palette -------------------------------------
-% The talk runs navy and gold (user, 2026-10-29), in place of the lecture decks'
-% white field with a coral accent: warm white headings, cool light grey body copy,
-% gold for emphasis and steel blue for links and data.
-\definecolor{vnbg}{HTML}{0D1B2A}         % the slide field
-\definecolor{vnslideink}{HTML}{F4F1EA}   % headings, emphatic body
-\definecolor{vnslidebody}{HTML}{B9C3CE}  % ordinary body copy
-\definecolor{vnaccent}{HTML}{E3B23C}     % the gold
-\definecolor{vnslidelink}{HTML}{8DB4DD}  % hyperlinks
-% the plot panels of the forecast and stylized-fact figures, a step lighter than the field, and their grid lines
-\definecolor{vnplotpanel}{HTML}{14283C}
-\definecolor{vnplotgrid}{HTML}{1F3852}
+% \vntheme picks the palette: navy (the default) or white (user, 2026-10-30: a white version to compare). The deck
+% file sets it before loading this package; `make both` builds the deck in each theme. Every color on the slides and
+% in the figures is one of the names below, so the theme is the only switch.
+\RequirePackage{etoolbox}
+\providecommand{\vntheme}{navy}
+\ifdefstring{\vntheme}{white}{%
+  % white field: navy headings, slate body copy, Cornell red for the slide's own marks, a deeper gold that still shows
+  % on white for SPY and the other gold marks in the figures, darker blues for data
+  \definecolor{vnbg}{HTML}{FFFFFF}         % the slide field
+  \definecolor{vnslideink}{HTML}{0D1B2A}   % headings, emphatic body
+  \definecolor{vnslidebody}{HTML}{3D4A5A}  % ordinary body copy
+  \definecolor{vnaccent}{HTML}{B31B1B}     % Cornell red (carnelian): title rules, the strip, the outline's numbers
+  \definecolor{vnfigaccent}{HTML}{B8860B}  % the gold of the figures: SPY, re-plan marks, the bottom tail
+  \definecolor{vnslidelink}{HTML}{2F6B9A}  % hyperlinks
+  % the plot panels of the forecast and stylized-fact figures, a step darker than the field, and their grid lines
+  \definecolor{vnplotpanel}{HTML}{F2F5F9}
+  \definecolor{vnplotgrid}{HTML}{DDE4EC}
+  % the section strip's other names
+  \definecolor{vnstripoff}{HTML}{7C8A9A}
+  % the dot plots (figs/dotplot.tex): filled and hollow dots, range bars, the equal-weight line, grid, axis, ticks
+  \definecolor{vndotoff}{HTML}{3F7FC0}
+  \definecolor{vndoton}{HTML}{1E3A5F}
+  \definecolor{vndotbar}{HTML}{E1E8F0}
+  \definecolor{vndotew}{HTML}{6B7A8C}
+  \definecolor{vndotgrid}{HTML}{EDF1F5}
+  \definecolor{vndotaxis}{HTML}{B8C3CF}
+  \definecolor{vndottick}{HTML}{3D4A5A}
+  % the forecast bands and the realized value (figs/mpc.tex), and the bands' opacities, widest band first: on white
+  % the layered bands need less opacity to stand apart
+  \definecolor{vnband}{HTML}{3E8BD0}
+  \definecolor{vnmpcred}{HTML}{D94A3A}
+  \newcommand{\vnbandouter}{0.12}\newcommand{\vnbandmiddle}{0.16}\newcommand{\vnbandinner}{0.26}
+  % the seal in Cornell red, recolored from cornell-seal.pdf, to match the title rules
+  \newcommand{\vnthemeseal}{cornell-seal-red.pdf}
+}{%
+  \ifdefstring{\vntheme}{navy}{}{%
+    \PackageError{vnslides}{unknown theme `\vntheme' (use navy or white)}{}}
+  % The talk runs navy and gold (user, 2026-10-29), in place of the lecture decks' white field with a coral accent:
+  % warm white headings, cool light grey body copy, gold for emphasis and steel blue for links and data.
+  \definecolor{vnbg}{HTML}{0D1B2A}         % the slide field
+  \definecolor{vnslideink}{HTML}{F4F1EA}   % headings, emphatic body
+  \definecolor{vnslidebody}{HTML}{B9C3CE}  % ordinary body copy
+  \definecolor{vnaccent}{HTML}{E3B23C}     % gold (user, 2026-10-30: gold on navy, red on white): title rules, the strip, the outline's numbers
+  \definecolor{vnfigaccent}{HTML}{E3B23C}  % the same gold in the figures: SPY, re-plan marks, the bottom tail
+  \definecolor{vnslidelink}{HTML}{8DB4DD}  % hyperlinks
+  % the plot panels of the forecast and stylized-fact figures, a step lighter than the field, and their grid lines
+  \definecolor{vnplotpanel}{HTML}{14283C}
+  \definecolor{vnplotgrid}{HTML}{1F3852}
+  % the section strip's other names
+  \definecolor{vnstripoff}{HTML}{8696A8}
+  % the dot plots: steel-blue dots, range bars a step lighter than the field, and greys that read on navy
+  \definecolor{vndotoff}{HTML}{7FA7D1}
+  \definecolor{vndoton}{HTML}{C9DCF0}
+  \definecolor{vndotbar}{HTML}{1B3047}
+  \definecolor{vndotew}{HTML}{9FB0C2}
+  \definecolor{vndotgrid}{HTML}{14283C}
+  \definecolor{vndotaxis}{HTML}{3C5570}
+  \definecolor{vndottick}{HTML}{B9C3CE}
+  % the forecast bands and the realized value, and the bands' opacities, widest band first: on the navy panel each
+  % band needs more opacity than on white to stand apart from the next
+  \definecolor{vnband}{HTML}{5DA9E9}
+  \definecolor{vnmpcred}{HTML}{FF6F61}
+  \newcommand{\vnbandouter}{0.20}\newcommand{\vnbandmiddle}{0.26}\newcommand{\vnbandinner}{0.38}
+  % the seal in warm white (vnslideink), recolored from cornell-seal.pdf
+  \newcommand{\vnthemeseal}{cornell-seal-white.pdf}
+}
 
 \setbeamercolor{background canvas}{bg=vnbg}
 
@@ -183,7 +238,6 @@
 % and underlined in gold and the others grey. \vnsections{<name>,<name>,...} in the preamble names them, in order;
 % \vnsection is the number of the current slide's section, set in the deck file before the slide is input. At 0, the
 % default, the slide has no strip and its title keeps its usual place.
-\definecolor{vnstripoff}{HTML}{8696A8}
 \newcommand{\vnsection}{0}
 \newcommand{\vnsectionnames}{}
 \newcommand{\vnsections}[1]{\renewcommand{\vnsectionnames}{#1}}
@@ -303,10 +357,10 @@
 % is the official #B31B1B variant -- note that is exactly vncarnelian, i.e. the
 % notes already use the official Cornell red while the decks run a lighter coral.
 % Override per deck with \vnseal{...} if a lecture needs something else.
-% The talk's navy field takes the seal in warm white (vnslideink), recolored from
-% cornell-seal.pdf, whose single fill is a near-black.
+% The talk's seal follows the theme (\vnthemeseal, in the deck palette above): warm white on navy and Cornell red on
+% white, each recolored from cornell-seal.pdf by swapping its single near-black fill.
 \newcommand{\vnseal}[1]{\def\@vnseal{#1}}
-\vnseal{cornell-seal-white.pdf}
+\vnseal{\vnthemeseal}
 % Widths are relative to \textwidth, not \paperwidth: the text area is already
 % inset by the margins, and paperwidth-relative boxes overflow and wrap the seal
 % onto its own line.

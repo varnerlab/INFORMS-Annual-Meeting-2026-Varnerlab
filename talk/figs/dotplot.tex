@@ -38,18 +38,12 @@
 \def\vndotOnRadius{1.7pt}
 \def\vndotBarWidth{2.2pt}
 
-% for the navy field: steel-blue dots, range bars a step lighter than the field, and greys that read on navy
-\definecolor{vndotoff}{HTML}{7FA7D1}
-\definecolor{vndoton}{HTML}{C9DCF0}
-\definecolor{vndotbar}{HTML}{1B3047}
-\definecolor{vndotew}{HTML}{9FB0C2}
-\definecolor{vndotgrid}{HTML}{14283C}
-\definecolor{vndotaxis}{HTML}{3C5570}
-\definecolor{vndottick}{HTML}{B9C3CE}
+% the colors (vndotoff, vndoton, vndotbar, vndotew, vndotgrid, vndotaxis, vndottick) come with the theme, from the
+% deck palette in vnslides.sty
 
 % the line and mark styles, shared by the plot and the legend
 \tikzset{
-  vndot spy/.style={draw=vnaccent, line width=1.1pt, dash pattern=on 4pt off 2.5pt},
+  vndot spy/.style={draw=vnfigaccent, line width=1.1pt, dash pattern=on 4pt off 2.5pt},
   vndot ew/.style={draw=vndotew, line width=1pt, dotted},
   vndot mid/.style={draw=vndotew, line width=0.8pt, dash pattern=on 3pt off 2pt},
   vndot off/.style={circle, fill=vndotoff, draw=none, inner sep=0pt, minimum size=2*\vndotOffRadius},
