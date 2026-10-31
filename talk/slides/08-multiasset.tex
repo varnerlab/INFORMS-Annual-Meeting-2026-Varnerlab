@@ -11,4 +11,64 @@
   {\centering\vnmultiasset\par}
   \vspace{8pt}
   {\small Residuals are not reordered: each keeps its own clustering and jump timing.\par}
-\end{frame}}
+  % speaker notes (user, 2026-10-31: how the JumpHMM extension to many assets works), four pages. Sources:
+  % arxiv-paper/sections/method_synthetic.tex and appendix_c.tex, verified against code/src/SyntheticMarket.jl
+  % (compose_name, SYNTH_FLOOR = 0.10) and SyntheticCalibration.jl; results/synthetic/generator_summary.toml
+  % (phi = 0.6, h_beta = 126, beta_acf252 = 0.2062, alpha_corr = 0.1748, loading_scale 1.020 to 1.337);
+  % results/synthetic/generator.jld2 (k_beta stationary SD quartiles 0.196, 0.261, 0.338; rho_bar 0.917, 0.918);
+  % results/synthetic/rows/meta_*.csv (clip_share 0.00536); results/synthetic/checks.csv (V5, V6, V9);
+  % .superpowers/sdd/2026-10-26-synthetic-market-stress-test/rulings.md (Ruling 11: -0.48 vs 0.003).
+  \note{\footnotesize
+    \vnnotehead{Many assets: the composition}
+    \vnnoterow{Each name}{$g_i(t) = \alpha_i + \beta_i(t)\, g_m(t) + \delta_i\, f_s(t) + s_i\, \tilde\varepsilon_i(t)$,
+      the daily growth rate of name $i$ in sector $s$.}
+    \vnnoterow{Market $g_m$}{One draw of the SPY JumpHMM, with its jump-episode flag. Synthetic SPY compounds from
+      it.}
+    \vnnoterow{Sector $f_s$}{One JumpHMM for each of the 11 sectors, fitted to the compounded equal-weight mean of
+      the sector's single-index residuals; drawn independently of each other and of the market.}
+    \vnnoterow{Own draw $\tilde\varepsilon_i$}{The name's own JumpHMM, fitted to its 2014–2024 closes (all 373
+      refitted), centered on the model's long-run mean (one $10^6$-day draw), not the path mean.}
+    \vnnoterow{One long path}{Every trading day from 3 Jan 2014 to 4 Sep 2026, compounding from the real 2014 closes,
+      so the method recalibrates on synthetic 2014–2024 and trades synthetic 2025–26.}
+    \vnnoterow{Seeds}{The market path uses seed $p$; the sector and name draws use seeds derived from $p$, so any
+      path rebuilds bit for bit.}}
+\end{frame}
+\note{\footnotesize
+  \vnnotehead{Many assets: intercepts and a drifting β}
+  \vnnoterow{Intercept}{$\alpha_i = \bar\alpha + 0.6\,(\hat\alpha_i - \bar\alpha)$, constant in time: names keep
+    their 2014–2024 order at 60\% of their distance from the universe mean. The pull 0.6 reproduces the real spread
+    of intercepts and their split-half correlation across names, 0.175.}
+  \vnnoterow{Drifting β}{$\beta_i(t) = \hat\beta_i + x_i(t)$, where $x_i(t) = (1 - a)\, x_i(t-1) + a\, k_i\,
+    z_i(t)$, $z_i \sim \mathcal{N}(0, 1)$, $a = 1 - 2^{-1/126}$, started from its stationary distribution.}
+  \vnnoterow{Calibrated to}{The method's own online β estimate, not an assumed truth: $k_i$ matches the SD of the
+    name's real online β; the half-life of 126 days matches its median lag-252 autocorrelation, 0.206.}
+  \vnnoterow{Size}{Stationary SD of the drift: median 0.26 across names (interquartile range 0.20 to 0.34). A β that
+    drifts below zero makes the name a hedge candidate on that path.}
+  \vnnoterow{Dropped}{A drift in α of the same form: its fitted size was zero.}}
+\note{\footnotesize
+  \vnnotehead{Many assets: matching each name's variance}
+  \vnnoterow{Sector loading}{$\delta_i$ is the slope of the name's real residual on the mean residual of the other
+    names in its sector, times one factor $\kappa_s$ per sector chosen so the mean pairwise covariance matches the
+    real residuals'; $\kappa_s$ runs from 1.02 (Financials) to 1.34 (Communication Services).}
+  \vnnoterow{Factor share}{$\bar\rho_i = [(\hat\beta_i^2 + k_i^2\, a/(2-a))\, \sigma_m^2 + \delta_i^2\,
+    \sigma_s^2]/\sigma_i^2$, with the real 2014–2024 variances of SPY, the sector factor and the name.}
+  \vnnoterow{Own-draw scale}{$s_i^2 = 1 - \bar\rho_i$. If $\bar\rho_i > 0.90$, both loadings shrink by
+    $\theta_i = \sqrt{0.90/\bar\rho_i}$ and $s_i^2 = 0.10$: two Utilities names, 0.54\% of name-days.}
+  \vnnoterow{Fixed targets}{Variances stay at their real values, so a market burst raises a name's variance
+    through its market term rather than shrinking its own noise over the whole path.}
+  \vnnoterow{Result}{Composed variance at a median 0.994 times the own draw's and 1.066 times the real one.}}
+\note{\footnotesize
+  \vnnotehead{Many assets: dependence and checks}
+  \vnnoterow{No copula}{A rank reorder imposes a fitted dependence but permutes each residual path over days,
+    destroying its clustering and jump timing. Here dependence enters only through the shared $g_m$ and $f_s$, on
+    the same day.}
+  \vnnoterow{Consequence}{Residual correlation across sectors is 0.0002 against 0.031 in real data. Correlations
+    rise in a sell-off only through the market term; real ones rise further.}
+  \vnnoterow{Hedge candidates}{A median of 7 names per path had an online $\beta \le 0$ in the window, against 120
+    in real 2025–26.}
+  \vnnoterow{Versus the paper}{Six changes: centering on the model mean (path centering tied the trading window's
+    noise to the calibration window's, intercept correlation −0.48); fixed variance targets; the sector term; a
+    drifting β; one shrink factor for both loadings; pulled intercepts.}
+  \vnnoterow{Checks}{22 gated checks against the real market; 21 passed. The miss: the cross-name SD of intercepts,
+    0.089 against 0.076 per year (tolerance 0.01), reported rather than tuned away.}}
+}

@@ -16,4 +16,37 @@
   \pgfplotsset{vndot extra/.style={extra description/.code={\vndotlegendstacked}}}%
   \vndotplot[xmin=0.97, xmax=1.72, xstep=0.1, spy=\vndotSPY, ew=\vndotEW, width=10.1cm, height=4.77cm,
     xlabel={terminal wealth ÷ initial wealth, median of 30 runs}]{data/realrun_grid.csv}{data/realrun_bars.csv}\par
-\end{frame}}
+  % speaker notes (user, 2026-10-31: algorithm cheat sheets), two pages. Sources: arxiv-paper/sections/
+  % method_allocation.tex (selection rules, bandit) and method_mpc.tex (backtest design), verified against
+  % code/src/Screens.jl, Bandit.jl, StudyRunner.jl; config/study.toml [screens], [grid].
+  \note{\footnotesize
+    \vnnotehead{Selection rules}
+    \vnnoterow{Per sector}{3 names in each of the 11 sectors, 33 in all: the highest γ, the bandit's top 3, or a
+      uniform random draw.}
+    \vnnoterow{Global γ}{The 13 highest γ in the 373-name universe, no sector quota.}
+    \vnnoterow{Correlation-\newline aware γ}{Walk down the γ ranking; accept a name only if its 252-day growth correlation with
+      every accepted name is at most 0.7; fill any shortfall from the ranking.}
+    \vnnoterow{Liquid then γ}{The 13 highest γ among the 100 names with the largest median daily dollar volume over
+      63 days.}
+    \vnnoterow{Random}{13 names drawn uniformly from those 100, or from the whole universe, afresh at every pick.}
+    \vnnoterow{Hand-picked}{AAPL, MSFT, INTC, MU, AMD, NVDA, GS, BAC, WFC, C, F, GM, JNJ, chosen in advance from
+      sectors I follow, without 2025 data; the 15-name list adds WMT and PG. Never re-picked.}
+    \vnnoterow{Pick dates}{The first day, every 21 trading days and every band exit, with data dated on or before
+      the pick. Each pick also refreshes the hedge pool and the short candidates of the 130/30 rule.}}
+\end{frame}
+\note{\footnotesize
+  \vnnotehead{The bandit, and how the runs are read}
+  \vnnoterow{Bandit arms}{One ε-greedy bandit per sector, retrained from scratch at each pick; each of the sector's
+    15 to 60 names is an arm.}
+  \vnnoterow{A pull}{Draws a 21-day window inside the trailing year and earns the name's growth rate over that
+    window minus SPY's; $\min(\max(50A, 500), 5000)$ pulls for $A$ arms.}
+  \vnnoterow{Exploration}{$\epsilon_k = \max\{0.05,\, \min[1,\, k^{-1/3} (A \ln k)^{1/3}]\}$, which stayed above
+    0.51, so every pull explored more than half the time. The rule keeps the 3 arms with the highest mean
+    reward.}
+  \vnnoterow{In effect}{A sector-neutral ranking by 12-month momentum against SPY.}
+  \vnnoterow{Seeds}{30 runs per cell, seeds 5660 to 5689. For the deterministic rules the seed moves only the
+    forecast paths, and through them the band exits and the re-plan dates.}
+  \vnnoterow{A dot}{The median terminal wealth ratio of a cell's 30 runs, never pooled across rules.}
+  \vnnoterow{Benchmarks}{SPY bought and held from the close of 2 Jan 2025; the equal-weight universe bought once
+    ($W_0/373$ in each name) and held. No costs.}}
+}

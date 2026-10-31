@@ -13,10 +13,46 @@
   \endgroup
   \vspace{6pt}
   \vnmpcfigure{11.5cm}{3.55cm}\par
-  % speaker note (user, 2026-10-31), hidden in the projected deck; `make notes` prints it. Source: the calendar-only
-  % reruns, results/calendar_baseline/calendar_vs_triggers.csv (real prices) and synthetic_vs_triggers.csv (sell-offs).
-  \note{\textbf{If asked whether the triggers beat a fixed schedule:}\par\medskip
-    We reran everything on a fixed 21-day schedule. Ending wealth is the same. The triggers take about a point off
-    the worst drawdown, on real prices and in simulated sell-offs. The protection relative to SPY comes from the
-    allocation, not from the timing.}
-\end{frame}}
+  % speaker notes (user, 2026-10-31), hidden in the projected deck; `make notes` prints them. Pages 1-2 are the
+  % algorithm cheat sheet. Sources: arxiv-paper/sections/method_mpc.tex (verified against code/src/StudyBacktest.jl,
+  % Triggers.jl, Projection.jl, Covariance.jl); config/study.toml [triggers], [covariance], [screens];
+  % results/calibration_summary.toml lambda = 0.0; README.md (88.5% drawdown re-plans before the reset).
+  \note{\footnotesize
+    \vnnotehead{Rebalancing controller: the forecast}
+    \vnnoterow{Drift}{$\mu_{g,i} = \alpha_i + \beta_i\, \tilde g_M$, the online single-index estimate of the expected
+      growth rate of the log price, so the GBM needs no Itô correction.}
+    \vnnoterow{Covariance}{$\Sigma_g = \sigma_M^2\, \beta\beta^{\top} + (1 - \lambda)\, \hat\Omega_\varepsilon +
+      \lambda\, \mathrm{diag}(\hat\Omega_\varepsilon)$, with $\hat\Omega_\varepsilon$ the sample residual covariance
+      over the last 126 days. λ was chosen by the QLIKE loss of 21-day variance forecasts for random portfolios on
+      2014–2024, which picked $\lambda = 0$.}
+    \vnnoterow{Paths}{1,000 paths over 21 trading days. Each day $\ln S_i$ advances by $g_i\, \Delta t$ with
+      $g \sim \mathcal{N}(\mu_g, \Sigma_g)$, independent across days and paths, starting from the decision day's
+      closes.}
+    \vnnoterow{Wealth}{Target shares times the simulated prices, plus the leftover cash growing at the 3-month
+      T-bill rate. The forecast leaves out trading costs, the overnight gap before the fill and borrow fees.}
+    \vnnoterow{Band}{Mean $\pm$ 1.96 SD of the simulated wealth, for each day 1 to 20 after the re-plan.}
+    \vnnoterow{Seeds}{Forecast paths are seeded by the run seed and the decision date, so a run reproduces exactly.}
+    \vnnoterow{Same model}{The allocation uses the same $\mu_g$ and $\Sigma_g$ in its volatility cap and benchmarks,
+      so each book is forecast with the model that sized it.}}
+\end{frame}
+\note{\footnotesize
+  \vnnotehead{Rebalancing controller: the triggers}
+  \vnnoterow{Order of checks}{At each close, the first that holds: cash revisit (the last plan was all cash and 21
+    days have passed), drawdown (wealth more than 8\% below its running peak), horizon (21 trading days), band exit.}
+  \vnnoterow{Drawdown reset}{A drawdown re-plan resets the peak to the current wealth, so the stop fires once per
+    fresh 8\% loss (88.5\% of decisions were drawdown re-plans without it).}
+  \vnnoterow{A re-plan}{Solves the same allocation from the shares held, with that day's estimates. No trigger
+    changes the objective or the limits, so a drawdown stop does not cut exposure by itself.}
+  \vnnoterow{Basket picks}{On the first day, every 21 trading days and at every band exit. A timer pick that changes
+    the names also forces a re-plan.}
+  \vnnoterow{Re-plans per run}{27 in the run shown: 17 at the horizon, 7 band exits, 3 drawdown stops.}
+  \vnnoterow{Related work}{Multi-period convex trading (Boyd et al., 2017) plans a sequence of trades and executes
+    the first each period. This controller solves one period and trades only when a trigger fires; the band is a
+    no-trade region on the portfolio value rather than on the weights.}}
+% page 3: the Q&A answer. Source: the calendar-only reruns, results/calendar_baseline/calendar_vs_triggers.csv (real
+% prices) and synthetic_vs_triggers.csv (sell-offs).
+\note{\textbf{If asked whether the triggers beat a fixed schedule:}\par\medskip
+  We reran everything on a fixed 21-day schedule. Ending wealth is the same. The triggers take about a point off
+  the worst drawdown, on real prices and in simulated sell-offs. The protection relative to SPY comes from the
+  allocation, not from the timing.}
+}

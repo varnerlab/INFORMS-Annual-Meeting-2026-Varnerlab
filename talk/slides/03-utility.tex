@@ -45,4 +45,56 @@
     with the limits & \multicolumn{4}{c}{\color{vnslideink} a convex cone program for each utility, solved
       numerically} \\
   \end{tabular*}\par}
-\end{frame}}
+  % speaker notes (user, 2026-10-31: algorithm cheat sheets), three pages. Sources: arxiv-paper/sections/
+  % method_allocation.tex and methods_data.tex (eq:cost), both verified against code/src/Allocators.jl,
+  % AllocatorsLongShort.jl, AllocatorsMeanVariance.jl, HedgePool.jl, StudyBacktest.jl; config/study.toml [limits],
+  % [costs], [hedge], [allocators]; results/calibration_summary.toml sigma_m = 2.7411, vol_cap_annual = 0.1727;
+  % talk/data/market_state.csv (xi from -0.7999 to 0.8999).
+  \note{\footnotesize
+    \vnnotehead{Allocation: the limits}
+    \vnnoterow{Single-name cap}{$\max(0.10,\, 1.5/K)$ of wealth for a picked name: 11.5\% at $K = 13$, 10\% with 33
+      names, 30\% at $K = 5$. Hedge-pool and short names: 10\%.}
+    \vnnoterow{Volatility cap}{$\sigma_{\text{SPY}}$ is the SD of SPY's daily growth rate over 2014–2024, 17.3\% a
+      year. Imposed as a second-order cone on $L^{\top} w$, with $L L^{\top} = \Sigma_g + 10^{-8} I$.}
+    \vnnoterow{Turnover budget}{Half spread $\bar c = 5$ bps, priced at the mean close of the names; $B = 10\%$ of
+      wealth. A long-only book can reach it only if the mean price exceeds 100 times the cheapest.}
+    \vnnoterow{β cap, hedge on}{$\bar\beta = \max(0,\, 1 - \xi_t)$, with each name's signed online β. It is 1 at
+      $\xi = 0$ and 0 for $\xi \ge 1$; over the window it ranged from 1.80 down to 0.10.}
+    \vnnoterow{Sector limit}{None in this study.}
+    \vnnoterow{Execution}{Orders fill at the next open: sells first, then buys scaled by one factor so that cash
+      stays nonnegative.}
+    \vnnoterow{Trading cost}{5 bps half spread plus a linear impact cost, $\kappa = 0.001$ times the participation
+      (shares traded over the 63-day mean daily volume). No commission.}}
+\end{frame}
+\note{\footnotesize
+  \vnnotehead{Allocation: solving the program}
+  \vnnoterow{Cones}{Cobb–Douglas and Stone–Geary use exponential cones, both CES rules power cones, the volatility
+    cap a second-order cone; the other limits are linear.}
+  \vnnoterow{Solver}{JuMP model solved by Clarabel, an interior-point conic solver (duality-gap tolerances
+    $10^{-12}$, feasibility $10^{-9}$, at most 500 iterations). Optimal or almost optimal is accepted; otherwise a
+    first-order conic solver retries the same program.}
+  \vnnoterow{Failed solve}{Certified infeasible, unsolved, or non-finite shares: keep every holding and place no
+    orders. Under 1\% of decisions in every real-data grid, apart from Stone–Geary with 100 or more names.}
+  \vnnoterow{Solver check}{Budget only, hand-picked 13, 17 solves: the largest gap between a solver weight and
+    its closed form was $1.0 \times 10^{-5}$.}
+  \vnnoterow{Names with γ ≤ 0}{Cobb–Douglas and both CES rules leave the name out of $U$ and hold it at a floor of
+    $10^{-3}$ shares, dropped before trading with every target worth at most 0.1\% of wealth. If no name has
+    $\gamma_i > 0$, they skip the solve and the book moves to cash.}
+  \vnnoterow{Stone–Geary}{Holds every name at its baseline $b_i$ (1\% of wealth) whatever its γ, so it cannot hold
+    more than 100 names; at $K = 200$ every decision was infeasible and the book stayed in cash.}}
+\note{\footnotesize
+  \vnnotehead{Allocation: hedge pool and benchmarks}
+  \vnnoterow{Hedge pool}{Up to 5 names with online $\beta \le 0$ and down-day $\beta \le 0$ (the slope on SPY's
+    down days in the trailing 252), most negative down-day β first. Refreshed at every pick and added on top of the
+    picks.}
+  \vnnoterow{Hedge with γ ≤ 0}{No utility term, so it is bought only when the β cap or the volatility cap needs it:
+    a tie-break cost of $10^{-6}$ per unit weight, then a second solve fixes the other names and minimizes the total
+    hedge weight under the same limits.}
+  \vnnoterow{Benchmarks}{Minimum variance and tangency find the largest invested fraction the other limits allow
+    without the volatility cap, choose the mix that minimizes variance or maximizes excess growth per unit SD, scale
+    it onto the volatility cap and hold the rest in cash. Tangency is solved as a quadratic program after the
+    Charnes–Cooper change of variables.}
+  \vnnoterow{130/30}{Cobb–Douglas on long shares plus $|\gamma_i| \ln n_i^{-}$ on short shares of names with
+    $\gamma_i < 0$ (up to 3 per sector, outside the hedge pool). Longs at most 130\%, shorts at most 30\%, net at
+    most 100\%; borrow fee 0.75\% a year.}}
+}

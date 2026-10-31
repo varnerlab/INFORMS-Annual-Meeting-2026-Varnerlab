@@ -41,4 +41,47 @@
   \vspace{3pt}
   \noindent\makebox[2.4cm][l]{\vnmedium\color{vnslideink}Selection}%
     the 13 highest γ overall, or the 3 highest in each sector.\par}
-\end{frame}}
+  % speaker notes (user, 2026-10-31: algorithm cheat sheets). Sources: arxiv-paper/sections/method_allocation.tex
+  % (verified against the code); code/src/SIM.jl (ewls_init, ewls_update!, ewvar_init, ewvar_update!) and
+  % OnlineSIM.jl; config/study.toml [sim] ewls_half_life = 63, ewls_prior_weight = 63; results/calibration_summary.toml
+  % m_m = 0.1061, v_m = 7.511. Prior share of the weight after t days: 63 δ^t / (63 δ^t + (1 - δ^t)/(1 - δ)), δ =
+  % 2^(-1/63): 0.726, 0.408, 0.187, 0.044 at t = 21, 63, 126, 252.
+  \note{\footnotesize
+    \vnnotehead{The β update: an online single-index fit to SPY}
+    \vnnoterow{Model}{$g_i(k) = \alpha_i + \beta_i\, g_M(k) + \varepsilon_i(k)$, with daily growth rates
+      $g = \ln(S_k/S_{k-1})/\Delta t$ and $\Delta t = 1/252$ yr.}
+    \vnnoterow{Daily update}{After each close, exponentially weighted least squares with decay
+      $\delta = 2^{-1/63}$, a 63-day half-life. Six running sums are each multiplied by $\delta$, then the day's term
+      is added: $1$, $g_M$, $g_i$, $g_M^2$, $g_i g_M$, $g_i^2$.}
+    \vnnoterow{Closed form}{$\beta = (S_w S_{xy} - S_x S_y)/(S_w S_{xx} - S_x^2)$, $\alpha = (S_y - \beta S_x)/S_w$,
+      with $x = g_M$ and $y = g_i$; the residual SD $\sigma_\varepsilon$ comes from the weighted mean squared
+      residual.}
+    \vnnoterow{Prior}{The sums start as 63 pseudo-observations at the 2014–2024 least-squares fit, using SPY's
+      2014–2024 mean (0.106/yr) and variance (7.51/yr²) of daily growth; the prior decays with the data.}
+    \vnnoterow{Prior's share}{73\% of the weight after 21 days, 41\% after 63, 19\% after 126, 4\% after 252.}
+    \vnnoterow{Timing}{Day $t$'s estimate includes the growth into day $t$ and nothing later. Decisions are made
+      after the close and fill at the next open.}
+    \vnnoterow{Signed β}{β keeps its sign: a name with $\beta_i < 0$ is charged for market growth in its expected
+      growth rate and can join the hedge pool.}
+    \vnnoterow{Market SD}{$\sigma_M$, SPY's growth SD, weighted with the same half-life and a 63-day prior at its
+      2014–2024 value; it sets the market term of $\Sigma_g$.}}
+\end{frame}
+% speaker notes, page 2. Sources: arxiv-paper/sections/method_allocation.tex; results/calibration_summary.toml
+% G = 21.2315; talk/data/market_state.csv (xi > 0 on 75 of 420 days, min -0.7999, max 0.8999); 0.1^(-0.90) = 7.94.
+\note{\footnotesize
+  \vnnotehead{Inputs to the score γ}
+  \vnnoterow{Expected growth}{$\mu_{g,i} = \alpha_i + \beta_i\, \tilde g_M$ (yr$^{-1}$). The same $\mu_g$ feeds γ,
+    the tangency benchmark and the controller's forecast.}
+  \vnnoterow{Market growth}{$\tilde g_M$, the exponential moving average of SPY's daily growth rate, span 252
+    trading days (smoothing factor 2/253).}
+  \vnnoterow{Market state ξ}{$\xi_t = -G\,(\mathrm{EMA}_{21}/\mathrm{EMA}_{63} - 1)$ on SPY's close. The gain
+    $G = 21.23$ is the reciprocal of the 99th percentile of $|\mathrm{EMA}_{21}/\mathrm{EMA}_{63} - 1|$ over
+    2014–2024, so $|\xi| \le 1$ on 99\% of those days.}
+  \vnnoterow{ξ in the window}{Positive on 75 of 420 trading days; it ranged from −0.80 to 0.90.}
+  \vnnoterow{β penalty}{With $\xi > 0$ (falling market), the expected growth of a name with $|\beta| > 1$ is divided
+    by more than one and that of a name with $|\beta| < 1$ by less than one, so the score favors low β. With
+    $\xi < 0$ it favors high β. The penalty is positive, so γ keeps the sign of expected growth.}
+  \vnnoterow{β floor 0.1}{Keeps the penalty finite for β near zero. At the window's largest ξ, 0.90, a low-β name's
+    expected growth is amplified at most $0.1^{-0.90} \approx 7.9$ times.}
+  \vnnoterow{tanh}{Bounds $\gamma_i$ to $(-1, 1)$; growth rates in yr$^{-1}$ enter as plain numbers.}}
+}

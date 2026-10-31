@@ -44,4 +44,37 @@
     height=4.23cm, rowlabels=false,
     title={\vnmedium Bear stress}]%
     {data/syn_bear_stress_dots.csv}{data/syn_bear_stress_bars.csv}\par
-\end{frame}}}
+  % speaker notes (user, 2026-10-31: algorithm cheat sheets), two pages. Sources: arxiv-paper/sections/
+  % method_synthetic.tex (evaluation), verified against code/src/SyntheticRunner.jl; results/synthetic/paths.csv
+  % (has_burst 523; set medians of window_max_drawdown and window_growth); results/synthetic/rows/meta_*.csv (lambda 0
+  % on 664 of 978, at most 0.2); results/synthetic/tables.md (0 of 520,296 runs failed); results/synthetic/checks.csv
+  % (V9: 0.100 vs -0.121); results/calendar_baseline/synthetic_vs_triggers.csv.
+  \note{\footnotesize
+    \vnnotehead{Stress test: choosing the futures}
+    \vnnoterow{Market paths}{10,000 draws of the market JumpHMM (seed = path number), ranked by synthetic SPY's
+      maximum drawdown in the trading window, with the peak reset at its start.}
+    \vnnoterow{Burst flag}{Set when a jump episode touches any day of the window: 523 of 10,000 windows, and 30 of
+      the 50 deepest drawdowns.}
+    \vnnoterow{Sets}{Typical: 600 paths at random. Burst stress: the 200 deepest drawdowns with a burst. Bear stress:
+      the 200 deepest without one. 978 distinct paths in all.}
+    \vnnoterow{SPY in each set}{Median window drawdown 17.6\%, 36.4\% and 40.6\%; median growth rate 0.102,
+      −0.087 and −0.199 per year (typical, burst, bear). A burst window is months of large moves of both signs
+      with less net decline than a bear window.}
+    \vnnoterow{Then}{Build the 373 names only for the chosen paths, since their draws do not depend on the market
+      draw.}}
+\end{frame}
+\note{\footnotesize
+  \vnnotehead{Stress test: running the method on a future}
+  \vnnoterow{Recalibrate}{On synthetic 2014–2024 with the real-run code: single-index fits, SPY's moments and the
+    volatility cap, the gain of ξ, and the covariance shrinkage (zero on 664 of 978 paths, at most 0.2).}
+  \vnnoterow{Trade}{Synthetic 2025–26 with the real settings. The GBM forecast is calibrated on synthetic data; the
+    plant is the synthetic closes.}
+  \vnnoterow{Runs}{532 per path, 520,296 in all, none failed. This slide shows the 10 selection rules by 7 weighting
+    rules; bandit and random use 5 seeds per path.}
+  \vnnoterow{A dot}{Median over seeds within a path, then the median across the set's paths; never pooled across
+    selection rules.}
+  \vnnoterow{Caveats}{Persistent intercepts favor selection by γ more than real 2025–26 did (intercept correlation
+    with 2014–2024: 0.10 synthetic, −0.12 real). The hedge has fewer candidates than in the backtest.}
+  \vnnoterow{Fixed schedule}{With the band exit and drawdown stop off, medians still end above SPY and equal weight
+    in every stress cell; the triggers cut the median worst drawdown by about a point.}}
+}}

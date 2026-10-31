@@ -19,4 +19,38 @@
   % half a point more than before: the footer's descenders deepen the page number's line
   \vspace{-2.5pt}
   \vnstylizedfacts{3.35cm}{1.47cm}
-\end{frame}}
+  % speaker notes (user, 2026-10-31: algorithm cheat sheets), two pages. Sources: arxiv-paper/sections/
+  % method_synthetic.tex (verified against code/src/SyntheticCalibration.jl SYNTH_HMM and the pinned JumpHMM.jl,
+  % src/JumpHMM.jl fit and src/Tune.jl w_kappa = 0.20, acf_lags = 25); results/synthetic/generator.jld2;
+  % results/synthetic/paths.csv (has_burst 523 of 10,000); results/synthetic/checks.csv (V4: -0.097, -0.171, -0.097).
+  \note{\footnotesize
+    \vnnotehead{JumpHMM: one series}
+    \vnnoterow{States}{50 intervals of the daily growth rate, bounded by equal-probability quantiles of a Laplace
+      distribution fitted to the series.}
+    \vnnoterow{Transitions}{Estimated by counting the state-to-state moves in the training data.}
+    \vnnoterow{Daily draw}{Step the chain, then draw a Student-$t$ growth rate ($\nu = 5$) located and scaled by the
+      training days in the new state.}
+    \vnnoterow{Why jumps}{The counted chain mixes within a few days, so on its own the volatility clustering would
+      fade too fast.}
+    \vnnoterow{Jump episodes}{On a day with no episode under way, one starts with probability ε and lasts a Poisson
+      number of days with mean λ. Each episode day draws its state uniformly from the 5 most negative states with
+      probability 0.52, otherwise from the 5 most positive: a sustained burst of large moves of both signs, not a
+      single price jump.}
+    \vnnoterow{Tuning ε and λ}{Grid search over simulated paths that contain an episode, minimizing the squared error
+      of the absolute-growth autocorrelation at lags 1 to 25 plus 0.20 times the squared error of excess kurtosis.}}
+\end{frame}
+\note{\footnotesize
+  \vnnotehead{JumpHMM in this study}
+  \vnnoterow{Market model}{Fitted to SPY's closes over 2014–2024: $\epsilon = 10^{-4}$ per day, $\lambda = 118.9$
+    trading days. 523 of 10,000 simulated 420-day windows (5.2\%) contain a burst.}
+  \vnnoterow{Tuned values}{ε sat at the grid's lower edge, $10^{-4}$, for all 11 sector models and 370 of the 373
+    name models; λ spread over its whole grid, 10 to 120 trading days.}
+  \vnnoterow{Versus the paper}{50 states instead of 100, so each tail set holds 10\% of the states rather than 5\%;
+    every sector and name model is tuned on its own series instead of reusing SPY's ε and λ.}
+  \vnnoterow{Known limit}{Composed names cluster less than real names: the absolute-growth autocorrelation is below
+    the real one by a median of 0.10, 0.17 and 0.10 at lags 1, 5 and 20.}
+  \vnnoterow{Software}{JumpHMM.jl 0.1.0 at a pinned commit, unmodified; only its fit, tune and simulate functions.
+    The multi-asset composition is written in the study code (next slide).}
+  \vnnoterow{Role}{JumpHMM plays the market. The controller still forecasts with GBM and never sees the
+    generator.}}
+}
