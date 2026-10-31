@@ -13,7 +13,7 @@
 {\renewcommand{\vnfootleft}{$\xi = -G \left( \text{EMA}_{21} / \text{EMA}_{63} - 1 \right)$ from SPY's 21- and
   63-day exponential averages; $|\xi| \le 1$ on 99\% of 2014–2024 days.}
 \begin{frame}{The score γ: expected growth, tilted by the market}
-  \hspace*{0.3cm}{\large
+  \hspace*{0.3cm}{\large\color{vnslideink}
   $\displaystyle \gamma_i = \tanh\!\left(
     \frac{\tikz[remember picture, baseline=(vngnum.base)]
             \node[inner sep=0pt, outer sep=0pt] (vngnum) {$\alpha_i + \beta_i\, \tilde g_M$};}
@@ -25,21 +25,21 @@
   \begin{tikzpicture}[remember picture, overlay]
     \path (vngend) ++(0.7cm, 0) coordinate (vngx);
     \node[anchor=base west, inner sep=0pt, font=\small] (vngn2) at (vngnum.base -| vngx)
-      {$\tilde g_M$: SPY's growth rate, 252-day EMA)};
+      {\vnaside{$\tilde g_M$: SPY's growth rate, 252-day EMA)}};
     \node[anchor=base west, inner sep=0pt, font=\small] at ([yshift=12.5pt]vngn2.base west)
-      {expected growth ($\alpha_i, \beta_i$: fit of name $i$ to SPY;};
+      {expected growth \vnaside{($\alpha_i, \beta_i$: fit of name $i$ to SPY;}};
     \node[anchor=base west, inner sep=0pt, font=\small] at (vngden.base -| vngx)
-      {β penalty ($\xi$: market state, >\,0 when EMA$_{21}$ < EMA$_{63}$)};
+      {β penalty \vnaside{($\xi$: market state, >\,0 when EMA$_{21}$ < EMA$_{63}$)}};
   \end{tikzpicture}\par
   \vspace{10pt}
   \vnmarketstate{12.9cm}{1.35cm}{1.2cm}\par
   \vspace{10pt}
   % the two jobs, named on the left like the parts of the agenda
   {\small
-  \noindent\makebox[2.4cm][l]{\vnmedium\color{vnslideink}Weighting}%
+  \noindent\makebox[2.4cm][l]{\vnlabel{Weighting}}%
     γ enters $U(n;\gamma)$: names with $\gamma_i > 0$ are held long, and 130/30 shorts $\gamma_i < 0$.\par
   \vspace{3pt}
-  \noindent\makebox[2.4cm][l]{\vnmedium\color{vnslideink}Selection}%
+  \noindent\makebox[2.4cm][l]{\vnlabel{Selection}}%
     the 13 highest γ overall, or the 3 highest in each sector.\par}
   % speaker notes (user, 2026-10-31: algorithm cheat sheets). Sources: arxiv-paper/sections/method_allocation.tex
   % (verified against the code); code/src/SIM.jl (ewls_init, ewls_update!, ewvar_init, ewvar_update!) and

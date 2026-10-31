@@ -9,6 +9,9 @@
 % obvious), e.g. "turnover budget B (c̄: half spread per share)". The closed form under the budget alone against the convex cone program under the limits is
 % the table's last two rows, the second in the heading color, because that contrast is the slide's point for this
 % audience. ρ, η, b_i and the benchmarks sit at the lower left, on the page number's line.
+% Type (user, 2026-10-31): the program is the focus, in the heading ink; each component's name is light body copy and
+% its symbol definitions are asides, all at footnotesize (user: the slide is packed and dense). In the table the
+% utilities' names and the cone-program line are light labels and the row labels are asides.
 {\renewcommand{\vnfootleft}{$\rho = 1 - 1/\eta$, $\eta = 0.5$; $b_i S_i = 1\%$ of $W$. Benchmarks under the same limits:
   minimum variance, tangency, 130/30.}
 \begin{frame}{Allocation: maximize utility subject to trading limits}
@@ -16,17 +19,16 @@
   \vspace{2pt}
   % an inline display, so it adds no display skips above and below
   {\centering
-  $\displaystyle
+  $\displaystyle\color{vnslideink}
     \begin{array}{@{}r@{\;\;}l@{\qquad}l@{}}
-      \max\limits_{n \,\ge\, 0} & U(n;\gamma) & \text{\small utility $U$ ($\gamma_i$: score of name $i$, next slide)}
+      \max\limits_{n \,\ge\, 0} & U(n;\gamma) & \text{\footnotesize\color{vnslidebody} {utility $U$} \vnaside{($\gamma_i$: score of name $i$, next slide)}}
         \\[2pt]
-      \text{s.t.} & \sum_i n_i S_i \le W & \text{\small budget $W$ ($S_i$: price of name $i$)} \\[1pt]
-      & w_i \le \bar w & \text{\small single-name cap $\bar w$ ($w_i$: weight of name $i$)} \\[1pt]
-      & \sqrt{w^{\top} \Sigma_g\, w} \le \sigma_{\text{SPY}} & \text{\small volatility cap $\sigma_{\text{SPY}}$
-        ($\Sigma_g$: growth-rate covariance)} \\[1pt]
-      & \bar c\, \lVert n - n^{\text{prev}} \rVert_1 \le B & \text{\small turnover budget $B$ ($\bar c$: half spread
-        per share)} \\[1pt]
-      & \beta^{\top} w \le \bar\beta & \text{\small β cap $\bar\beta$, hedge on (β: beta to SPY)}
+      \text{s.t.} & \sum_i n_i S_i \le W & \text{\footnotesize\color{vnslidebody} {budget $W$} \vnaside{($S_i$: price of name $i$)}} \\[1pt]
+      & w_i \le \bar w & \text{\footnotesize\color{vnslidebody} {single-name cap $\bar w$} \vnaside{($w_i$: weight of name $i$)}} \\[1pt]
+      & \sqrt{w^{\top} \Sigma_g\, w} \le \sigma_{\text{SPY}} & \text{\footnotesize\color{vnslidebody} {volatility cap $\sigma_{\text{SPY}}$} \vnaside{($\Sigma_g$: growth-rate covariance)}} \\[1pt]
+      & \bar c\, \lVert n - n^{\text{prev}} \rVert_1 \le B & \text{\footnotesize\color{vnslidebody} {turnover budget $B$} \vnaside{($\bar c$: half spread
+        per share)}} \\[1pt]
+      & \beta^{\top} w \le \bar\beta & \text{\footnotesize\color{vnslidebody} {β cap $\bar\beta$}, \vnaside{hedge on (β: beta to SPY)}}
     \end{array}$\par}
   \vspace{4pt}
   % the four utilities side by side: U on the first row, the closed form under the budget alone on the second, and on
@@ -35,15 +37,15 @@
   \renewcommand{\arraystretch}{1.2}%
   \setlength{\tabcolsep}{0pt}%
   \begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}l c c c c@{}}
-    & {\vnmedium\color{vnslideink} Cobb–Douglas} & {\vnmedium\color{vnslideink} CES on shares}
-      & {\vnmedium\color{vnslideink} CES on weights} & {\vnmedium\color{vnslideink} Stone–Geary} \\
+    & \vnlabel{Cobb–Douglas} & \vnlabel{CES on shares}
+      & \vnlabel{CES on weights} & \vnlabel{Stone–Geary} \\
     \hline
-    $U(n;\gamma)$, over $\gamma_i > 0$ & $\sum \gamma_i \ln n_i$ & $(\sum \gamma_i n_i^{\rho})^{1/\rho}$
+    \vnaside{$U(n;\gamma)$, over $\gamma_i > 0$} & $\sum \gamma_i \ln n_i$ & $(\sum \gamma_i n_i^{\rho})^{1/\rho}$
       & $(\sum \gamma_i w_i^{\rho})^{1/\rho}$ & $\sum \gamma_i \ln (n_i - b_i)$ \\
-    budget alone & $w_i \propto \gamma_i$ & $n_i \propto (\gamma_i / S_i)^{\eta}$ & $w_i \propto \gamma_i^{\eta}$
+    \vnaside{budget alone} & $w_i \propto \gamma_i$ & $n_i \propto (\gamma_i / S_i)^{\eta}$ & $w_i \propto \gamma_i^{\eta}$
       & $(n_i - b_i)\, S_i \propto \gamma_i$ \\
-    with the limits & \multicolumn{4}{c}{\color{vnslideink} a convex cone program for each utility, solved
-      numerically} \\
+    \vnaside{with the limits} & \multicolumn{4}{c}{\vnlabel{a convex cone program for each utility, solved
+      numerically}} \\
   \end{tabular*}\par}
   % speaker notes (user, 2026-10-31: algorithm cheat sheets), three pages. Sources: arxiv-paper/sections/
   % method_allocation.tex and methods_data.tex (eq:cost), both verified against code/src/Allocators.jl,

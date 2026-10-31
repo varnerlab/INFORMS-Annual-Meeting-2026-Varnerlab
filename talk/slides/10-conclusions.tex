@@ -8,17 +8,21 @@
 {\renewcommand{\vnfootleft}{A paper-trading version of this system is running now; its results are not part of this
   talk.}
 \begin{frame}{Key takeaways}
-  \setbeamerfont{itemize/enumerate body}{size=\small}%
+  % Type (user, 2026-10-31, treatment A): each claim on its own line in \vnkey at 10.5 pt, which keeps the longest
+  % claim on one line, and its support below in the light body copy at \small
   \begin{itemize}
-    \setlength{\itemsep}{0.9em}
-    \item {\vnmedium\color{vnslideink} Allocation: stock selection mattered more than the weighting rule.} With the
-      hedge off, seven weighting rules on one 33-name basket ended at \SectorLo–\SectorHi{} times initial wealth;
-      different baskets ended at \BasketLo–\BasketHi.
-    \item {\vnmedium\color{vnslideink} Rebalancing: re-plans came at the horizon, a band exit, or a drawdown stop.}
-      About \Rebalances{} re-plans in 419 trading days, a third of them before the 21-day horizon.
-    \item {\vnmedium\color{vnslideink} Evaluation: in both sell-off sets, every median ended above SPY.} JumpHMM
-      reproduces fat tails, but its volatility clustering fades after a day. With the hedge off, 13 names picked by
-      γ beat 13 random names in \TypicalLo–\TypicalHi\% of typical futures; in bear futures, random picks did as well
-      or better for most rules.
+    \setlength{\itemsep}{1.1em}
+    \item {\fontsize{10.5}{12.6}\selectfont\vnkey{Allocation: stock selection mattered more than the weighting
+      rule.}\par}\vspace{2pt}
+      {\small With the hedge off, seven weighting rules on one 33-name basket ended at \SectorLo–\SectorHi{} times
+      initial wealth; different baskets ended at \BasketLo–\BasketHi.\par}
+    \item {\fontsize{10.5}{12.6}\selectfont\vnkey{Rebalancing: re-plans came at the horizon, a band exit, or a
+      drawdown stop.}\par}\vspace{2pt}
+      {\small About \Rebalances{} re-plans in 419 trading days, a third of them before the 21-day horizon.\par}
+    \item {\fontsize{10.5}{12.6}\selectfont\vnkey{Evaluation: in both sell-off sets, every median ended above
+      SPY.}\par}\vspace{2pt}
+      {\small JumpHMM reproduces fat tails, but its volatility clustering fades after a day. With the hedge off, 13
+      names picked by γ beat 13 random names in \TypicalLo–\TypicalHi\% of typical futures; in bear futures, random
+      picks did as well or better for most rules.\par}
   \end{itemize}
 \end{frame}}

@@ -88,6 +88,8 @@
   \definecolor{vnplotgrid}{HTML}{DDE4EC}
   % the section strip's other names
   \definecolor{vnstripoff}{HTML}{7C8A9A}
+  % asides: symbol definitions, table row labels, small notes and the footer, a step lighter than the body copy
+  \definecolor{vnquiet}{HTML}{6B7A8C}
   % the dot plots (figs/dotplot.tex): filled and hollow dots, range bars, the equal-weight line, grid, axis, ticks
   \definecolor{vndotoff}{HTML}{3F7FC0}
   \definecolor{vndoton}{HTML}{1E3A5F}
@@ -119,6 +121,8 @@
   \definecolor{vnplotgrid}{HTML}{1F3852}
   % the section strip's other names
   \definecolor{vnstripoff}{HTML}{8696A8}
+  % asides: symbol definitions, table row labels, small notes and the footer, a step dimmer than the body copy
+  \definecolor{vnquiet}{HTML}{8696A8}
   % the dot plots: steel-blue dots, range bars a step lighter than the field, and greys that read on navy
   \definecolor{vndotoff}{HTML}{7FA7D1}
   \definecolor{vndoton}{HTML}{C9DCF0}
@@ -186,6 +190,7 @@
 \setbeamertemplate{itemize subitem}{--}
 % beamer already insets the frametitle box by the text margin, so adding another
 % \hspace here double-indents the title relative to the body copy.
+% Frame titles are set in Helvetica Neue Bold (user, 2026-10-31: weight carries the hierarchy).
 % The talk deck sets a short gold rule under every frame title. \nointerlineskip hangs the rule a fixed distance
 % under the title's descenders; without it the \Large baselineskip leaves the rule floating a full line below.
 % Under the section strip (below) the title sits higher, so the strip takes less of the slide's height.
@@ -195,7 +200,7 @@
   \else
     \vskip0.9em%
   \fi
-  \usebeamerfont{frametitle}\usebeamercolor[fg]{frametitle}\insertframetitle\par
+  \usebeamerfont{frametitle}\mdseries\vnheavy\usebeamercolor[fg]{frametitle}\insertframetitle\par
   \nointerlineskip\vskip0.5em%
   {\color{vnaccent}\rule{0.072\paperwidth}{1.4pt}}\par
   \vskip0.25em}
@@ -228,8 +233,8 @@
 \setbeamertemplate{footline}{%
   \vskip\vnfootskip%
   \leavevmode\hbox to \paperwidth{\hspace*{\vnmargin}%
-    {\fontsize{7.5}{9}\selectfont\color{vnslidebody}\vnfootleft}\hfill
-    {\fontsize{7.5}{9}\selectfont\color{vnslidebody}Varnerlab\ \insertframenumber}%
+    {\fontsize{7.5}{9}\selectfont\color{vnquiet}\vnfootleft}\hfill
+    {\fontsize{7.5}{9}\selectfont\color{vnquiet}Varnerlab\ \insertframenumber}%
     \hspace*{0.01\paperwidth}}%
   \vskip0.9em}
 
@@ -325,6 +330,15 @@
 % \hilite{...}  accent (gold) emphasis inside running text (\accent is a TeX primitive)
 % \dim{...}      recede a clause to the body grey
 \newcommand{\hilite}[1]{\textcolor{vnaccent}{#1}}
+% The talk's type hierarchy (user, 2026-10-31: weight and gray, no new color; one focus per slide, since medium weight
+% on every label made supporting labels compete with the point). Bold is for frame titles only. \vnkey (medium, heading
+% ink) is for the few lines that are a slide's point: the outline's three parts, the takeaways' claims, the people
+% thanked. A focal equation is set in the heading ink. \vnlabel (light, heading ink) marks a label that must stand
+% apart from the text after it, by colour rather than weight. Body copy is light slate, and \vnaside (light, quiet
+% gray) holds what supports a line rather than carries it: symbol definitions, row labels, small notes.
+\newcommand{\vnkey}[1]{{\vnmedium\color{vnslideink}#1}}
+\newcommand{\vnlabel}[1]{{\color{vnslideink}#1}}
+\newcommand{\vnaside}[1]{{\color{vnquiet}#1}}
 \newcommand{\dimmed}[1]{\textcolor{vnslidebody}{#1}}
 % Body-level emphasis keeps the same neutral gray as running text. Weight and
 % size carry hierarchy; vnslideink remains reserved for slide and deck titles.
