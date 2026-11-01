@@ -1,191 +1,189 @@
-# INFORMS 2026: EOD utility-variation study
+# Interpretable allocation and model-predictive rebalancing of equity portfolios
 
-Replays a constrained Cobb-Douglas portfolio strategy on end-of-day S&P 500 data, and runs the screened
-utility-panel study on top of it. Package `VLINFORMS2026` lives in `code/`. All performance numbers are
-growth rates g = ln(S_end/S_start)/(k·Δt) in 1/yr with Δt = 1/252.
+This repository holds the code, results, slides and paper for the INFORMS Annual Meeting 2026 talk
+"Coupling Interpretable Allocation, Model-Predictive Control, and Tail-Aware Forecasting for Live Portfolio
+Management" (Jeffrey D. Varner, Cornell University; session TD47, San Francisco, November 3, 2026). The companion
+paper, "Interpretable Allocation and Model-Predictive Rebalancing of Equity Portfolios, Tested on Real and Synthetic
+Markets", is in `arxiv-paper/`.
 
-## Run order
+## What the study does
 
-`00 → 10 → 11 → 11 --fixed → 15 → 11 --universe → 11 --eta → 11 --limits → 12 → 13`
+The study tests one way to run a stock portfolio on daily S&P 500 data. It has three parts.
 
-1. `julia scripts/00_fetch_data.jl`: copy the price/sector files into `data/` and download FRED DTB3.
-2. `julia scripts/10_calibrate.jl`: calibrate on 2014-01-03 → 2024-12-31. Writes `results/calibration.jld2` and
-   `results/calibration_summary.toml` (λ, σ_m, annualized vol cap, m_m, v_m, ξ gain G, universe and sector counts).
-3. `julia -t auto scripts/11_run_study.jl`: Tier 1 grid (allocators × screens × hedge × seeds). Per-run files in
-   `results/runs/` (not committed), summary in `results/tier1_summary.csv`.
-   `--smoke` runs 2 runs (CD × γ screen × hedge on/off) into `results/smoke/`.
-   A run's file name hashes its settings and a fingerprint of the market data and calibration, so reruns skip
-   finished runs only while the data and calibration are unchanged. The hash cannot see code: **after a code
-   change, rerun every grid with `--fresh`** (it ignores and replaces the cached files of the selected runs) and
-   check that the printed `skipped` count is 0. A run that reuses cached files prints a `SKIPPED` banner.
-   If a threaded grid run crashes (an intermittent segfault, cause unknown), rerun the same command without
-   `--fresh`: it resumes. Each run file is written whole or not at all, so the finished runs are kept.
-4. `julia -t auto scripts/11_run_study.jl --fixed`: fixed-schedule grid (no re-pick on band exit), `results/fixed_summary.csv`.
-5. `julia scripts/15_regression_check.jl [rev]`: compares the rerun `results/tier1_summary.csv` and
-   `results/fixed_summary.csv` with the versions committed at git revision `rev` (default `HEAD`), joined on
-   `label`, over every growth-scorecard metric and run statistic. Exits 1 unless every committed run is present
-   and every value is exactly equal. Run it after a code change that should not move the results (after the
-   `--fresh` reruns) and before committing new summaries.
-6. `julia -t auto scripts/11_run_study.jl --universe`: the ticker-picker addendum's 4,438 runs (universe-wide
-   screens and random controls at K ∈ {5, 8, 13, 21, 34}, plus the user's 13- and 15-name lists), summary in
-   `results/universe_summary.csv`.
-7. `julia -t auto scripts/11_run_study.jl --eta`: the CES elasticity sweep, 2,562 runs (both CES versions over the
-   η grids, with the per-name cap on and off; share-count CES at η = 0.1 is left out, `eta_ces_drop`, because it is
-   ill-conditioned when a limit binds, while CESw at η = 0.1 and every η of the limits runs are kept), summary in `results/eta_summary.csv`. The cap-on η = 0.5 and
-   Cobb-Douglas points are taken from Tier 1, not rerun.
-8. `julia scripts/11_run_study.jl --limits`: the limits dial, 17 budget-only runs over the full window (2025-01-02 → 2026-09-04,
-   the fixed 13-name list, hedge off, no per-stock, volatility or sector cap; step (a) η grid for both CES versions,
-   plus Cobb-Douglas as η = 1), summary in `results/limits_summary.csv` and a one-day solve of each run
-   (a fresh book on one day) in `results/limits_day.csv` (with a `solver` column). The 17 limits runs are full-window backtests; only the
-   one-day weights in `limits_day.csv` are gated against the closed form: the command errors if any row is off
-   by more than 1e-3, is not finite, or has a status other than `:optimal`.
-9. `julia scripts/12_tables.jl [dir] [--smoke]`: comparison tables to `<dir>/tables/*.csv` (default `results/`),
-   also printed as Markdown. Smoke check: `julia scripts/12_tables.jl results/smoke --smoke`. With
-   `universe_summary.csv` present it also writes `size_sweep.csv`, `matched_percentile.csv`,
-   `head_to_head_K13.csv` and `quota_cost.csv`. With `eta_summary.csv` and `limits_summary.csv` present it also
-   writes `eta_sweep.csv`, `eta_regimes.csv`, `eta_solver.csv` and `limits_dial.csv`.
-10. `julia --project=scripts scripts/13_figures.jl`: slide figures (1600×900 PNG) to `results/figures/`, from
-   `results/*_summary.csv`, `results/runs/`, `config/study.toml` and `results/calibration_summary.toml`
-   (figs 6–7, the size sweep, need `universe_summary.csv`; the η figures `fig_limits_day.png`, `fig_limits_dial.png`,
-   `fig_eta_<metric>.png` and `fig_eta_frontier.png` need the η and limits summaries).
-   It uses its own environment (`scripts/Project.toml`, Plots.jl with VLINFORMS2026 developed from `code/`);
-   once per checkout, run `julia --project=scripts -e 'using Pkg; Pkg.instantiate()'`.
+1. **What to hold.** Each stock gets a score, γ, from a single-index model fit: its growth beyond what the market
+   explains, scaled by its market exposure β. How strongly β counts depends on the market state, which compares a
+   21-day and a 63-day moving average of SPY. A picker chooses a basket of names: by γ, at random, with a bandit,
+   or from a fixed list chosen in advance. Then the book is weighted by maximizing a utility function under trading
+   limits. Seven weighting rules are compared: Cobb–Douglas, CES on share counts, CES on weights, Stone–Geary,
+   minimum variance, the tangency portfolio and a 130/30 long-short book.
+2. **When to trade.** The book re-plans when 21 trading days have passed, when its value leaves a forecast band
+   (model-predictive control with a GBM forecast), or when it falls 8% below its peak.
+3. **How to judge it.** The main test is a backtest on real data from January 2, 2025 to September 4, 2026, after
+   calibration on 2014–2024. A backtest is a single historical path, so the study also runs on synthetic markets
+   built by a JumpHMM generator fit to the same stocks: 600 typical futures and two sets of 200 simulated sell-offs,
+   978 markets in all, because some markets fall in more than one set. Each synthetic market covers 2014–2026; the
+   study calibrates on its 2014–2024 and trades its 2025–2026.
 
-Tests: `julia --project=code code/test/runtests.jl`. Settings live in `config/study.toml`.
-`data/`, `results/runs/` and `results/smoke/` are never committed; summaries, tables, figures and
-`results/calibration*` are.
+Each configuration runs twice: once with a market hedge and once without. The hedge caps the book's β, with a
+tighter cap as the market state turns bearish, and it can hold up to five names whose β is zero or negative.
 
-## Plan decisions
+The universe is the 373 S&P 500 names with a complete daily history from 2014 to 2026 and a current GICS sector.
+Performance is measured in growth rates, g = ln(S_end/S_start)/(k·Δt) per year with Δt = 1/252, and in ending
+wealth ÷ starting wealth. Simple and log returns are never used.
 
-Choices the plan or the build makes where the spec is open (marked **(plan decision)** in the docstrings).
+## Main findings
 
-Plan:
+- **Allocation:** which stocks were picked mattered more than how they were weighted. On one basket, the seven
+  weighting rules ended close together, while different baskets ended far apart.
+- **Rebalancing:** the book re-planned at the 21-day horizon, at a band exit or at a drawdown stop. About a third of
+  the re-plans came before the horizon. Compared with re-planning on the calendar alone, ending wealth on real data
+  came out about the same, and the worst drawdown was about one point smaller with the triggers.
+- **Evaluation:** in both sell-off sets, every median book ended above SPY. In typical synthetic futures, 13 names
+  picked by γ beat 13 random names in about two-thirds of the futures, for every weighting rule. In bear futures,
+  random picks did as well or better for most rules.
 
-- Config field names are ASCII, so `config/study.toml` keys equal `MyStudySettings` field names.
-- The hedge-pool tie-break: a hedge name holds more than its floor only when a binding limit (β cap or vol cap) makes it worth its budget.
-- "Share of days the β cap binds" is counted over decision days (`cap_bind_share`), the only days the cap is enforced.
-- The figures use Plots.jl in a separate scripts environment.
-- ξ's short and long averages and g̃_M are exponential moving averages (EMA, as in CHEME-5660 L8b) where the
-  spec says "moving average": ξ uses spans `xi_short`/`xi_long` (21/63 days) and g̃_M a span of `gtilde_window`
-  (252 days).
-- The old 10-19 `run_backtest` stays; `run_study` reuses its fill and cost helpers.
+The numbers behind each finding are in `results/` (below), the slides and the paper.
 
-Spec "my call" items the code implements:
+## What is in the repository
 
-- The ξ gain G is L8b's calibrated gain (|ξ| ≤ 1 on 99% of 2014–2024 days), not the trial's fixed 20.
-- The vol cap is SPY's 2014–2024 growth-rate SD (annualized ≈ 17%).
-- γ uses the signed numerator with |β| floored at β_floor = 0.1 in the denominator.
-- The online β prior uses SPY's 2014–2024 mean and variance (CHEME-5660 `ewls_init`).
-- The β cap is β_max = max(β_min, β_ref − κ_β·ξ), which is max(0, 1 − ξ) by default.
-- The hedge pool holds up to 5 names whose online β and down-day β are both ≤ 0, most negative down-day β first, and pool names are never shorted.
-- Hedge-off control: every run has a paired twin without the cap or pool.
+| Folder | What it holds |
+|---|---|
+| `code/` | The Julia package `VLINFORMS2026`: data loading, calibration, the pickers, the weighting problems, the backtest engine, the synthetic-market generator, and the tests. |
+| `scripts/` | Numbered scripts that run the study from start to finish (below). `scripts/dev/` holds the extra checks the talk and paper use. |
+| `config/study.toml` | Every study setting, with its units. |
+| `results/` | The committed summaries, tables and figures. Per-run files are not committed. |
+| `talk/` | The INFORMS deck (XeLaTeX Beamer). `talk/informs2026.pdf` is the built deck. |
+| `arxiv-paper/` | The paper (pdfLaTeX). `arxiv-paper/Paper_v1.pdf` is the built paper. |
+| `docs/design-notes.md` | Every modeling choice, solver ruling and data fix in the real-data study, and what each run step writes. |
+| `docs/superpowers/` | The design spec and the implementation plan for each piece of work, by date. |
 
-Rulings made during the build, each of which changes behavior:
+## Setup
 
-- Hedge names are minimized in a second, lexicographic solve (utility names fixed), because a 1e-6 tie-break alone is below the solver's accuracy.
-- CES with η < 1 uses a rescaled power cone (same optimum, accurate at large equity).
-- Stone–Geary with no γ > 0 still meets the β cap (buys the least hedge, or keeps holdings with `:infeasible`).
-- On an `:infeasible` or `:solver_failed` decision, `run_study` places no orders and keeps every holding, and the band and stats describe the kept book.
-- After a decision that leaves the book all cash, no band is set, so only cash revisit, horizon or drawdown can trigger the next decision (as in the trial).
-- An empty 130/30 problem records `:no_preferred` and goes to cash instead of erroring.
-- Each drawdown decision sets the drawdown peak back to current equity (user, 2026-10-25; `drawdown_reset`), even
-  when its solve fails and the book is kept. The trial never resets the peak, so once equity was 8% under it the
-  trigger fired every day: 88.5% of Tier 1 decisions. `drawdown_reset = false` restores the trial's rule; the
-  legacy `run_backtest` keeps it.
-- A study context that fails to build writes error files for its runs, and the sweep continues.
-- Study fills are in fractional shares (user, 2026-10-21), not the spec's whole shares. Whole-share rounding made a
-  fill depend on the split basis: putting earlier rows on the newest file's basis changed how many shares a 2025
-  order could buy. A target worth at most 0.1% of equity trades to 0, which removes the ε pins of the log utilities
-  and solver dust, as whole-share rounding used to. Stone–Geary baselines are exact (`sg_baseline`·W/Sᵢ shares, not
-  floored). The legacy `run_backtest`, used to validate the trial, keeps whole shares.
-- The risk-free growth rate converts DTB3 correctly (user, 2026-10-21). DTB3 is a bank-discount rate d on a 360-day
-  basis, so a 91-day bill grows at g_f = −ln(1 − d·91/360)·365/91 per year; the old log(1 + d) understated g_f by
-  about 0.0015 yr⁻¹. Day t takes the last observation dated before t, because the Fed publishes a day's rate the
-  next day. A date with no earlier observation is an error, not filled from a later one.
-- `CESw` is added beside the share-count CES (user, 2026-10-21; spec `2026-10-21-ces-eta-sweep-design.md`).
-- The η sweep and the clean limits: the headline stays `ces_eta = 0.5` for both versions, and the sweep is
-  sensitivity around it. The limits dial is 17 full-window backtests; only the one-day weights in `limits_day.csv` are gated against the closed forms (within 1e-3).
-- The turnover rule is a spread-cost budget (user, 2026-10-22), c̄·Σ|Δnᵢ| ≤ `turnover_frac`·W. At 5 bps, for a
-  long-only book, it can bind only when a basket's mean share price is more than 100 times its cheapest name's.
-  The names `turnover_frac` and `K_turnover` are unchanged.
-- Every committed number moved in the 2026-10-22 rerun: fractional shares, the DTB3 conversion, `CESw` added, and the
-  CES cone rescaled (numerical; same argmax).
-- λ is calibrated with the study's own residual covariance (user, 2026-10-21). At each month-end of the training
-  window, the forecast is (1−λ)·Ω̂_ε + λ·diag(Ω̂_ε), with Ω̂_ε the residual covariance over the trailing
-  `omega_window` days, the estimator `run_study` uses; before, the residual scales came from a 252-day OLS fit and
-  the anchors fell every 21 trading days. α and β come from a trailing 252-day OLS fit, because the online
-  estimates have no warm-up inside 2014–2024. λ is still 0 (forecast loss 0.353 at λ = 0, rising steadily to 0.619
-  at λ = 1).
+1. **Julia 1.12.** The manifests were built with Julia 1.12.7.
+2. **Packages.** Install both environments once:
 
-CES elasticity sweep (spec `docs/superpowers/specs/2026-10-21-ces-eta-sweep-design.md`), choices the build makes:
+   ```
+   julia --project=code -e 'using Pkg; Pkg.instantiate()'
+   julia --project=scripts -e 'using Pkg; Pkg.instantiate()'
+   ```
 
-- Share-count CES uses the scaled variable z = n·Σ_{γ>0}Sᵢ/W, so z = 1 at equal share counts (it was W/mean(S)).
-  Weight-based CES (`CESw`, `MyCESWeightRule`) uses z = K_p·wᵢ, so z = 1 at equal weights. Both are numerical only,
-  with the same argmax. Before the rescale, CES at η = 0.05 (and 0.1 on 13 names) failed outright.
-- Each decision records `solver` (`:clarabel`, `:clarabel_almost`, `:scs`, `:failed`, `:none`) through a scoped log.
-  `n_failed` counts statuses `:infeasible` or `:solver_failed`. `n_fallback` counts decisions that did not fail and
-  were answered at Clarabel's ALMOST_OPTIMAL, by SCS, or with a failed hedge sub-solve. `n_almost_optimal` is the
-  ALMOST_OPTIMAL subset.
-- `mean_eff_names` and `n_eff_skipped` are defined in the docstring of `study_stats`.
-- `regime_stats` labels each day t by ξ_{t−1}: bullish if < 0, bearish if > 0, dropped if 0. It reports mean daily
-  growth per regime for the run and for SPY.
-- The limits day: `limits_row` picks the run start unless fewer than 5 of the 13 names have γ > 0, and then the first
-  row with the most. `limits_day` solves a fresh $100k book (held = 0) on that day with the study's problem builder.
-  `limits_failures` is the gate (1e-3 on the weight, finite, `:optimal`).
-- Clarabel 0.11.1 threw a `DomainError` in its power-cone barrier at extreme η on real data (a trial point its own
-  feasibility test rejects, a slack of about −5.6e-17 under the 1e-12 gap tolerances). No Clarabel setting removed
-  it, so `_solve_with_fallback` treats a solver exception as that solver not accepting and falls through to SCS.
-  Errors in our own model-building code still propagate. SCS runs at its default settings. In the 17 budget-only limits runs it
-  answers 13 decisions, all at η ≤ 0.25 or η ≥ 4. Before the drawdown reset (2026-10-25) it answered 82; their
-  median weight error was 3.3e-6 against a BigFloat reference, and 3 were above 1e-3 (max 4.2e-3). Cobb-Douglas and η = 0.5/2 results are bit-identical to before the solver-exception fallthrough.
-- Clarabel stops at ALMOST_OPTIMAL on a large share of decisions in every run, Cobb-Douglas included; this predates
-  the sweep. In `results/tables/eta_solver.csv` the share is 28–32% for Cobb-Douglas, 29–48% for CES and 29–42%
-  for CESw, and 37–44% at the headline η = 0.5; in the limits runs (`results/limits_summary.csv`) it is about 26%.
-  `eta_solver` flags any η point where failed decisions or decisions answered beyond ALMOST_OPTIMAL (SCS or a failed
-  sub-solve) exceed 1% of decisions; ALMOST_OPTIMAL alone is not flagged, since it is pervasive. It reports
-  `n_beyond_almost` and `beyond_almost_share` per point: from 0.4% to 16% of decisions, above 4% at 14 points
-  (CES and CESw at η ≤ 0.25 and at η ≥ 4). Flagged points are reported, never dropped.
-- Run labels look like `CESw|bandit|hedge=true|seed=5660|eta=2|cap=off`; limits labels end `|eta=<η>|limits`.
-  The cap-on η = 0.5 and Cobb-Douglas points come from Tier 1. Cobb-Douglas runs keep `ces_eta = 0.5` (ignored by
-  Cobb-Douglas); only their label says η = 1.
-- The tables give medians by allocator × η × cap × hedge × screen. The η figures put cap on/off in rows and screens
-  in columns with hedge on; the frontier figure uses the random screen with hedge on.
+   `JumpHMM` installs from [varnerlab/JumpHMM.jl](https://github.com/varnerlab/JumpHMM.jl) at the commit pinned
+   in `code/Manifest.toml`. The `scripts` environment is only for the figure script, `13_figures.jl`, which uses
+   Plots.jl.
+3. **Price data.** The prices are three daily OHLC files for the S&P 500, from Polygon.io, covering 2014-01-03 to
+   2026-09-04, plus a sector file. They come from the public
+   [CHEME-5660 course repository](https://github.com/varnerlab/CHEME-5660-CourseRepository-Fall-2026), in
+   `code/src/data/`. Clone that repository, then run `julia scripts/00_fetch_data.jl`. The script copies the files
+   into `data/` and downloads the 3-month T-bill rate (DTB3) from FRED. If the course repository is not at
+   `~/Desktop/julia_work/CHEME-5660-CourseRepository-Fall-2026`, set `CHEME5660_DATA` to its `code/src/data`
+   folder. `data/` is never committed.
+4. **Thread settings.** Set these two variables in every shell that runs the study:
 
-Ticker-picker addendum (spec `docs/superpowers/specs/2026-10-20-ticker-picker-addendum-design.md`), "my call"
-items the code implements:
+   ```
+   export OMP_NUM_THREADS=1 KMP_GTID_MODE=2
+   ```
 
-- The liquid shortlist ranks names by the median of close × volume (USD/day) over the trailing 63 trading days.
-- The liquid shortlist keeps the top 100 names by that dollar volume.
-- The correlation-aware γ screen accepts a name only if its 252-day growth-rate correlation with every name already accepted is ≤ 0.7, fixed before any run.
-- A screen pick's per-stock cap is max(w_max, 1.5/K), so a K-name basket can be fully invested with room to tilt.
-- A name that is both a screen pick and a hedge-pool name gets the pick's cap; pool-only names keep w_max.
-- The 130/30 shorts are unchanged under every screen (bottom 3 γ < 0 per sector, excluding the pool), and short names keep w_max.
-- The new screens get no fixed-schedule variant; the base fixed-schedule grid already answers that question.
+   The backup solver (SCS) loads an OpenMP library that gives several Julia threads the same thread id. Without
+   these settings, threaded runs crash or hang. Script 22 refuses to start unless both are set.
 
-The universe-wide screens, their thresholds and the K grid were designed after the Tier 1 results were known,
-so their comparison is exploratory, not out-of-sample. The user's 13-name list (AAPL, MSFT, INTC, MU, AMD, NVDA,
-GS, BAC, WFC, C, F, GM, JNJ) and the 15-name sensitivity list (the same plus WMT and PG) were chosen in advance,
-without 2025 data.
+Every script activates its own environment, so run each one from the repository root as `julia scripts/<name>.jl`.
+`-t 30` below matches the 32-core machine that made the committed results. Use `-t auto` or your own core count.
 
-## Data and its limitations
+## Running the study
 
-- **Split basis across the price files.** The three price files are each split-adjusted only as of their own
-  creation, so a split between two files' creation dates shows up as a one-day jump at their boundary.
-  `load_market_data` reconciles these: at each boundary it tests every universe ticker (overnight
-  |log(open/previous close)| > 0.4, the ratio within e^0.1 of a common split ratio, volume moving inversely
-  within a factor of 3, SPY's overnight move within 5%) and puts the earlier rows on the newest file's basis
-  (prices ÷ k, volume × k), logging each adjustment. On the current data it adjusts seven names: ORLY (15),
-  NFLX (10), NOW (5) and FAST (2) at 2025-01-02, and KLAC (10), MNST (2) and APH (2) at 2026-01-02. Afterwards
-  no universe ticker moves more than 0.4 in log overnight across a boundary. Growth rates within a file and
-  dollar volume are unchanged, so the 2014–2024 calibration reproduces to within 2e-15. Results committed
-  before this reconciliation (2026-10-20) carried a fake one-day loss on 2026-01-02 for any run holding KLAC,
-  MNST or APH (a fake gain for a 130/30 short in them), and the fake 2025-01-02 jumps distorted the online SIM
-  estimates, γ and short candidacy of ORLY, NFLX, NOW and FAST.
-- **Spin-offs and ticker reuse are not adjusted.** The loader warns about any other one-day close move beyond
-  0.9 in log. Two remain, both in the 2014–2024 training window, where they enter the SIM fits of those names:
-  IR on 2020-03-02 (−1.37) and NI on 2015-07-02 (−0.98).
-- **Survivorship and sectors.** The universe holds only tickers with a complete 2014–2026 history and a current
-  GICS sector, and the sectors are current membership, not point-in-time.
-- **Dividends** are not included, in the portfolios or in SPY.
+### 1. Real-data study
 
-Throughout, performance is measured by growth rates g = ln(S_end/S_start)/(k·Δt) in 1/yr, with no simple or log returns.
+| Step | Command | Writes |
+|---|---|---|
+| Copy the data | `julia scripts/00_fetch_data.jl` | `data/` |
+| Calibrate on 2014–2024 | `julia scripts/10_calibrate.jl` | `results/calibration.jld2`, `results/calibration_summary.toml` |
+| Main grid | `julia -t 30 scripts/11_run_study.jl` | `results/tier1_summary.csv` |
+| Fixed-schedule grid | `julia -t 30 scripts/11_run_study.jl --fixed` | `results/fixed_summary.csv` |
+| Ticker-picker grid (4,438 runs) | `julia -t 30 scripts/11_run_study.jl --universe` | `results/universe_summary.csv` |
+| CES elasticity sweep (2,562 runs) | `julia -t 30 scripts/11_run_study.jl --eta` | `results/eta_summary.csv` |
+| Budget-only limits dial (17 runs) | `julia scripts/11_run_study.jl --limits` | `results/limits_summary.csv`, `results/limits_day.csv` |
+| Tables | `julia scripts/12_tables.jl` | `results/tables/*.csv` |
+| Figures | `julia --project=scripts scripts/13_figures.jl` | `results/figures/*.png` |
+
+- `julia scripts/11_run_study.jl --smoke` runs two runs into `results/smoke/` as a quick check.
+- Each run writes its own file to `results/runs/`. The file name is a hash of the run's settings, the market data
+  and the calibration, so a rerun skips the runs it has already finished. The hash does not see code changes.
+  After changing the code, rerun every grid with `--fresh` and check that the printed `skipped` count is 0.
+- If a threaded run crashes, rerun the same command without `--fresh`, and it picks up where it stopped.
+- `julia scripts/15_regression_check.jl [rev]` compares rerun summaries with the ones committed at git revision
+  `rev` (default `HEAD`). It exits 1 unless every value matches exactly. Use it after a code change that should not
+  move the results.
+
+### 2. Synthetic stress test
+
+Run these steps in this order. Each script's header explains what it does and what it reads.
+
+| Step | Command | Writes |
+|---|---|---|
+| Fit the generator to real 2014–2024 data | `julia -t 30 scripts/20_synthetic_fit.jl` | `results/synthetic/generator.jld2` (not committed), `results/synthetic/generator_summary.toml` |
+| Draw 10,000 markets and pick the typical and sell-off sets | `julia -t 30 scripts/21_synthetic_paths.jl` | `results/synthetic/paths.csv` |
+| Compare the generator with the real market (22 checks) | `julia -t 30 scripts/24_synthetic_checks.jl` | `results/synthetic/checks.md`, `results/synthetic/checks.csv` |
+| Run the study on each market (532 runs per market) | `julia --gcthreads=1 -t 30 scripts/22_synthetic_run.jl` | `results/synthetic/rows/` (not committed) |
+| Tables | `julia scripts/23_synthetic_tables.jl` | `results/synthetic/tables.md`, `results/synthetic/tables/*.csv` |
+
+The study run takes about 24 seconds per market on 30 threads, so the 978 markets take about 6.5 hours. To run it
+overnight, use the wrapper, which relaunches the run after a crash and kills an attempt that stalls for 10 minutes:
+
+```
+caffeinate -i nohup zsh scripts/22_relaunch.sh > /dev/null 2>&1 &
+```
+
+Its logs go to `results/synthetic/rows/logs/`. `--smoke` runs the first 20 markets only.
+
+### 3. Extra checks used by the talk and paper
+
+| Script | What it checks | Writes |
+|---|---|---|
+| `scripts/dev/gamma_seeds.jl` | Reruns the γ pickers and the fixed lists over the same 30 seeds as the random pickers | `results/gamma_seeds/` |
+| `scripts/dev/large_k.jl` | Whether picking by γ still beats random picks at 100 and 200 names | `results/large_k/` |
+| `scripts/dev/calendar_baseline.jl` | The re-plan triggers against re-planning on the calendar alone, on real data | `results/calendar_baseline/calendar_vs_triggers.csv` |
+| `scripts/dev/calendar_baseline_synthetic.jl` | The same comparison on the 400 sell-off markets (needs the step 2 rows) | `results/calendar_baseline/synthetic_vs_triggers.csv` |
+| `scripts/dev/l8b_reproduction.jl` | Whether the engine reproduces the CHEME-5660 monthly Cobb–Douglas example | prints only |
+
+Run each one as `julia -t 30 scripts/dev/<name>.jl`. The sell-off comparison also takes `--gcthreads=1`, like
+script 22.
+
+Two parts of the repository need private repositories and cannot be rerun from this one:
+
+- `scripts/02_validate_trial.jl` and `scripts/validation/export_trial.jl` replay the live paper trial (May 20 to
+  September 4, 2026) against its own order tickets. Their committed output is in `results/validation/`.
+- `scripts/dev/make_engine_fixture.jl` builds the test fixture `code/test/fixtures/engine_cd_case.jld2` from the
+  original allocation engine. The fixture is committed.
+
+### 4. Slides and paper
+
+1. `julia scripts/30_talk_data.jl` writes the data behind every slide figure to `talk/data/`, using only committed
+   results, and checks every number quoted on the slides.
+2. **Slides:** `cd talk && make` builds `informs2026.pdf` with XeLaTeX. It needs latexmk and the Helvetica Neue
+   fonts that ship with macOS. `make notes` builds the speaker notes, and `bash talk/check_deck.sh 16` builds the
+   deck and checks it: 16 pages, no overfull boxes, no missing glyphs.
+3. **Paper:** `cd arxiv-paper && make` builds `Paper_v1.pdf` with pdfLaTeX and BibTeX. `make figs` redraws the
+   figures from the slides' figure code and data. `make source` packs the arXiv upload.
+
+## Tests
+
+```
+julia --project=code code/test/runtests.jl
+```
+
+## Data limitations
+
+- **Survivorship.** The universe holds only names with a complete 2014–2026 history. Sectors are current
+  membership, not point-in-time.
+- **No dividends.** Dividends are left out, for both the portfolios and SPY.
+- **Splits between files.** Each of the three price files is split-adjusted only as of the date it was made. At
+  each file boundary, the loader puts the earlier rows on the newest file's basis; seven names are adjusted.
+  Spin-offs and ticker reuse are not adjusted. Two remain, both in the training window: IR on 2020-03-02 and NI on
+  2015-07-02.
+- **Exploratory screens.** The universe-wide screens and the basket sizes were designed after the first results
+  were known, so that comparison is exploratory. The 13-name and 15-name fixed lists were chosen in advance,
+  without 2025 data.
+- **Best case for γ in the synthetic markets.** Each synthetic stock keeps its 2014–2024 average growth, so the
+  stress test is a best case for picking by γ.
+
+`docs/design-notes.md` has the details of each item.
