@@ -163,7 +163,7 @@ Two parts of the repository need private repositories and cannot be rerun from t
    fonts that ship with macOS. `make notes` builds the speaker notes, and `bash talk/check_deck.sh 16` builds the
    deck and checks it: 16 pages, no overfull boxes, no missing glyphs.
 3. **Paper:** `cd arxiv-paper && make` builds `Paper_v1.pdf` with pdfLaTeX and BibTeX. `make figs` redraws the
-   figures from the slides' figure code and data. `make source` packs the arXiv upload.
+   figures from the slides' figure code and data. `make source` packs the arXiv upload (comments stripped, no `.bib`).
 
 ## Tests
 

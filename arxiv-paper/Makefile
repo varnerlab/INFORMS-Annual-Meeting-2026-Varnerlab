@@ -27,14 +27,25 @@ figs:
 source: $(ARCHIVE)
 
 # Build first so the release archive includes the current generated bibliography.
-$(ARCHIVE): $(PDF) $(SOURCES) Makefile
-	COPYFILE_DISABLE=1 tar -czf $(ARCHIVE) $(SOURCES) $(PAPER).bbl
+# arXiv publishes the source, so the archive gets copies of the .tex files with their comments stripped
+# (strip_comments.pl). The .bib stays out: arXiv compiles from the .bbl.
+STAGE := arxiv-stage
+TEX := $(PAPER).tex $(SECTIONS) $(TABLES)
+SHIPPED := $(TEX) neurips_2026.sty $(FIGS) $(PAPER).bbl
+
+$(ARCHIVE): $(PDF) $(SOURCES) Makefile strip_comments.pl
+	rm -rf $(STAGE) && mkdir $(STAGE)
+	COPYFILE_DISABLE=1 tar -cf - $(SHIPPED) | tar -xf - -C $(STAGE)
+	cd $(STAGE) && perl ../strip_comments.pl $(TEX)
+	cd $(STAGE) && COPYFILE_DISABLE=1 tar -czf ../$(ARCHIVE) $(SHIPPED)
+	rm -rf $(STAGE)
 
 watch:
 	$(LATEXMK) $(LATEXMK_FLAGS) -pvc $(PAPER)
 
 clean:
 	$(LATEXMK) -c $(PAPER)
+	rm -rf $(STAGE)
 	rm -f $(PAPER).bbl $(PAPER).run.xml $(PAPER).synctex.gz $(PAPER).fff $(PAPER).ttt
 
 distclean: clean
