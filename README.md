@@ -187,3 +187,7 @@ julia --project=code code/test/runtests.jl
   stress test is a best case for picking by γ.
 
 `docs/design-notes.md` has the details of each item.
+
+## License
+
+MIT License. See `LICENSE`.
