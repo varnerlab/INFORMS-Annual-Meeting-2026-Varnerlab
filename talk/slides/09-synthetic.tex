@@ -1,13 +1,14 @@
 % Synthetic slide (spec, slide 6): the real-run grammar on the JumpHMM futures, one panel per set, each with its own
 % x range (talk/data/syn_axes.csv) and its own SPY and equal-weight lines.
-% Title from the data: in both sell-off sets every dot, hedge off and on, sits right of SPY (burst: lowest 0.924
-% against 0.865; bear: lowest 0.774 against 0.718). Set sizes from results/synthetic/tables.md, in the one-line
+% Title from the data: in both sell-off sets every dot, hedge off and on, sits right of SPY (crash: lowest 0.924
+% against 0.865; slow bear: lowest 0.774 against 0.718). Panel names and the subtitle's account of the selection (user,
+% 2026-11-03): Crash is the burst-stress set and Slow bear the bear-stress set of the paper. Set sizes from results/synthetic/tables.md, in the one-line
 % subtitle. Review round (user, 2026-10-30): the title says median, as each dot is one, and the stress sets are
 % defined on the page number's line (design spec §6: of 10,000 market paths ranked by synthetic SPY's drawdown in
 % the window, the 200 deepest with a jump burst and the 200 deepest without). With text on that line, the space
 % above it is the deck's usual 0.9em, so the panels are 0.27 cm shorter than when the line was empty.
-% No legend block (user, 2026-10-30): SPY and Equal run up the left side of their lines at the top of the Burst stress
-% panel, whose dots all sit right of both lines, and hedge on and hedge off are stacked just right of the Bear stress
+% No legend block (user, 2026-10-30): SPY and Equal run up the left side of their lines at the top of the Crash
+% panel, whose dots all sit right of both lines, and hedge on and hedge off are stacked just right of the Slow bear
 % panel. The dots and range bars are smaller than
 % the deck's default, so the 140 dots of each narrow panel bunch less. The panels are 2.95 cm wide, so the hedge key
 % ends about as far in from the right edge as the row labels start from the left.
@@ -15,11 +16,10 @@
 \def\vndotOffRadius{1.4pt}
 \def\vndotOnRadius{1.35pt}
 \def\vndotBarWidth{1.7pt}
-{\renewcommand{\vnfootleft}{Stress sets: of 10,000 paths, the 200 deepest SPY drawdowns with a jump burst, and the 200
-  without one.}
+{\renewcommand{\vnfootleft}{Crash: months of extreme up and down days. Slow bear: no such stretch, a steady decline.}
 \begin{frame}{Simulated sell-offs: every median ends above SPY}
   % a group, not braces: beamer would read a brace group after the title as a frame subtitle
-  \begingroup\small 600 typical JumpHMM futures of Jan 2025 – Sep 2026, and 200 in each stress set.\par\endgroup
+  \begingroup\small Of 10,000 futures: 600 typical (random), plus the 200 worst SPY drops of each kind.\par\endgroup
   \vndotreadaxis{data/syn_axes.csv}{typical}%
   \vndotreadrefs{data/syn_typical_refs.csv}%
   \vndotplot[xmin=\vndotAxisLo, xmax=\vndotAxisHi, xstep=0.1, spy=\vndotSPY, ew=\vndotEW, width=2.95cm,
@@ -33,16 +33,16 @@
   \pgfplotsset{vndot extra/.style={xlabel style={overlay, yshift=2pt}}}%
   \vndotplot[xmin=\vndotAxisLo, xmax=\vndotAxisHi, xstep=0.1, spy=\vndotSPY, ew=\vndotEW, width=2.95cm,
     height=4.23cm, rowlabels=false, spylabel=SPY, ewlabel=Equal,
-    xlabel={terminal wealth ÷ initial wealth, median across futures}, title={\vnmedium Burst stress}]%
+    xlabel={terminal wealth ÷ initial wealth, median across futures}, title={\vnmedium Crash}]%
     {data/syn_burst_stress_dots.csv}{data/syn_burst_stress_bars.csv}%
-  % no space here: the Bear stress panel's first tick label, at its left edge, already opens the same gap as the
-  % 0.3cm before the Burst stress panel
+  % no space here: the Slow bear panel's first tick label, at its left edge, already opens the same gap as the
+  % 0.3cm before the Crash panel
   \vndotreadaxis{data/syn_axes.csv}{bear_stress}%
   \vndotreadrefs{data/syn_bear_stress_refs.csv}%
   \pgfplotsset{vndot extra/.style={extra description/.code={\vndothedgekey}}}%
   \vndotplot[xmin=\vndotAxisLo, xmax=\vndotAxisHi, xstep=0.1, spy=\vndotSPY, ew=\vndotEW, width=2.95cm,
     height=4.23cm, rowlabels=false,
-    title={\vnmedium Bear stress}]%
+    title={\vnmedium Slow bear}]%
     {data/syn_bear_stress_dots.csv}{data/syn_bear_stress_bars.csv}\par
   % speaker notes (user, 2026-10-31: algorithm cheat sheets), two pages. Sources: arxiv-paper/sections/
   % method_synthetic.tex (evaluation), verified against code/src/SyntheticRunner.jl; results/synthetic/paths.csv
@@ -55,11 +55,11 @@
       maximum drawdown in the trading window, with the peak reset at its start.}
     \vnnoterow{Burst flag}{Set when a jump episode touches any day of the window: 523 of 10,000 windows, and 30 of
       the 50 deepest drawdowns.}
-    \vnnoterow{Sets}{Typical: 600 paths at random. Burst stress: the 200 deepest drawdowns with a burst. Bear stress:
+    \vnnoterow{Sets}{Typical: 600 paths at random. Crash: the 200 deepest drawdowns with a burst. Slow bear:
       the 200 deepest without one. 978 distinct paths in all.}
     \vnnoterow{SPY in each set}{Median window drawdown 17.6\%, 36.4\% and 40.6\%; median growth rate 0.102,
-      −0.087 and −0.199 per year (typical, burst, bear). A burst window is months of large moves of both signs
-      with less net decline than a bear window.}
+      −0.087 and −0.199 per year (typical, crash, slow bear). A crash window is months of large moves of both signs
+      with less net decline than a slow-bear window.}
     \vnnoterow{Then}{Build the 373 names only for the chosen paths, since their draws do not depend on the market
       draw.}}
 \end{frame}

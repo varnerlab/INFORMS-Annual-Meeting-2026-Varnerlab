@@ -46,13 +46,20 @@
 \input{slides/02-agenda.tex}
 
 % each slide's section in the agenda, which the strip at the top of the slide marks; 0 turns the strip off
+% each part opens on a transition slide (user, 2026-11-03: a tight talk, one sentence that poses the next part's
+% question); it sits after the \vnsection change, so its strip already marks the part it opens
 \renewcommand{\vnsection}{1}
+\transitionframe{We want to build evolving portfolios that maximize investor satisfaction as preferences shift with
+  the market.}
 \input{slides/03-utility.tex}
 \input{slides/04-gamma.tex}
 \renewcommand{\vnsection}{2}
+\transitionframe{Markets drift away from any plan, so when should the portfolio stop and re-plan?}
 \input{slides/05-mpc.tex}
 \input{slides/06-realrun.tex}
 \renewcommand{\vnsection}{3}
+\transitionframe{What if 2025–26 was just a good run? Let's test our approaches on fat-tailed, multi-asset
+  synthetic markets.}
 \input{slides/07-jumphmm.tex}
 \input{slides/08-multiasset.tex}
 \input{slides/09-synthetic.tex}
