@@ -97,10 +97,10 @@ end
         rows = full_rows()
         g = talk_realrun_grid(rows)
         @test nrow(g) == 140
-        @test g.label[1] == "γ per sector" && g.hedge[1] == false && g.allocator[1] == "CD"
+        @test g.label[1] == "Top 3 by score" && g.hedge[1] == false && g.allocator[1] == "CD"
         @test all(g.n_seeds .== 30) && all(isapprox.(g.value, 1.0145; atol=1e-12))
         @test g.row[1] == 1 && g.group_index[1] == 0 && maximum(g.row) == 10 && maximum(g.group_index) == 2
-        @test g.group[g.label .== "Hand-picked 13 + WMT, PG"][1] == "Hand-picked"
+        @test g.group[g.label .== "My 13 plus WMT, PG"][1] == "Chosen in advance"
         # the seed-5660 rows repeated (as in the tier1 and universe summaries) are counted once
         dup = vcat(rows, rows[rows.seed .== 5660, :])
         @test all(talk_realrun_grid(dup).n_seeds .== 30)
@@ -114,7 +114,7 @@ end
         r = talk_row_ranges(g)
         @test nrow(r) == 20 && all(r.lo .<= r.hi)
         # the group name rides along so the deck can label each group above its first row
-        @test r.group[1] == "33 names · 3 per sector" && r.group[end] == "Hand-picked"
+        @test r.group[1] == "In each sector (33 stocks)" && r.group[end] == "Chosen in advance"
     end
 
     @testset "large-book shares" begin
@@ -155,14 +155,18 @@ end
         g.value[(g.row .== 1) .& (g.hedge .== true) .& (g.allocator .== "LS")] .= 1.1
         refs = DataFrame(name=["SPY buy-and-hold", "equal-weight universe"], value=[1.3174, 1.2962])
         off = talk_table_rows(g, refs; hedge=false)
-        @test length(off) == 12
+        # 10 picker rows, a name row opening each of the 3 groups, a rule, then the 2 references
+        @test length(off) == 16
+        @test off[1] == "\\multicolumn{8}{l}{\\vntablegroup{In each sector (33 stocks)}} \\\\"
+        @test off[5] == "\\multicolumn{8}{l}{\\vntablegroup{13 stocks}} \\\\"
         # utility columns in TABLE_ALLOCATOR_ORDER, 3 decimals with trailing zeros kept
-        @test off[1] == "γ per sector & 1.520 & 1.200 & 1.200 & 1.200 & 1.200 & 1.200 & 1.200 \\\\"
-        @test off[10] == "Hand-picked 13 + WMT, PG & 1.200 & 1.200 & 1.200 & 1.200 & 1.200 & 1.200 & 1.200 \\\\"
-        # the references: one value repeated in every column
-        @test off[11] == "SPY buy-and-hold & 1.317 & 1.317 & 1.317 & 1.317 & 1.317 & 1.317 & 1.317 \\\\"
-        @test talk_table_rows(g, refs; hedge=true)[1] ==
-            "γ per sector & 1.200 & 1.200 & 1.200 & 1.200 & 1.200 & 1.200 & 1.100 \\\\"
+        @test off[2] == "Top 3 by score & 1.520 & 1.200 & 1.200 & 1.200 & 1.200 & 1.200 & 1.200 \\\\"
+        @test off[13] == "My 13 plus WMT, PG & 1.200 & 1.200 & 1.200 & 1.200 & 1.200 & 1.200 & 1.200 \\\\"
+        # the references, below a rule: one value repeated in every column
+        @test off[14] == "\\midrule"
+        @test off[15] == "SPY buy-and-hold & 1.317 & 1.317 & 1.317 & 1.317 & 1.317 & 1.317 & 1.317 \\\\"
+        @test talk_table_rows(g, refs; hedge=true)[2] ==
+            "Top 3 by score & 1.200 & 1.200 & 1.200 & 1.200 & 1.200 & 1.200 & 1.100 \\\\"
         # a missing cell is an error
         @test_throws ArgumentError talk_table_rows(g[2:end, :], refs; hedge=false)
     end
@@ -172,7 +176,7 @@ end
         # the 10 slide rows × 7 utilities; the 5- and 34-name rows of the synthetic tables are not on the slide
         @test nrow(w.dots) == 70 && all(w.dots.hedge .== false) && all(w.dots.value .== 1.1)
         @test unique(w.dots.label) == [label for (key, label, group) in TALK_REALRUN_ROWS]
-        @test !any(w.dots.label .== "Global γ (5)") && w.dots.group[end] == "Hand-picked"
+        @test !any(w.dots.label .== "Global γ (5)") && w.dots.group[end] == "Chosen in advance"
         @test w.dots.row[1] == 1 && w.dots.group_index[end] == 2 && w.dots.allocator[1:7] == TABLE_ALLOCATOR_ORDER
         @test w.refs.name == ["SPY buy-and-hold", "equal-weight universe"] && w.refs.value == [1.1, 1.1]
         @test all(talk_from_wide(wide_table(1.1); hedge=true, scale=100).dots.value .≈ 110.0)
@@ -181,12 +185,15 @@ end
         @test_throws ArgumentError talk_from_wide(t[t[!, "Ticker picker"] .!= "Global γ (13)", :]; hedge=false)
 
         s = talk_largek_shares(largek_rows())
-        d = talk_largek_dots(s)
-        cd = d[(d.allocator .== "CD") .& (d.hedge .== false), :]
-        @test cd.row == [1, 2] && cd.label == ["34 names", "100 names"] && cd.value == [50.0, 50.0]
-        @test all(d.group .== "Global γ against random picks") && all(d.group_index .== 0)
-        # Stone–Geary is not shown at 100 names, so that row has one dot fewer
-        @test sum(d.label .== "34 names") == 2 && sum(d.label .== "100 names") == 1
+        w = talk_largek_wealth(s)
+        # one row per basket size, evenly spaced; each rule's medians are 1.25 (global [1.2, 1.3], random
+        # [1.1, 1.25, 1.4])
+        @test w.K == [34, 100] && w.pos == [1, 2]
+        @test w.top_mid == [1.25, 1.25] && w.random_mid == [1.25, 1.25] && w.top_lo == w.top_hi
+        # Stone–Geary is not shown at 100 names, so that size has one rule fewer
+        @test w.n_rules == [2, 1]
+        # the fixture has no hedge-on runs
+        @test nrow(talk_largek_wealth(s; hedge=true)) == 0
     end
 
     @testset "MPC episode" begin

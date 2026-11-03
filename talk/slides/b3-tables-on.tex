@@ -1,10 +1,19 @@
 % Backup (spec, B3): the real-run numbers behind slide 6, hedge on.
+% the caption's first line sits on the page number's line, so the table has room for its group rows; it and the
+% abbreviation key are set small so the rows can spread out (user, 2026-11-03: "things are looking crunched")
+{\renewcommand{\vnfootskip}{0.1em}\renewcommand{\vnfootleft}{{\fontsize{6}{7.2}\selectfont Terminal wealth ÷ initial wealth, median of 30 runs.
+  Real-data backtest, Jan 2025 – Sep 2026.}}
 \begin{frame}{Terminal wealth by picker and utility: hedge on}
   % the table body is read into a macro first: \input cannot sit inside a tabular
+  % each group of rows opens on its name (\vntablegroup, figs/dotplot.tex), as on the dot plots (user, 2026-11-03)
   \CatchFileDef{\vntablerows}{data/b3_rows_hedge_on.tex}{}%
   \centering
   {\footnotesize
-  \renewcommand{\arraystretch}{0.95}%
+  \renewcommand{\arraystretch}{0.84}%
+  % each group label gets a strut, so it sits clear of the rows above it (user, 2026-11-03)
+  \let\vntablegroup\vntablegroupstrut
+  % columns 1pt closer than the default 6pt so the plain-word picker labels (user, 2026-11-03) fit
+  \setlength{\tabcolsep}{5pt}%
   \begin{tabular}{l*{7}{r}}
     \toprule
     Picker & CD & CES & CESw & SG & MinVar & Tangent & LS \\
@@ -12,8 +21,8 @@
     \vntablerows
     \bottomrule
   \end{tabular}\par}
-  \vspace{0.4em}
-  {\scriptsize\color{vnquiet} Terminal wealth ÷ initial wealth, median of 30 runs. Real-data backtest, Jan 2025 – Sep 2026.\par
-    CD Cobb–Douglas · CES on shares · CESw CES on weights · SG Stone–Geary · MinVar minimum variance · Tangent the
-    tangency portfolio · LS 130/30 long-short Cobb–Douglas.\par}
+  \vspace{0.1em}
+  {\fontsize{6}{7.2}\selectfont\color{vnquiet} CD Cobb–Douglas · CES / CESw CES on shares / weights · SG Stone–Geary ·
+    MinVar minimum variance · Tangent tangency · LS 130/30 long-short.\par}
 \end{frame}
+}

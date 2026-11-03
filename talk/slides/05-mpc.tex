@@ -3,13 +3,16 @@
 % whole-backtest counts sit on the page number's line, apart from the episode shown, so the titled date axis has the
 % caption's old height. The counts are this run's (the hand-picked 13, Cobb–Douglas, hedge off, seed 5660 row of
 % results/universe_summary.csv: n_decisions 28, so 27 re-plans after the first allocation; n_horizon 17,
-% n_band_exit 7, n_drawdown 3, so 10 before the horizon).
-{\renewcommand{\vnfootleft}{Hand-picked 13, Cobb–Douglas, hedge off; over Jan 2025 – Sep 2026, 27 re-plans, 10 before
-  the horizon.}
+% n_band_exit 7, n_drawdown 3, so 10 before the horizon; the footer dropped that count, user 2026-11-03: it read as
+% unexplained; the split is in the speaker notes).
+{\renewcommand{\vnfootleft}{My 13 stocks, Cobb–Douglas, hedge off; over Jan 2025 – Sep 2026, 27 re-plans.}
 \begin{frame}{Rebalancing triggers: horizon, forecast band, drawdown}
+  % "re-fit at each re-plan" (user, 2026-11-03): μ_g and Σ_g are rebuilt from that day's estimates at every re-plan
+  % and held over the 21 days (Q&A notes page); "21 days" is trading days, as in the figure's labels; the 1,000
+  % paths moved to the speaker notes (Paths row) to keep the line to one row.
   % a group, not braces: beamer would read a brace group after the title as a frame subtitle
   \begingroup\small
-  \vnlabel{Forecast:} multi-asset GBM, 1,000 paths, 21 trading days ahead. \vnlabel{Plant:} real prices.\par
+  \vnlabel{Forecast:} multi-asset GBM, re-fit at each re-plan, 21 days ahead. \vnlabel{Plant:} real prices.\par
   \endgroup
   \vspace{6pt}
   \vnmpcfigure{11.5cm}{3.55cm}\par
@@ -49,10 +52,16 @@
   \vnnoterow{Related work}{Multi-period convex trading (Boyd et al., 2017) plans a sequence of trades and executes
     the first each period. This controller solves one period and trades only when a trigger fires; the band is a
     no-trade region on the portfolio value rather than on the weights.}}
-% page 3: the Q&A answer. Source: the calendar-only reruns, results/calendar_baseline/calendar_vs_triggers.csv (real
+% page 3: the Q&A answers. Second answer (user, 2026-11-03): StudyBacktest.jl:231-235 and 416, Triggers.jl:82.
+% Source of the first: the calendar-only reruns, results/calendar_baseline/calendar_vs_triggers.csv (real
 % prices) and synthetic_vs_triggers.csv (sell-offs).
 \note{\textbf{If asked whether the triggers beat a fixed schedule:}\par\medskip
   We reran everything on a fixed 21-day schedule. Ending wealth is the same. The triggers take about a point off
   the worst drawdown, on real prices and in simulated sell-offs. The protection relative to SPY comes from the
-  allocation, not from the timing.}
+  allocation, not from the timing.\par\bigskip
+  \textbf{If asked whether the forecast's drift and covariance are updated:}\par\medskip
+  At every re-plan. Each one rebuilds $\mu_g$ and $\Sigma_g$ from that day's α, β, $\tilde g_M$ and $\sigma_M$ and
+  the last 126 days of residuals, and holds them constant over the 21 forecast days. Between re-plans the estimates
+  keep updating after every close, but the band is not recomputed: wealth is checked against the band stored at the
+  last re-plan until a trigger fires.}
 }

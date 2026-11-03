@@ -6,6 +6,9 @@
 % empty, so the space above it is cut and the plot runs down toward the page number.
 % Review round (user, 2026-10-30): an academic title in place of "What you hold beats how you weight it"; each row is
 % named a selection rule, as the legend names each dot a weighting rule.
+% Row labels in plain words (user, 2026-11-03, mock-up C): each says how many names it holds and, for the 13-stock
+% rows, the pool it draws from, so "all 373" no longer reads as holding 373; set in code/src/TalkData.jl. The plot is
+% 0.35cm narrower than before so the longest label, "Top 13 by score, 100 most traded", stays inside the margin.
 {\renewcommand{\vnfootskip}{0.2em}
 \begin{frame}{Stock selection matters more than the weighting rule}
   % a group, not braces: beamer would read a brace group after the title as a frame subtitle
@@ -14,23 +17,23 @@
   \vspace{7pt}
   \vndotreadrefs{data/realrun_refs.csv}%
   \pgfplotsset{vndot extra/.style={extra description/.code={\vndotlegendstacked}}}%
-  \vndotplot[xmin=0.97, xmax=1.72, xstep=0.1, spy=\vndotSPY, ew=\vndotEW, width=10.1cm, height=4.77cm,
+  \vndotplot[xmin=0.97, xmax=1.72, xstep=0.1, spy=\vndotSPY, ew=\vndotEW, width=9.75cm, height=4.77cm,
     xlabel={terminal wealth ÷ initial wealth, median of 30 runs}]{data/realrun_grid.csv}{data/realrun_bars.csv}\par
   % speaker notes (user, 2026-10-31: algorithm cheat sheets), two pages. Sources: arxiv-paper/sections/
   % method_allocation.tex (selection rules, bandit) and method_mpc.tex (backtest design), verified against
   % code/src/Screens.jl, Bandit.jl, StudyRunner.jl; config/study.toml [screens], [grid].
   \note{\footnotesize
-    \vnnotehead{Selection rules}
-    \vnnoterow{Per sector}{3 names in each of the 11 sectors, 33 in all: the highest γ, the bandit's top 3, or a
-      uniform random draw.}
-    \vnnoterow{Global γ}{The 13 highest γ in the 373-name universe, no sector quota.}
-    \vnnoterow{Correlation-\newline aware γ}{Walk down the γ ranking; accept a name only if its 252-day growth correlation with
-      every accepted name is at most 0.7; fill any shortfall from the ranking.}
-    \vnnoterow{Liquid then γ}{The 13 highest γ among the 100 names with the largest median daily dollar volume over
-      63 days.}
-    \vnnoterow{Random}{13 names drawn uniformly from those 100, or from the whole universe, afresh at every pick.}
-    \vnnoterow{Hand-picked}{AAPL, MSFT, INTC, MU, AMD, NVDA, GS, BAC, WFC, C, F, GM, JNJ, chosen in advance from
-      sectors I follow, without 2025 data; the 15-name list adds WMT and PG. Never re-picked.}
+    \vnnotehead{Selection rules (paper's names in parentheses)}
+    \vnnoterow{In each sector}{3 names in each of the 11 sectors, 33 in all: the highest γ (γ per sector), the
+      bandit's top 3 (bandit per sector; momentum, below), or a uniform random draw.}
+    \vnnoterow{Top 13 by score}{The 13 highest γ in the 373-name universe, no sector quota (global γ).}
+    \vnnoterow{Diversified}{Walk down the γ ranking; accept a name only if its 252-day growth correlation with every
+      accepted name is at most 0.7; fill any shortfall from the ranking (correlation-aware γ).}
+    \vnnoterow{100 most traded}{The 100 names with the largest median daily dollar volume over 63 days; the 13
+      highest γ among them (liquid then γ) or 13 at random.}
+    \vnnoterow{Random 13}{Drawn uniformly from those 100 or from all 373, afresh at every pick.}
+    \vnnoterow{My 13 stocks}{AAPL, MSFT, INTC, MU, AMD, NVDA, GS, BAC, WFC, C, F, GM, JNJ, chosen in advance from
+      sectors I follow, without 2025 data; the second list adds WMT and PG. Never re-picked (hand-picked).}
     \vnnoterow{Pick dates}{The first day, every 21 trading days and every band exit, with data dated on or before
       the pick. Each pick also refreshes the hedge pool and the short candidates of the 130/30 rule.}}
 \end{frame}
@@ -49,4 +52,27 @@
   \vnnoterow{A dot}{The median terminal wealth ratio of a cell's 30 runs, never pooled across rules.}
   \vnnoterow{Benchmarks}{SPY bought and held from the close of 2 Jan 2025; the equal-weight universe bought once
     ($W_0/373$ in each name) and held. No costs.}}
+% speaker notes, page 3 (user, 2026-11-03): what hedge on and off mean, for the filled and open dots. Sources:
+% code/src/HedgePool.jl (beta_cap, the pool), StudyBacktest.jl, AllocatorsLongShort.jl; config/study.toml [hedge];
+% slides/03-utility.tex notes (cap range 1.80 to 0.10 over the window); the 50 of 70 pairs and median gap of
+% −0.033 are from data/realrun_grid.csv (hedge true minus false, same row and allocator).
+% Synthetic, same pairing (data/syn_*_dots.csv): slow bear (bear stress) higher in 65 of 70, median +0.029;
+% crash (burst stress) higher in 34 of 70, median −0.001; typical lower in 59 of 70, median −0.006.
+\note{\footnotesize
+  \vnnotehead{Hedge on and off (open and filled dots)}
+  \vnnoterow{Say}{``With the hedge on, we put an upper bound on the portfolio's β, and the bound responds to the
+    market. The optimizer decides how to get under it.''}
+  \vnnoterow{Hedge on}{Adds $\beta^{\top} w \le \bar\beta$, $\bar\beta = \max(0,\, 1 - \xi_t)$, and a hedge pool. Hedge off has
+    neither; everything else is the same.}
+  \vnnoterow{The cap}{1 at $\xi = 0$, looser when bullish ($\xi < 0$), tighter when bearish, 0 at $\xi \ge 1$. Over
+    the window it ran from 1.80 down to 0.10.}
+  \vnnoterow{Hedge pool}{Up to 5 names with online and down-day β $\le 0$, refreshed at every pick. With
+    $\gamma \le 0$ they earn no utility, so they are bought only when a cap needs them, as little as possible.}
+  \vnnoterow{Meeting the cap}{The cap is one more constraint; the solver tilts toward lower-β names, holds cash
+    (β = 0) or buys pool names (β $\le 0$), whichever costs the least utility.}
+  \vnnoterow{Shorts}{Only 130/30 can short, and only names with $\gamma < 0$, held for their own utility term. A
+    short of a positive-β name also lowers β, so the solver uses shorts before pool names, up to the 30\% cap.}
+  \vnnoterow{On this slide}{Each weighting rule ran both ways. In a mostly rising 2025--26 the hedge usually cost a
+    little: lower in 50 of 70 pairs, by a median 0.033 of $W_0$. In the slow bear it helps (higher in 65 of 70); in
+    the crash it is a wash.}}
 }

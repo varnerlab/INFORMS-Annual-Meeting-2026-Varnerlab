@@ -1,0 +1,52 @@
+% The large-book backup's figure (user, 2026-11-03: show ending wealth against basket size for both picks, not the
+% share of run pairs one wins). From talk/data/b2_wealth.csv (code/src/TalkData.jl talk_largek_wealth, hedge off):
+% for each basket size K, the median over the weighting rules of each rule's median ending wealth ÷ start, for the K
+% highest γ ("top K by score", the line in the figure blue) and for K random names (grey), each with a band from the
+% lowest to the highest rule. SPY and the equal-weight universe are the real-run slide's references, from
+% data/realrun_refs.csv, drawn as they are there. The basket sizes 5, 8, 13, 21, 34, 100, 200 sit evenly spaced
+% (column pos), so the small baskets, where the two picks differ, are not squeezed to the left.
+% Input once in the preamble, after vnslides (colours) and stylized_facts.tex (the vnsf look).
+%
+% \vnlargek{<width>}{<height>}: one plot area <width> by <height>.
+
+\newcommand{\vnlargek}[2]{%
+  \pgfplotstableread[col sep=comma]{data/realrun_refs.csv}\vnlkRefs
+  \pgfplotstablegetelem{0}{value}\of\vnlkRefs \let\vnlkSPY\pgfplotsretval
+  \pgfplotstablegetelem{1}{value}\of\vnlkRefs \let\vnlkEW\pgfplotsretval
+  \begin{tikzpicture}
+    \begin{axis}[vnsf, width=#1, height=#2,
+      xmin=0.6, xmax=7.4, xtick={1,...,7}, xticklabels={5,8,13,21,34,100,200},
+      ymin=1.0, ymax=1.7, ytick={1.0,1.1,...,1.7},
+      yticklabel style={/pgf/number format/precision=1, /pgf/number format/fixed zerofill},
+      xlabel={stocks in the basket, K},
+      ylabel={terminal wealth ÷ initial wealth},
+    ]
+      % the references, across the plot
+      \addplot[draw=vnfigaccent, line width=1.1pt, dash pattern=on 3pt off 2pt, forget plot]
+        coordinates {(0.6,\vnlkSPY) (7.4,\vnlkSPY)};
+      \addplot[draw=vndotew, line width=0.9pt, dash pattern=on 0.9pt off 1.6pt, forget plot]
+        coordinates {(0.6,\vnlkEW) (7.4,\vnlkEW)};
+      \node[anchor=south east, inner sep=1.5pt, font=\fontsize{7}{8.4}\selectfont, text=vnfigaccent]
+        at (axis cs:7.4,\vnlkSPY) {SPY buy-and-hold};
+      \node[anchor=north east, inner sep=1.5pt, font=\fontsize{7}{8.4}\selectfont, text=vndotew]
+        at (axis cs:7.4,\vnlkEW) {equal-weight universe};
+      % random picks: the band over the weighting rules, then the median line
+      \addplot[name path=vnlkrlo, draw=none, forget plot] table[col sep=comma, x=pos, y=random_lo] {data/b2_wealth.csv};
+      \addplot[name path=vnlkrhi, draw=none, forget plot] table[col sep=comma, x=pos, y=random_hi] {data/b2_wealth.csv};
+      \addplot[fill=vnquiet, fill opacity=0.28, draw=none, forget plot] fill between[of=vnlkrlo and vnlkrhi];
+      \addplot[draw=vnquiet, line width=1.3pt, mark=*, mark size=1.6pt, mark options={fill=vnquiet}]
+        table[col sep=comma, x=pos, y=random_mid] {data/b2_wealth.csv};
+      % top K by score, drawn last so it sits on top where the two meet
+      \addplot[name path=vnlktlo, draw=none, forget plot] table[col sep=comma, x=pos, y=top_lo] {data/b2_wealth.csv};
+      \addplot[name path=vnlkthi, draw=none, forget plot] table[col sep=comma, x=pos, y=top_hi] {data/b2_wealth.csv};
+      \addplot[fill=vnband, fill opacity=0.3, draw=none, forget plot] fill between[of=vnlktlo and vnlkthi];
+      \addplot[draw=vnslidelink, line width=1.3pt, mark=*, mark size=1.6pt, mark options={fill=vnslidelink}]
+        table[col sep=comma, x=pos, y=top_mid] {data/b2_wealth.csv};
+      % each line named at its left end, where the two are far apart
+      \node[anchor=south west, inner sep=1.5pt, font=\fontsize{7.5}{9}\selectfont\bfseries, text=vnslidelink]
+        at (axis cs:1.1,1.585) {top K by score};
+      \node[anchor=north west, inner sep=1.5pt, font=\fontsize{7.5}{9}\selectfont\bfseries, text=vnquiet]
+        at (axis cs:1.1,1.04) {random K};
+    \end{axis}
+  \end{tikzpicture}%
+}

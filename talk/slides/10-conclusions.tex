@@ -3,7 +3,9 @@
 % talk/data/numbers.tex: the wealth ranges and the typical-futures shares are hedge off (talk_numbers in
 % code/src/TalkData.jl). "A third before the horizon": over the real-data runs (seeds 5660–5689 in the tier1,
 % universe and fixed summaries), the median share of re-plans from a band exit or the drawdown stop is 0.33. The
-% sell-off sentence follows slide 9 (every median right of SPY in both stress sets). Sector limits are not named:
+% sell-off sentence follows slide 9 (every median right of SPY in both stress sets). The third takeaway (user,
+% 2026-11-03) answers part 3's question, whether 2025–26 was just a good run; it is named for the agenda's part, and
+% the generator's clustering caveat moved to the speaker notes. Sector limits are not named:
 % the study ran with the sector cap off. The paper-trading note sits on the page number's line.
 {\renewcommand{\vnfootleft}{A paper-trading version of this system is running now; its results are not part of this
   talk.}
@@ -19,10 +21,27 @@
     \item {\fontsize{10.5}{12.6}\selectfont\vnkey{Rebalancing: re-plans came at the horizon, a band exit, or a
       drawdown stop.}\par}\vspace{2pt}
       {\small About \Rebalances{} re-plans in 419 trading days, a third of them before the 21-day horizon.\par}
-    \item {\fontsize{10.5}{12.6}\selectfont\vnkey{Evaluation: in both sell-off sets, every median ended above
-      SPY.}\par}\vspace{2pt}
-      {\small JumpHMM reproduces fat tails, but its volatility clustering fades after a day. With the hedge off, 13
-      names picked by γ beat 13 random names in \TypicalLo–\TypicalHi\% of typical futures; in slow-bear futures, random
-      picks did as well or better for most rules.\par}
+    \item {\fontsize{10.5}{12.6}\selectfont\vnkey{Market generator: the results held up beyond 2025–26.}\par}\vspace{2pt}
+      {\small In 600 typical simulated futures, 13 stocks picked by γ beat 13 random stocks \TypicalLo–\TypicalHi\% of
+      the time, and in simulated sell-offs every median still ended above SPY. In a slow bear market, random picks
+      did as well as γ for most weighting rules.\par}
   \end{itemize}
+  % speaker notes (user, 2026-11-03): the third takeaway's evidence, and the generator caveat it no longer carries.
+  % Sources: results/synthetic/tables/{typical,bear_stress,burst_stress}_head_to_head.csv, "Global γ (13) minus
+  % Random, whole universe (13)", wealth, hedge off; slides/07-jumphmm.tex (clustering); mean portfolio β from
+% arxiv-paper/sections/tables/tableS_synbeta.tex (bear stress, hedge off). The cash explanation is inferred from the
+% β pattern (invested fractions are not in the committed tables).
+  \note{\footnotesize
+    \vnnotehead{Market generator takeaway: the numbers behind it}
+    \vnnoterow{Typical futures}{Top 13 by γ ended above random 13 in 62--71\% of 600 futures, for every weighting
+      rule.}
+    \vnnoterow{Slow bear market}{28--38\% for five of the seven rules, so random did as well or better; minimum
+      variance and tangency still about 70\%.}
+    \vnnoterow{Why random wins there}{The book with the lower β won in every rule. Mean β, top 13 vs random 13: CD 0.72
+      vs 0.46, LS 0.63 vs 0.23, but MinVar 0.64 vs 0.77. Likely cause: in a falling market many random names have
+      $\gamma \le 0$, which the utility rules leave in cash (130/30 shorts them); MinVar and tangency ignore γ.}
+    \vnnoterow{Crash}{Close to a coin flip, 53--57\%, for the utility rules; minimum variance and tangency 67--68\%.}
+    \vnnoterow{Sell-offs vs SPY}{Every median, hedge off and on, ended above SPY in both sell-off sets (slide 12).}
+    \vnnoterow{If asked}{JumpHMM reproduces fat tails, but its volatility clustering fades within a few days, faster
+      than SPY's (slide 10). Calm and turbulent stretches are shorter than in real markets.}}
 \end{frame}}

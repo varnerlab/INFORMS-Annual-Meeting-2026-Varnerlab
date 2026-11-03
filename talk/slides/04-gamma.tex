@@ -5,6 +5,10 @@
 % xi_series, xi_gain, gtilde_series) and config/study.toml: β floor 0.1, G = 1/(99th percentile of |EMA21/EMA63 − 1|
 % over 2014–2024), g̃_M the 252-day EMA of SPY's growth rate. The γ pickers are the γ rows of the real-run plot; the
 % slide names the two simplest (global top 13, top 3 per sector).
+% The selection row is generic (user, 2026-11-03): K names overall, as in the paper, and m per sector, since N
+% names the JumpHMM's states; the values used here (K = 13, m = 3) are in the speaker notes, as an aside wraps the row.
+% "daily fit" (user, 2026-11-03): α_i and β_i are refit each day by exponentially weighted least squares (63-day
+% half-life, in the speaker notes), so γ moves with the market; not called an EMA, since nothing is averaged.
 % The labels are placed on the second run: each part of the fraction is a node the overlay finds by name.
 % Review round (user, 2026-10-30): the two jobs are named Weighting and Selection. Every rule holds the names with
 % γ_i > 0 long; the 130/30 rule also shorts the names with γ_i < 0, weighted by |γ_i| (code/src/AllocatorsLongShort.jl),
@@ -27,7 +31,7 @@
     \node[anchor=base west, inner sep=0pt, font=\small] (vngn2) at (vngnum.base -| vngx)
       {\vnaside{$\tilde g_M$: SPY's growth rate, 252-day EMA)}};
     \node[anchor=base west, inner sep=0pt, font=\small] at ([yshift=12.5pt]vngn2.base west)
-      {expected growth \vnaside{($\alpha_i, \beta_i$: fit of name $i$ to SPY;}};
+      {expected growth \vnaside{($\alpha_i, \beta_i$: daily fit of name $i$ to SPY;}};
     \node[anchor=base west, inner sep=0pt, font=\small] at (vngden.base -| vngx)
       {β penalty \vnaside{($\xi$: market state, >\,0 when EMA$_{21}$ < EMA$_{63}$)}};
   \end{tikzpicture}\par
@@ -40,7 +44,7 @@
     γ enters $U(n;\gamma)$: names with $\gamma_i > 0$ are held long, and 130/30 shorts $\gamma_i < 0$.\par
   \vspace{3pt}
   \noindent\makebox[2.4cm][l]{\vnlabel{Selection}}%
-    the 13 highest γ overall, or the 3 highest in each sector.\par}
+    the $K$ highest γ overall, or the $m$ highest in each sector.\par}
   % speaker notes (user, 2026-10-31: algorithm cheat sheets). Sources: arxiv-paper/sections/method_allocation.tex
   % (verified against the code); code/src/SIM.jl (ewls_init, ewls_update!, ewvar_init, ewvar_update!) and
   % OnlineSIM.jl; config/study.toml [sim] ewls_half_life = 63, ewls_prior_weight = 63; results/calibration_summary.toml
@@ -83,5 +87,7 @@
     $\xi < 0$ it favors high β. The penalty is positive, so γ keeps the sign of expected growth.}
   \vnnoterow{β floor 0.1}{Keeps the penalty finite for β near zero. At the window's largest ξ, 0.90, a low-β name's
     expected growth is amplified at most $0.1^{-0.90} \approx 7.9$ times.}
-  \vnnoterow{tanh}{Bounds $\gamma_i$ to $(-1, 1)$; growth rates in yr$^{-1}$ enter as plain numbers.}}
+  \vnnoterow{tanh}{Bounds $\gamma_i$ to $(-1, 1)$; growth rates in yr$^{-1}$ enter as plain numbers.}
+  \vnnoterow{Selection sizes}{$K = 13$ names overall and $m = 3$ per sector (33 names) in the main comparison;
+    other $K$ in the size comparison.}}
 }

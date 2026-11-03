@@ -349,3 +349,13 @@
     \node[vndot off] at ([xshift=-4.5pt]vndotKoff.mid west) {};
   \end{scope}%
 }
+
+% \vntablegroup{<group>}: a group's name as the dot plots set it (6 pt, letter-spaced capitals, link colour), for the
+% group rows of the backup number tables (user, 2026-11-03), which data/b3_rows_hedge_*.tex open with
+% \multicolumn{8}{l}{\vntablegroup{<group>}}
+% \vntablegroupname is the styled name alone
+\newcommand{\vntablegroupname}[1]{{\fontsize{6}{7.2}\selectfont\addfontfeatures{LetterSpace=10}\color{vnslidelink}%
+  \vndotupper{#1}}}
+\newcommand{\vntablegroup}[1]{\vntablegroupname{#1}}
+% the same with a strut 10.5pt tall, so a group row sits clear of the row above it; a table \let's \vntablegroup to it
+\newcommand{\vntablegroupstrut}[1]{\rule{0pt}{10.5pt}\vntablegroupname{#1}}

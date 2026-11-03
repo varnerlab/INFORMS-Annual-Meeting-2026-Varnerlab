@@ -1,21 +1,21 @@
 row,group_index,label,group,hedge,lo,hi
-1,0,γ per sector,33 names · 3 per sector,false,39.83333333333333,56.166666666666664
-2,0,Bandit per sector,33 names · 3 per sector,false,42.66666666666667,64.66666666666666
-3,0,Random per sector,33 names · 3 per sector,false,49.0,68.66666666666667
-4,1,Global γ,13 names,false,47.5,81.66666666666667
-5,1,Correlation-aware γ,13 names,false,58.833333333333336,74.66666666666667
-6,1,Liquid then γ,13 names,false,47.16666666666667,70.0
-7,1,{Random, liquid 100},13 names,false,34.5,59.333333333333336
-8,1,{Random, whole universe},13 names,false,43.333333333333336,64.33333333333333
-9,2,Hand-picked 13,Hand-picked,false,79.16666666666666,90.66666666666666
-10,2,{Hand-picked 13 + WMT, PG},Hand-picked,false,74.0,90.66666666666666
-1,0,γ per sector,33 names · 3 per sector,true,40.166666666666664,67.83333333333333
-2,0,Bandit per sector,33 names · 3 per sector,true,37.166666666666664,71.33333333333334
-3,0,Random per sector,33 names · 3 per sector,true,38.666666666666664,73.0
-4,1,Global γ,13 names,true,50.33333333333333,86.66666666666667
-5,1,Correlation-aware γ,13 names,true,44.666666666666664,80.83333333333333
-6,1,Liquid then γ,13 names,true,59.166666666666664,66.5
-7,1,{Random, liquid 100},13 names,true,37.333333333333336,51.66666666666667
-8,1,{Random, whole universe},13 names,true,32.5,47.66666666666667
-9,2,Hand-picked 13,Hand-picked,true,60.83333333333333,88.5
-10,2,{Hand-picked 13 + WMT, PG},Hand-picked,true,49.833333333333336,91.16666666666666
+1,0,Top 3 by score,In each sector (33 stocks),false,39.83333333333333,56.166666666666664
+2,0,Top 3 by momentum,In each sector (33 stocks),false,42.66666666666667,64.66666666666666
+3,0,Random 3,In each sector (33 stocks),false,49.0,68.66666666666667
+4,1,Top 13 by score,13 stocks,false,47.5,81.66666666666667
+5,1,{Top 13 by score, diversified},13 stocks,false,58.833333333333336,74.66666666666667
+6,1,{Top 13 by score, 100 most traded},13 stocks,false,47.16666666666667,70.0
+7,1,{Random 13, 100 most traded},13 stocks,false,34.5,59.333333333333336
+8,1,{Random 13, all 373},13 stocks,false,43.333333333333336,64.33333333333333
+9,2,My 13 stocks,Chosen in advance,false,79.16666666666666,90.66666666666666
+10,2,{My 13 plus WMT, PG},Chosen in advance,false,74.0,90.66666666666666
+1,0,Top 3 by score,In each sector (33 stocks),true,40.166666666666664,67.83333333333333
+2,0,Top 3 by momentum,In each sector (33 stocks),true,37.166666666666664,71.33333333333334
+3,0,Random 3,In each sector (33 stocks),true,38.666666666666664,73.0
+4,1,Top 13 by score,13 stocks,true,50.33333333333333,86.66666666666667
+5,1,{Top 13 by score, diversified},13 stocks,true,44.666666666666664,80.83333333333333
+6,1,{Top 13 by score, 100 most traded},13 stocks,true,59.166666666666664,66.5
+7,1,{Random 13, 100 most traded},13 stocks,true,37.333333333333336,51.66666666666667
+8,1,{Random 13, all 373},13 stocks,true,32.5,47.66666666666667
+9,2,My 13 stocks,Chosen in advance,true,60.83333333333333,88.5
+10,2,{My 13 plus WMT, PG},Chosen in advance,true,49.833333333333336,91.16666666666666

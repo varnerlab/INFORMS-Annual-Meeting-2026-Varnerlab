@@ -8,18 +8,21 @@
 
 The ten ticker pickers of the real-run slide, in slide order, as `(key, label, group)`: `key` is what `picker_key`
 returns for a run row of that picker, `label` the row name on the slide and `group` the basket-size group above it.
+The labels are plain words with the count held and, for the 13-stock rows, the pool drawn from (user, 2026-11-03:
+"Global γ" and "Random, whole universe" read as holding all 373 names). The bandit row is named for what it ranks
+by in effect, momentum against SPY.
 """
 const TALK_REALRUN_ROWS = [
-    ("gamma", "γ per sector", "33 names · 3 per sector"),
-    ("bandit", "Bandit per sector", "33 names · 3 per sector"),
-    ("random", "Random per sector", "33 names · 3 per sector"),
-    ("global_gamma|K=13", "Global γ", "13 names"),
-    ("corr_gamma|K=13", "Correlation-aware γ", "13 names"),
-    ("liquid_gamma|K=13", "Liquid then γ", "13 names"),
-    ("random_liquid|K=13", "Random, liquid 100", "13 names"),
-    ("random_global|K=13", "Random, whole universe", "13 names"),
-    ("fixed:l8b_13", "Hand-picked 13", "Hand-picked"),
-    ("fixed:l8b_15", "Hand-picked 13 + WMT, PG", "Hand-picked"),
+    ("gamma", "Top 3 by score", "In each sector (33 stocks)"),
+    ("bandit", "Top 3 by momentum", "In each sector (33 stocks)"),
+    ("random", "Random 3", "In each sector (33 stocks)"),
+    ("global_gamma|K=13", "Top 13 by score", "13 stocks"),
+    ("corr_gamma|K=13", "Top 13 by score, diversified", "13 stocks"),
+    ("liquid_gamma|K=13", "Top 13 by score, 100 most traded", "13 stocks"),
+    ("random_liquid|K=13", "Random 13, 100 most traded", "13 stocks"),
+    ("random_global|K=13", "Random 13, all 373", "13 stocks"),
+    ("fixed:l8b_13", "My 13 stocks", "Chosen in advance"),
+    ("fixed:l8b_15", "My 13 plus WMT, PG", "Chosen in advance"),
 ]
 
 # Row number (1 = top) and group index (0 = first group) of each TALK_REALRUN_ROWS picker, by key.
@@ -255,27 +258,24 @@ function talk_from_wide(t::DataFrame; hedge::Bool, scale::Real=1.0)::NamedTuple{
 end
 
 """
-    talk_largek_dots(shares::DataFrame)::DataFrame
+    talk_largek_wealth(shares::DataFrame; hedge::Bool=false)::DataFrame
 
-The large-book head-to-heads (`talk_largek_shares` output) as a dot table: one row per basket size K in increasing
-order, labeled `"<K> names"`, all in the group `"Global γ against random picks"`, with columns `row`, `group_index`,
-`label`, `group`, `allocator`, `hedge`, `value` (100·share, percent of seed pairs in which global γ ends higher) and
-`picker`.
+Ending wealth by basket size for the large-book backup slide (user, 2026-11-03: show the wealth of both picks against
+the basket size, not the share of run pairs one wins): from the `talk_largek_shares` output, one row per basket size K
+in increasing order for one hedge setting, with columns `pos` (1, 2, … : the K values sit evenly spaced on the plot),
+`K` (names), `n_rules` (weighting rules, count), and for global γ (`top_`) and random picks (`random_`) the lowest,
+median and highest over the weighting rules of each rule's median ending wealth ÷ start (`_lo`, `_mid`, `_hi`).
 """
-function talk_largek_dots(shares::DataFrame)::DataFrame
-    Ks = sort(unique(Int.(shares.K)))
-    rank = Dict{Int,Int}()
-    for (i, K) in enumerate(Ks)
-        rank[K] = i
+function talk_largek_wealth(shares::DataFrame; hedge::Bool=false)::DataFrame
+    sel = shares[Bool.(shares.hedge) .== hedge, :]
+    out = DataFrame(pos=Int[], K=Int[], n_rules=Int[], top_lo=Float64[], top_mid=Float64[], top_hi=Float64[],
+        random_lo=Float64[], random_mid=Float64[], random_hi=Float64[])
+    for (i, K) in enumerate(sort(unique(Int.(sel.K))))
+        rows = sel[Int.(sel.K) .== K, :]
+        g = Float64.(rows.global_median)
+        r = Float64.(rows.random_median)
+        push!(out, (i, K, nrow(rows), minimum(g), median(g), maximum(g), minimum(r), median(r), maximum(r)))
     end
-    out = DataFrame(row=Int[], group_index=Int[], label=String[], group=String[], allocator=String[], hedge=Bool[],
-        value=Float64[], picker=String[])
-    for i in 1:nrow(shares)
-        K = Int(shares.K[i])
-        push!(out, (rank[K], 0, "$(K) names", "Global γ against random picks", string(shares.allocator[i]),
-            Bool(shares.hedge[i]), 100 * shares.share[i], "global_gamma|K=$(K)"))
-    end
-    sort!(out, [:row]; alg=MergeSort)
     return out
 end
 
@@ -351,24 +351,33 @@ end
     talk_table_rows(grid::DataFrame, refs::DataFrame; hedge::Bool)::Vector{String}
 
 The body lines of a backup number table for one hedge setting: one `label & v_CD & … & v_LS \\\\` line per row of
-`grid` (the `talk_realrun_grid` output), in row order, with the utilities in `TABLE_ALLOCATOR_ORDER`, then one line per
-row of `refs` (columns `name`, `value`) with its value in every column. Values are ending wealth ÷ start at 3
+`grid` (the `talk_realrun_grid` output), in row order, each group opened by a
+`\\multicolumn{8}{l}{\\vntablegroup{<group>}} \\\\` line (user, 2026-11-03: "Top 3 by score" needs its
+"In each sector" heading, as on the dot plots), with the utilities in `TABLE_ALLOCATOR_ORDER`, then a `\\midrule`
+and one line per row of `refs` (columns `name`, `value`) with its value in every column. Values are ending wealth ÷ start at 3
 decimals. Throws `ArgumentError` when a row lacks a utility.
 """
 function talk_table_rows(grid::DataFrame, refs::DataFrame; hedge::Bool)::Vector{String}
     # the cells of this hedge setting, keyed by (row, utility)
     labels = Dict{Int,String}()
+    groups = Dict{Int,String}()
     cells = Dict{Tuple{Int,String},Float64}()
     for i in 1:nrow(grid)
         if Bool(grid.hedge[i]) == hedge
             labels[grid.row[i]] = string(grid.label[i])
+            groups[grid.row[i]] = string(grid.group[i])
             cells[(grid.row[i], string(grid.allocator[i]))] = grid.value[i]
         end
     end
 
     # one line per row, utilities in table order
     lines = String[]
+    last_group = ""
     for r in sort(collect(keys(labels)))
+        if groups[r] != last_group
+            push!(lines, "\\multicolumn{8}{l}{\\vntablegroup{" * groups[r] * "}} \\\\")
+            last_group = groups[r]
+        end
         parts = [labels[r]]
         for a in TABLE_ALLOCATOR_ORDER
             if !haskey(cells, (r, a))
@@ -379,7 +388,8 @@ function talk_table_rows(grid::DataFrame, refs::DataFrame; hedge::Bool)::Vector{
         push!(lines, join(parts, " & ") * " \\\\")
     end
 
-    # the references, the same value in every column
+    # the references, the same value in every column, below a rule so they do not read as the last group's rows
+    nrow(refs) > 0 && push!(lines, "\\midrule")
     for i in 1:nrow(refs)
         parts = [string(refs.name[i])]
         for a in TABLE_ALLOCATOR_ORDER

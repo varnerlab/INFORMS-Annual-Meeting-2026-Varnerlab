@@ -44,7 +44,7 @@ end
     wrote(name::AbstractString, df::DataFrame)::Nothing
 
 Write `df` to talk/data/`name` and say so. A text field that holds a comma is wrapped in braces, as in
-`{Random, liquid 100}`: pgfplotstable reads a braced cell as one cell, and it does not understand double quotes.
+`{Random 13, all 373}`: pgfplotstable reads a braced cell as one cell, and it does not understand double quotes.
 """
 function wrote(name::AbstractString, df::DataFrame)::Nothing
     CSV.write(joinpath(OUT, name), df; openquotechar='{', closequotechar='}')
@@ -217,10 +217,8 @@ function main()
     shares = talk_largek_shares(head; n_runs=length(REAL_SEEDS))
     wrote("largek_shares.csv", shares)
 
-    # B2: the same head-to-heads as dots, one row per basket size
-    b2 = talk_largek_dots(shares)
-    wrote("b2_dots.csv", b2)
-    wrote("b2_bars.csv", talk_row_ranges(b2))
+    # B2: ending wealth of global γ and of random picks by basket size, hedge off
+    wrote("b2_wealth.csv", talk_largek_wealth(shares; hedge=false))
 
     # the synthetic slide: one panel per set, both hedge settings stacked, and each panel's x range over its dots and
     # references, padded by 0.005 and rounded out to a multiple of 0.05

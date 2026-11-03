@@ -107,5 +107,18 @@
       \node[circle, draw=vnslideink, line width=0.9pt, minimum size=6.4pt, inner sep=0pt] at (vnmsup\vnmsR) {};
       \fill[vnslideink] (vnmsdown\vnmsR) circle (1.3pt);
     }
+    % the two cases named (user, 2026-11-03: label the bullish and bearish cases so the audience can see them), at
+    % the top of the SPY strip, where every line stays below: "bearish" centred on each shaded run (crossings 0–1
+    % and 2–3), "bullish" centred on the long rise between them (crossings 1–2). Assumes the four crossings of the
+    % real window.
+    \begin{scope}[every node/.style={anchor=north, inner sep=1.5pt, font=\fontsize{8}{9.6}\selectfont\bfseries,
+        text=vnslideink}]
+      \coordinate (vnmsbear0) at ($(vnmsup0)!0.5!(vnmsup1)$);
+      \coordinate (vnmsbear1) at ($(vnmsup2)!0.5!(vnmsup3)$);
+      \coordinate (vnmsbull) at ($(vnmsup1)!0.5!(vnmsup2)$);
+      \node at (vnmsbear0 |- vnmsspy.north) {bearish};
+      \node at (vnmsbear1 |- vnmsspy.north) {bearish};
+      \node at (vnmsbull |- vnmsspy.north) {bullish};
+    \end{scope}
   \end{tikzpicture}%
 }

@@ -1,5 +1,7 @@
 % Backup (spec, B1): where each real result falls among the 600 typical futures, from the committed percentile
 % tables; SPY's own percentile is the coral line.
+% the plot is 0.65cm narrower for the plain-word row labels (user, 2026-11-03), whose longest is
+% "Top 13 by score, 100 most traded"
 % the seed note sits at the lower left, on the page number's line, so the plot has its line
 {\renewcommand{\vnfootleft}{Real results use the simulated runs' seeds: 5660–5664 for random and bandit pickers,
   5660 for the rest.}
@@ -9,7 +11,7 @@
   future.\par\endgroup
   \vspace{8pt}
   \vndotreadrefs{data/b1_refs.csv}%
-  \vndotplot[xmin=0, xmax=100, xstep=25, xprecision=0, midline=50, spy=\vndotSPY, width=10.1cm, height=4.25cm,
+  \vndotplot[xmin=0, xmax=100, xstep=25, xprecision=0, midline=50, spy=\vndotSPY, width=9.45cm, height=4.25cm,
     xlabel={percentile of the real result among 600 typical futures}]{data/b1_dots.csv}{data/b1_bars.csv}\par
   \vspace{4pt}
   \vndotlegend[legend ew=false]\par

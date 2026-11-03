@@ -1,141 +1,141 @@
 row,group_index,label,group,allocator,hedge,value,picker
-1,0,γ per sector,33 names · 3 per sector,CD,false,51.0,gamma
-1,0,γ per sector,33 names · 3 per sector,CES,false,49.0,gamma
-1,0,γ per sector,33 names · 3 per sector,CESw,false,50.83333333333333,gamma
-1,0,γ per sector,33 names · 3 per sector,SG,false,51.5,gamma
-1,0,γ per sector,33 names · 3 per sector,MinVar,false,39.83333333333333,gamma
-1,0,γ per sector,33 names · 3 per sector,Tangent,false,56.166666666666664,gamma
-1,0,γ per sector,33 names · 3 per sector,LS,false,45.0,gamma
-2,0,Bandit per sector,33 names · 3 per sector,CD,false,42.66666666666667,bandit
-2,0,Bandit per sector,33 names · 3 per sector,CES,false,58.666666666666664,bandit
-2,0,Bandit per sector,33 names · 3 per sector,CESw,false,48.66666666666667,bandit
-2,0,Bandit per sector,33 names · 3 per sector,SG,false,52.5,bandit
-2,0,Bandit per sector,33 names · 3 per sector,MinVar,false,53.5,bandit
-2,0,Bandit per sector,33 names · 3 per sector,Tangent,false,64.66666666666666,bandit
-2,0,Bandit per sector,33 names · 3 per sector,LS,false,51.16666666666667,bandit
-3,0,Random per sector,33 names · 3 per sector,CD,false,68.66666666666667,random
-3,0,Random per sector,33 names · 3 per sector,CES,false,50.83333333333333,random
-3,0,Random per sector,33 names · 3 per sector,CESw,false,60.5,random
-3,0,Random per sector,33 names · 3 per sector,SG,false,62.5,random
-3,0,Random per sector,33 names · 3 per sector,MinVar,false,60.333333333333336,random
-3,0,Random per sector,33 names · 3 per sector,Tangent,false,49.0,random
-3,0,Random per sector,33 names · 3 per sector,LS,false,60.0,random
-4,1,Global γ,13 names,CD,false,81.66666666666667,global_gamma|K=13
-4,1,Global γ,13 names,CES,false,71.33333333333334,global_gamma|K=13
-4,1,Global γ,13 names,CESw,false,76.66666666666667,global_gamma|K=13
-4,1,Global γ,13 names,SG,false,77.83333333333333,global_gamma|K=13
-4,1,Global γ,13 names,MinVar,false,58.833333333333336,global_gamma|K=13
-4,1,Global γ,13 names,Tangent,false,67.5,global_gamma|K=13
-4,1,Global γ,13 names,LS,false,47.5,global_gamma|K=13
-5,1,Correlation-aware γ,13 names,CD,false,65.33333333333333,corr_gamma|K=13
-5,1,Correlation-aware γ,13 names,CES,false,64.66666666666666,corr_gamma|K=13
-5,1,Correlation-aware γ,13 names,CESw,false,74.66666666666667,corr_gamma|K=13
-5,1,Correlation-aware γ,13 names,SG,false,69.16666666666667,corr_gamma|K=13
-5,1,Correlation-aware γ,13 names,MinVar,false,63.83333333333333,corr_gamma|K=13
-5,1,Correlation-aware γ,13 names,Tangent,false,68.5,corr_gamma|K=13
-5,1,Correlation-aware γ,13 names,LS,false,58.833333333333336,corr_gamma|K=13
-6,1,Liquid then γ,13 names,CD,false,63.16666666666667,liquid_gamma|K=13
-6,1,Liquid then γ,13 names,CES,false,62.33333333333333,liquid_gamma|K=13
-6,1,Liquid then γ,13 names,CESw,false,67.33333333333333,liquid_gamma|K=13
-6,1,Liquid then γ,13 names,SG,false,64.66666666666666,liquid_gamma|K=13
-6,1,Liquid then γ,13 names,MinVar,false,47.16666666666667,liquid_gamma|K=13
-6,1,Liquid then γ,13 names,Tangent,false,70.0,liquid_gamma|K=13
-6,1,Liquid then γ,13 names,LS,false,61.0,liquid_gamma|K=13
-7,1,{Random, liquid 100},13 names,CD,false,46.666666666666664,random_liquid|K=13
-7,1,{Random, liquid 100},13 names,CES,false,39.33333333333333,random_liquid|K=13
-7,1,{Random, liquid 100},13 names,CESw,false,46.666666666666664,random_liquid|K=13
-7,1,{Random, liquid 100},13 names,SG,false,34.5,random_liquid|K=13
-7,1,{Random, liquid 100},13 names,MinVar,false,41.333333333333336,random_liquid|K=13
-7,1,{Random, liquid 100},13 names,Tangent,false,41.66666666666667,random_liquid|K=13
-7,1,{Random, liquid 100},13 names,LS,false,59.333333333333336,random_liquid|K=13
-8,1,{Random, whole universe},13 names,CD,false,43.333333333333336,random_global|K=13
-8,1,{Random, whole universe},13 names,CES,false,46.33333333333333,random_global|K=13
-8,1,{Random, whole universe},13 names,CESw,false,64.0,random_global|K=13
-8,1,{Random, whole universe},13 names,SG,false,64.33333333333333,random_global|K=13
-8,1,{Random, whole universe},13 names,MinVar,false,46.666666666666664,random_global|K=13
-8,1,{Random, whole universe},13 names,Tangent,false,59.0,random_global|K=13
-8,1,{Random, whole universe},13 names,LS,false,44.5,random_global|K=13
-9,2,Hand-picked 13,Hand-picked,CD,false,83.16666666666667,fixed:l8b_13
-9,2,Hand-picked 13,Hand-picked,CES,false,87.83333333333333,fixed:l8b_13
-9,2,Hand-picked 13,Hand-picked,CESw,false,88.16666666666667,fixed:l8b_13
-9,2,Hand-picked 13,Hand-picked,SG,false,88.5,fixed:l8b_13
-9,2,Hand-picked 13,Hand-picked,MinVar,false,79.16666666666666,fixed:l8b_13
-9,2,Hand-picked 13,Hand-picked,Tangent,false,90.66666666666666,fixed:l8b_13
-9,2,Hand-picked 13,Hand-picked,LS,false,87.5,fixed:l8b_13
-10,2,{Hand-picked 13 + WMT, PG},Hand-picked,CD,false,86.0,fixed:l8b_15
-10,2,{Hand-picked 13 + WMT, PG},Hand-picked,CES,false,90.66666666666666,fixed:l8b_15
-10,2,{Hand-picked 13 + WMT, PG},Hand-picked,CESw,false,90.33333333333333,fixed:l8b_15
-10,2,{Hand-picked 13 + WMT, PG},Hand-picked,SG,false,89.5,fixed:l8b_15
-10,2,{Hand-picked 13 + WMT, PG},Hand-picked,MinVar,false,74.0,fixed:l8b_15
-10,2,{Hand-picked 13 + WMT, PG},Hand-picked,Tangent,false,88.33333333333333,fixed:l8b_15
-10,2,{Hand-picked 13 + WMT, PG},Hand-picked,LS,false,90.33333333333333,fixed:l8b_15
-1,0,γ per sector,33 names · 3 per sector,CD,true,49.666666666666664,gamma
-1,0,γ per sector,33 names · 3 per sector,CES,true,52.0,gamma
-1,0,γ per sector,33 names · 3 per sector,CESw,true,50.83333333333333,gamma
-1,0,γ per sector,33 names · 3 per sector,SG,true,51.83333333333333,gamma
-1,0,γ per sector,33 names · 3 per sector,MinVar,true,40.166666666666664,gamma
-1,0,γ per sector,33 names · 3 per sector,Tangent,true,67.83333333333333,gamma
-1,0,γ per sector,33 names · 3 per sector,LS,true,41.66666666666667,gamma
-2,0,Bandit per sector,33 names · 3 per sector,CD,true,39.83333333333333,bandit
-2,0,Bandit per sector,33 names · 3 per sector,CES,true,37.166666666666664,bandit
-2,0,Bandit per sector,33 names · 3 per sector,CESw,true,38.83333333333333,bandit
-2,0,Bandit per sector,33 names · 3 per sector,SG,true,40.0,bandit
-2,0,Bandit per sector,33 names · 3 per sector,MinVar,true,71.33333333333334,bandit
-2,0,Bandit per sector,33 names · 3 per sector,Tangent,true,57.666666666666664,bandit
-2,0,Bandit per sector,33 names · 3 per sector,LS,true,40.33333333333333,bandit
-3,0,Random per sector,33 names · 3 per sector,CD,true,44.166666666666664,random
-3,0,Random per sector,33 names · 3 per sector,CES,true,38.666666666666664,random
-3,0,Random per sector,33 names · 3 per sector,CESw,true,44.166666666666664,random
-3,0,Random per sector,33 names · 3 per sector,SG,true,48.833333333333336,random
-3,0,Random per sector,33 names · 3 per sector,MinVar,true,73.0,random
-3,0,Random per sector,33 names · 3 per sector,Tangent,true,46.5,random
-3,0,Random per sector,33 names · 3 per sector,LS,true,43.5,random
-4,1,Global γ,13 names,CD,true,77.5,global_gamma|K=13
-4,1,Global γ,13 names,CES,true,60.83333333333333,global_gamma|K=13
-4,1,Global γ,13 names,CESw,true,76.5,global_gamma|K=13
-4,1,Global γ,13 names,SG,true,78.5,global_gamma|K=13
-4,1,Global γ,13 names,MinVar,true,50.33333333333333,global_gamma|K=13
-4,1,Global γ,13 names,Tangent,true,86.66666666666667,global_gamma|K=13
-4,1,Global γ,13 names,LS,true,63.66666666666667,global_gamma|K=13
-5,1,Correlation-aware γ,13 names,CD,true,73.66666666666667,corr_gamma|K=13
-5,1,Correlation-aware γ,13 names,CES,true,75.33333333333333,corr_gamma|K=13
-5,1,Correlation-aware γ,13 names,CESw,true,80.83333333333333,corr_gamma|K=13
-5,1,Correlation-aware γ,13 names,SG,true,74.33333333333333,corr_gamma|K=13
-5,1,Correlation-aware γ,13 names,MinVar,true,44.666666666666664,corr_gamma|K=13
-5,1,Correlation-aware γ,13 names,Tangent,true,69.83333333333334,corr_gamma|K=13
-5,1,Correlation-aware γ,13 names,LS,true,70.5,corr_gamma|K=13
-6,1,Liquid then γ,13 names,CD,true,65.33333333333333,liquid_gamma|K=13
-6,1,Liquid then γ,13 names,CES,true,59.166666666666664,liquid_gamma|K=13
-6,1,Liquid then γ,13 names,CESw,true,66.16666666666666,liquid_gamma|K=13
-6,1,Liquid then γ,13 names,SG,true,64.66666666666666,liquid_gamma|K=13
-6,1,Liquid then γ,13 names,MinVar,true,63.33333333333333,liquid_gamma|K=13
-6,1,Liquid then γ,13 names,Tangent,true,66.5,liquid_gamma|K=13
-6,1,Liquid then γ,13 names,LS,true,61.33333333333333,liquid_gamma|K=13
-7,1,{Random, liquid 100},13 names,CD,true,44.83333333333333,random_liquid|K=13
-7,1,{Random, liquid 100},13 names,CES,true,46.166666666666664,random_liquid|K=13
-7,1,{Random, liquid 100},13 names,CESw,true,51.66666666666667,random_liquid|K=13
-7,1,{Random, liquid 100},13 names,SG,true,49.5,random_liquid|K=13
-7,1,{Random, liquid 100},13 names,MinVar,true,50.5,random_liquid|K=13
-7,1,{Random, liquid 100},13 names,Tangent,true,37.333333333333336,random_liquid|K=13
-7,1,{Random, liquid 100},13 names,LS,true,46.0,random_liquid|K=13
-8,1,{Random, whole universe},13 names,CD,true,37.333333333333336,random_global|K=13
-8,1,{Random, whole universe},13 names,CES,true,41.66666666666667,random_global|K=13
-8,1,{Random, whole universe},13 names,CESw,true,37.333333333333336,random_global|K=13
-8,1,{Random, whole universe},13 names,SG,true,47.16666666666667,random_global|K=13
-8,1,{Random, whole universe},13 names,MinVar,true,37.666666666666664,random_global|K=13
-8,1,{Random, whole universe},13 names,Tangent,true,47.66666666666667,random_global|K=13
-8,1,{Random, whole universe},13 names,LS,true,32.5,random_global|K=13
-9,2,Hand-picked 13,Hand-picked,CD,true,84.16666666666667,fixed:l8b_13
-9,2,Hand-picked 13,Hand-picked,CES,true,86.33333333333333,fixed:l8b_13
-9,2,Hand-picked 13,Hand-picked,CESw,true,82.66666666666667,fixed:l8b_13
-9,2,Hand-picked 13,Hand-picked,SG,true,81.66666666666667,fixed:l8b_13
-9,2,Hand-picked 13,Hand-picked,MinVar,true,60.83333333333333,fixed:l8b_13
-9,2,Hand-picked 13,Hand-picked,Tangent,true,88.5,fixed:l8b_13
-9,2,Hand-picked 13,Hand-picked,LS,true,88.33333333333333,fixed:l8b_13
-10,2,{Hand-picked 13 + WMT, PG},Hand-picked,CD,true,83.33333333333334,fixed:l8b_15
-10,2,{Hand-picked 13 + WMT, PG},Hand-picked,CES,true,86.5,fixed:l8b_15
-10,2,{Hand-picked 13 + WMT, PG},Hand-picked,CESw,true,84.33333333333334,fixed:l8b_15
-10,2,{Hand-picked 13 + WMT, PG},Hand-picked,SG,true,85.0,fixed:l8b_15
-10,2,{Hand-picked 13 + WMT, PG},Hand-picked,MinVar,true,49.833333333333336,fixed:l8b_15
-10,2,{Hand-picked 13 + WMT, PG},Hand-picked,Tangent,true,70.5,fixed:l8b_15
-10,2,{Hand-picked 13 + WMT, PG},Hand-picked,LS,true,91.16666666666666,fixed:l8b_15
+1,0,Top 3 by score,In each sector (33 stocks),CD,false,51.0,gamma
+1,0,Top 3 by score,In each sector (33 stocks),CES,false,49.0,gamma
+1,0,Top 3 by score,In each sector (33 stocks),CESw,false,50.83333333333333,gamma
+1,0,Top 3 by score,In each sector (33 stocks),SG,false,51.5,gamma
+1,0,Top 3 by score,In each sector (33 stocks),MinVar,false,39.83333333333333,gamma
+1,0,Top 3 by score,In each sector (33 stocks),Tangent,false,56.166666666666664,gamma
+1,0,Top 3 by score,In each sector (33 stocks),LS,false,45.0,gamma
+2,0,Top 3 by momentum,In each sector (33 stocks),CD,false,42.66666666666667,bandit
+2,0,Top 3 by momentum,In each sector (33 stocks),CES,false,58.666666666666664,bandit
+2,0,Top 3 by momentum,In each sector (33 stocks),CESw,false,48.66666666666667,bandit
+2,0,Top 3 by momentum,In each sector (33 stocks),SG,false,52.5,bandit
+2,0,Top 3 by momentum,In each sector (33 stocks),MinVar,false,53.5,bandit
+2,0,Top 3 by momentum,In each sector (33 stocks),Tangent,false,64.66666666666666,bandit
+2,0,Top 3 by momentum,In each sector (33 stocks),LS,false,51.16666666666667,bandit
+3,0,Random 3,In each sector (33 stocks),CD,false,68.66666666666667,random
+3,0,Random 3,In each sector (33 stocks),CES,false,50.83333333333333,random
+3,0,Random 3,In each sector (33 stocks),CESw,false,60.5,random
+3,0,Random 3,In each sector (33 stocks),SG,false,62.5,random
+3,0,Random 3,In each sector (33 stocks),MinVar,false,60.333333333333336,random
+3,0,Random 3,In each sector (33 stocks),Tangent,false,49.0,random
+3,0,Random 3,In each sector (33 stocks),LS,false,60.0,random
+4,1,Top 13 by score,13 stocks,CD,false,81.66666666666667,global_gamma|K=13
+4,1,Top 13 by score,13 stocks,CES,false,71.33333333333334,global_gamma|K=13
+4,1,Top 13 by score,13 stocks,CESw,false,76.66666666666667,global_gamma|K=13
+4,1,Top 13 by score,13 stocks,SG,false,77.83333333333333,global_gamma|K=13
+4,1,Top 13 by score,13 stocks,MinVar,false,58.833333333333336,global_gamma|K=13
+4,1,Top 13 by score,13 stocks,Tangent,false,67.5,global_gamma|K=13
+4,1,Top 13 by score,13 stocks,LS,false,47.5,global_gamma|K=13
+5,1,{Top 13 by score, diversified},13 stocks,CD,false,65.33333333333333,corr_gamma|K=13
+5,1,{Top 13 by score, diversified},13 stocks,CES,false,64.66666666666666,corr_gamma|K=13
+5,1,{Top 13 by score, diversified},13 stocks,CESw,false,74.66666666666667,corr_gamma|K=13
+5,1,{Top 13 by score, diversified},13 stocks,SG,false,69.16666666666667,corr_gamma|K=13
+5,1,{Top 13 by score, diversified},13 stocks,MinVar,false,63.83333333333333,corr_gamma|K=13
+5,1,{Top 13 by score, diversified},13 stocks,Tangent,false,68.5,corr_gamma|K=13
+5,1,{Top 13 by score, diversified},13 stocks,LS,false,58.833333333333336,corr_gamma|K=13
+6,1,{Top 13 by score, 100 most traded},13 stocks,CD,false,63.16666666666667,liquid_gamma|K=13
+6,1,{Top 13 by score, 100 most traded},13 stocks,CES,false,62.33333333333333,liquid_gamma|K=13
+6,1,{Top 13 by score, 100 most traded},13 stocks,CESw,false,67.33333333333333,liquid_gamma|K=13
+6,1,{Top 13 by score, 100 most traded},13 stocks,SG,false,64.66666666666666,liquid_gamma|K=13
+6,1,{Top 13 by score, 100 most traded},13 stocks,MinVar,false,47.16666666666667,liquid_gamma|K=13
+6,1,{Top 13 by score, 100 most traded},13 stocks,Tangent,false,70.0,liquid_gamma|K=13
+6,1,{Top 13 by score, 100 most traded},13 stocks,LS,false,61.0,liquid_gamma|K=13
+7,1,{Random 13, 100 most traded},13 stocks,CD,false,46.666666666666664,random_liquid|K=13
+7,1,{Random 13, 100 most traded},13 stocks,CES,false,39.33333333333333,random_liquid|K=13
+7,1,{Random 13, 100 most traded},13 stocks,CESw,false,46.666666666666664,random_liquid|K=13
+7,1,{Random 13, 100 most traded},13 stocks,SG,false,34.5,random_liquid|K=13
+7,1,{Random 13, 100 most traded},13 stocks,MinVar,false,41.333333333333336,random_liquid|K=13
+7,1,{Random 13, 100 most traded},13 stocks,Tangent,false,41.66666666666667,random_liquid|K=13
+7,1,{Random 13, 100 most traded},13 stocks,LS,false,59.333333333333336,random_liquid|K=13
+8,1,{Random 13, all 373},13 stocks,CD,false,43.333333333333336,random_global|K=13
+8,1,{Random 13, all 373},13 stocks,CES,false,46.33333333333333,random_global|K=13
+8,1,{Random 13, all 373},13 stocks,CESw,false,64.0,random_global|K=13
+8,1,{Random 13, all 373},13 stocks,SG,false,64.33333333333333,random_global|K=13
+8,1,{Random 13, all 373},13 stocks,MinVar,false,46.666666666666664,random_global|K=13
+8,1,{Random 13, all 373},13 stocks,Tangent,false,59.0,random_global|K=13
+8,1,{Random 13, all 373},13 stocks,LS,false,44.5,random_global|K=13
+9,2,My 13 stocks,Chosen in advance,CD,false,83.16666666666667,fixed:l8b_13
+9,2,My 13 stocks,Chosen in advance,CES,false,87.83333333333333,fixed:l8b_13
+9,2,My 13 stocks,Chosen in advance,CESw,false,88.16666666666667,fixed:l8b_13
+9,2,My 13 stocks,Chosen in advance,SG,false,88.5,fixed:l8b_13
+9,2,My 13 stocks,Chosen in advance,MinVar,false,79.16666666666666,fixed:l8b_13
+9,2,My 13 stocks,Chosen in advance,Tangent,false,90.66666666666666,fixed:l8b_13
+9,2,My 13 stocks,Chosen in advance,LS,false,87.5,fixed:l8b_13
+10,2,{My 13 plus WMT, PG},Chosen in advance,CD,false,86.0,fixed:l8b_15
+10,2,{My 13 plus WMT, PG},Chosen in advance,CES,false,90.66666666666666,fixed:l8b_15
+10,2,{My 13 plus WMT, PG},Chosen in advance,CESw,false,90.33333333333333,fixed:l8b_15
+10,2,{My 13 plus WMT, PG},Chosen in advance,SG,false,89.5,fixed:l8b_15
+10,2,{My 13 plus WMT, PG},Chosen in advance,MinVar,false,74.0,fixed:l8b_15
+10,2,{My 13 plus WMT, PG},Chosen in advance,Tangent,false,88.33333333333333,fixed:l8b_15
+10,2,{My 13 plus WMT, PG},Chosen in advance,LS,false,90.33333333333333,fixed:l8b_15
+1,0,Top 3 by score,In each sector (33 stocks),CD,true,49.666666666666664,gamma
+1,0,Top 3 by score,In each sector (33 stocks),CES,true,52.0,gamma
+1,0,Top 3 by score,In each sector (33 stocks),CESw,true,50.83333333333333,gamma
+1,0,Top 3 by score,In each sector (33 stocks),SG,true,51.83333333333333,gamma
+1,0,Top 3 by score,In each sector (33 stocks),MinVar,true,40.166666666666664,gamma
+1,0,Top 3 by score,In each sector (33 stocks),Tangent,true,67.83333333333333,gamma
+1,0,Top 3 by score,In each sector (33 stocks),LS,true,41.66666666666667,gamma
+2,0,Top 3 by momentum,In each sector (33 stocks),CD,true,39.83333333333333,bandit
+2,0,Top 3 by momentum,In each sector (33 stocks),CES,true,37.166666666666664,bandit
+2,0,Top 3 by momentum,In each sector (33 stocks),CESw,true,38.83333333333333,bandit
+2,0,Top 3 by momentum,In each sector (33 stocks),SG,true,40.0,bandit
+2,0,Top 3 by momentum,In each sector (33 stocks),MinVar,true,71.33333333333334,bandit
+2,0,Top 3 by momentum,In each sector (33 stocks),Tangent,true,57.666666666666664,bandit
+2,0,Top 3 by momentum,In each sector (33 stocks),LS,true,40.33333333333333,bandit
+3,0,Random 3,In each sector (33 stocks),CD,true,44.166666666666664,random
+3,0,Random 3,In each sector (33 stocks),CES,true,38.666666666666664,random
+3,0,Random 3,In each sector (33 stocks),CESw,true,44.166666666666664,random
+3,0,Random 3,In each sector (33 stocks),SG,true,48.833333333333336,random
+3,0,Random 3,In each sector (33 stocks),MinVar,true,73.0,random
+3,0,Random 3,In each sector (33 stocks),Tangent,true,46.5,random
+3,0,Random 3,In each sector (33 stocks),LS,true,43.5,random
+4,1,Top 13 by score,13 stocks,CD,true,77.5,global_gamma|K=13
+4,1,Top 13 by score,13 stocks,CES,true,60.83333333333333,global_gamma|K=13
+4,1,Top 13 by score,13 stocks,CESw,true,76.5,global_gamma|K=13
+4,1,Top 13 by score,13 stocks,SG,true,78.5,global_gamma|K=13
+4,1,Top 13 by score,13 stocks,MinVar,true,50.33333333333333,global_gamma|K=13
+4,1,Top 13 by score,13 stocks,Tangent,true,86.66666666666667,global_gamma|K=13
+4,1,Top 13 by score,13 stocks,LS,true,63.66666666666667,global_gamma|K=13
+5,1,{Top 13 by score, diversified},13 stocks,CD,true,73.66666666666667,corr_gamma|K=13
+5,1,{Top 13 by score, diversified},13 stocks,CES,true,75.33333333333333,corr_gamma|K=13
+5,1,{Top 13 by score, diversified},13 stocks,CESw,true,80.83333333333333,corr_gamma|K=13
+5,1,{Top 13 by score, diversified},13 stocks,SG,true,74.33333333333333,corr_gamma|K=13
+5,1,{Top 13 by score, diversified},13 stocks,MinVar,true,44.666666666666664,corr_gamma|K=13
+5,1,{Top 13 by score, diversified},13 stocks,Tangent,true,69.83333333333334,corr_gamma|K=13
+5,1,{Top 13 by score, diversified},13 stocks,LS,true,70.5,corr_gamma|K=13
+6,1,{Top 13 by score, 100 most traded},13 stocks,CD,true,65.33333333333333,liquid_gamma|K=13
+6,1,{Top 13 by score, 100 most traded},13 stocks,CES,true,59.166666666666664,liquid_gamma|K=13
+6,1,{Top 13 by score, 100 most traded},13 stocks,CESw,true,66.16666666666666,liquid_gamma|K=13
+6,1,{Top 13 by score, 100 most traded},13 stocks,SG,true,64.66666666666666,liquid_gamma|K=13
+6,1,{Top 13 by score, 100 most traded},13 stocks,MinVar,true,63.33333333333333,liquid_gamma|K=13
+6,1,{Top 13 by score, 100 most traded},13 stocks,Tangent,true,66.5,liquid_gamma|K=13
+6,1,{Top 13 by score, 100 most traded},13 stocks,LS,true,61.33333333333333,liquid_gamma|K=13
+7,1,{Random 13, 100 most traded},13 stocks,CD,true,44.83333333333333,random_liquid|K=13
+7,1,{Random 13, 100 most traded},13 stocks,CES,true,46.166666666666664,random_liquid|K=13
+7,1,{Random 13, 100 most traded},13 stocks,CESw,true,51.66666666666667,random_liquid|K=13
+7,1,{Random 13, 100 most traded},13 stocks,SG,true,49.5,random_liquid|K=13
+7,1,{Random 13, 100 most traded},13 stocks,MinVar,true,50.5,random_liquid|K=13
+7,1,{Random 13, 100 most traded},13 stocks,Tangent,true,37.333333333333336,random_liquid|K=13
+7,1,{Random 13, 100 most traded},13 stocks,LS,true,46.0,random_liquid|K=13
+8,1,{Random 13, all 373},13 stocks,CD,true,37.333333333333336,random_global|K=13
+8,1,{Random 13, all 373},13 stocks,CES,true,41.66666666666667,random_global|K=13
+8,1,{Random 13, all 373},13 stocks,CESw,true,37.333333333333336,random_global|K=13
+8,1,{Random 13, all 373},13 stocks,SG,true,47.16666666666667,random_global|K=13
+8,1,{Random 13, all 373},13 stocks,MinVar,true,37.666666666666664,random_global|K=13
+8,1,{Random 13, all 373},13 stocks,Tangent,true,47.66666666666667,random_global|K=13
+8,1,{Random 13, all 373},13 stocks,LS,true,32.5,random_global|K=13
+9,2,My 13 stocks,Chosen in advance,CD,true,84.16666666666667,fixed:l8b_13
+9,2,My 13 stocks,Chosen in advance,CES,true,86.33333333333333,fixed:l8b_13
+9,2,My 13 stocks,Chosen in advance,CESw,true,82.66666666666667,fixed:l8b_13
+9,2,My 13 stocks,Chosen in advance,SG,true,81.66666666666667,fixed:l8b_13
+9,2,My 13 stocks,Chosen in advance,MinVar,true,60.83333333333333,fixed:l8b_13
+9,2,My 13 stocks,Chosen in advance,Tangent,true,88.5,fixed:l8b_13
+9,2,My 13 stocks,Chosen in advance,LS,true,88.33333333333333,fixed:l8b_13
+10,2,{My 13 plus WMT, PG},Chosen in advance,CD,true,83.33333333333334,fixed:l8b_15
+10,2,{My 13 plus WMT, PG},Chosen in advance,CES,true,86.5,fixed:l8b_15
+10,2,{My 13 plus WMT, PG},Chosen in advance,CESw,true,84.33333333333334,fixed:l8b_15
+10,2,{My 13 plus WMT, PG},Chosen in advance,SG,true,85.0,fixed:l8b_15
+10,2,{My 13 plus WMT, PG},Chosen in advance,MinVar,true,49.833333333333336,fixed:l8b_15
+10,2,{My 13 plus WMT, PG},Chosen in advance,Tangent,true,70.5,fixed:l8b_15
+10,2,{My 13 plus WMT, PG},Chosen in advance,LS,true,91.16666666666666,fixed:l8b_15
