@@ -277,7 +277,11 @@ portfolio value with a multi-asset geometric Brownian motion (GBM), now calibrat
 plant it acted on was the synthetic closes, so JumpHMM played the market and not the forecast model. The synthetic
 data kept the real calendar, sectors and 3-month Treasury bill rate, held each name's daily share volume at its real
 2014--2024 median, so that the dollar volume ranked by the liquidity-based rule moves with the synthetic price, and
-set opens equal to closes, which the method does not use.
+set opens equal to closes.
+% code/src/SyntheticMarket.jl (market_data_from_growth: open = close); code/src/Backtest.jl (_bt_fill!, md.open[t]),
+% called from code/src/StudyBacktest.jl
+Orders filled at the next open, so a synthetic order filled at the next day's close, a full trading day after the
+decision rather than overnight as in the real run, and its fill absorbed the whole day's move.
 
 % code/src/SyntheticRunner.jl (synthetic_runs: 154 + 182 + 168 + 28 = 532); config/study.toml [grid], [screens]
 Each path received $532$ runs, a subset of the real grid sized to the compute budget. All seven weighting rules, with
