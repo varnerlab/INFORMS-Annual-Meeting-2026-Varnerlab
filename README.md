@@ -4,7 +4,7 @@ This repository holds the code, results, slides and paper for the INFORMS Annual
 "Coupling Interpretable Allocation, Model-Predictive Control, and Tail-Aware Forecasting for Live Portfolio
 Management" (Jeffrey D. Varner, Cornell University; session TD47, San Francisco, November 3, 2026). The companion
 paper, "Interpretable Allocation and Model-Predictive Rebalancing of Equity Portfolios, Tested on Real and Synthetic
-Markets", is in `arxiv-paper/`.
+Markets", is on arXiv as [arXiv:2611.03022](https://arxiv.org/abs/2611.03022); its sources are in `arxiv-paper/`.
 
 ## What the study does
 
