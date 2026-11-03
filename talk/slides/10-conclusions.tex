@@ -10,21 +10,21 @@
 {\renewcommand{\vnfootleft}{A paper-trading version of this system is running now; its results are not part of this
   talk.}
 \begin{frame}{Key takeaways}
-  % Type (user, 2026-10-31, treatment A): each claim on its own line in \vnkey at 10.5 pt, which keeps the longest
-  % claim on one line, and its support below in the light body copy at \small
+  % Type (user, 2026-10-31, treatment A; 2026-11-03: claim and support start on the same line): each claim in
+  % \vnkey at 10.5 pt as a run-in heading, its support following on the same line in the light body copy at 10 pt;
+  % both share a 12.6 pt line pitch so the mixed sizes set evenly
   \begin{itemize}
     \setlength{\itemsep}{1.1em}
     \item {\fontsize{10.5}{12.6}\selectfont\vnkey{Allocation: stock selection mattered more than the weighting
-      rule.}\par}\vspace{2pt}
-      {\small With the hedge off, seven weighting rules on one 33-name basket ended at \SectorLo–\SectorHi{} times
-      initial wealth; different baskets ended at \BasketLo–\BasketHi.\par}
+      rule.}} {\fontsize{10}{12.6}\selectfont With the hedge off, seven weighting rules on one 33-name basket ended at
+      \SectorLo–\SectorHi{} times initial wealth; different baskets ended at \BasketLo–\BasketHi.\par}
     \item {\fontsize{10.5}{12.6}\selectfont\vnkey{Rebalancing: re-plans came at the horizon, a band exit, or a
-      drawdown stop.}\par}\vspace{2pt}
-      {\small About \Rebalances{} re-plans in 419 trading days, a third of them before the 21-day horizon.\par}
-    \item {\fontsize{10.5}{12.6}\selectfont\vnkey{Market generator: the results held up beyond 2025–26.}\par}\vspace{2pt}
-      {\small In 600 typical simulated futures, 13 stocks picked by γ beat 13 random stocks \TypicalLo–\TypicalHi\% of
-      the time, and in simulated sell-offs every median still ended above SPY. In a slow bear market, random picks
-      did as well as γ for most weighting rules.\par}
+      drawdown stop.}} {\fontsize{10}{12.6}\selectfont About \Rebalances{} re-plans in 419 trading days, a third of
+      them before the 21-day horizon.\par}
+    \item {\fontsize{10.5}{12.6}\selectfont\vnkey{Market generator: the results held up beyond 2025–26.}}
+      {\fontsize{10}{12.6}\selectfont In 600 typical simulated futures, 13 stocks picked by γ beat 13 random stocks
+      \TypicalLo–\TypicalHi\% of the time, and in simulated sell-offs every median still ended above SPY. In a slow
+      bear market, random picks did as well as γ for most weighting rules.\par}
   \end{itemize}
   % speaker notes (user, 2026-11-03): the third takeaway's evidence, and the generator caveat it no longer carries.
   % Sources: results/synthetic/tables/{typical,bear_stress,burst_stress}_head_to_head.csv, "Global γ (13) minus
