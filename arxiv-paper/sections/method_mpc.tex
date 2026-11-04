@@ -93,7 +93,8 @@ We adopted this reset after an earlier pass of the Tier 1 grid (the three per-se
 the seven weighting rules) without it, in which $88.5\%$ of the decisions were
 % code/src/StudyBacktest.jl (_study_lots, trig.projection = nothing); config/study.toml cash_revisit = 21
 drawdown re-plans. A re-plan that leaves no position worth more than $0.1\%$ of wealth sets no band, and the next
-re-plan then comes from the drawdown trigger or, after $21$ trading days, from a cash revisit.
+re-plan then comes from the drawdown trigger, from a basket change or, after $21$ trading days, from a cash revisit
+(when no name had a positive score) or the horizon.
 
 % config/study.toml [screens] repick_interval = 21, repick_on_band_exit = true
 The selection rule picks the basket on the first day, every $21$ trading days after its previous pick, and at

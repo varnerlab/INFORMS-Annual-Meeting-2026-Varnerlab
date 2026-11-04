@@ -1,5 +1,5 @@
 The clearest result of the study concerned allocation. On real prices without the market hedge (when on, the hedge
-capped the portfolio's beta at a level that fell as the market weakened and let up to five stocks with zero or
+capped the portfolio's beta at each re-plan, at a level that was lower when the market was weaker, and let up to five stocks with zero or
 negative beta enter), the seven weighting rules applied to one selection of $33$ stocks (three in each of the $11$
 sectors) ended within $0.15$ of one another, and all seven ended below SPY. The selections themselves ended further
 apart, from $1.03$ to $1.70$ times initial wealth across all combinations, and the wide spread came from the
@@ -23,7 +23,7 @@ The rebalancing controller re-planned, re-solving the allocation from the curren
 by its own forecast errors. Across combinations of selection and weighting rule, the median of each combination's
 $30$ runs brought a fifth to three fifths of its re-plans forward of the $21$-day
 horizon, through a band exit (the realized portfolio value leaving the range the forecast considered likely) or a
-drawdown stop (wealth falling $8\%$ below its peak), and early re-plans were more frequent for stocks selected by
+drawdown stop (wealth falling $8\%$ below its peak since the last drawdown stop), and early re-plans were more frequent for stocks selected by
 score than for random stocks, a difference the study did not examine. The forecast, a geometric Brownian motion,
 represents neither the heavy tails nor the volatility clustering of daily growth rates~\cite{mandelbrot1963,
 cont2001}, so band exits are expected to occur more often than they would if the forecast model were correct, and
@@ -72,7 +72,10 @@ market exposure in every combination on real prices but reduced terminal wealth 
 terminal wealth in most combinations of the $600$ typical futures, which were drawn at random from $10{,}000$
 simulated paths. In the stress set without jump episodes it raised terminal wealth in most combinations, and in the
 stress set with jump episodes it raised terminal wealth in about half of them. Since the hedge's beta cap tightens after
-the market has started to fall, it pays only when the decline continues.
+the market has started to fall, and takes effect only at the next re-plan, it pays only when the decline continues.
+Between re-plans the shares were held, so the portfolio's beta was not controlled, and in a slow decline that stayed
+inside the forecast band and above the drawdown limit the book could keep the shares of its last re-plan for up to
+$21$ trading days.
 
 The comparison of score-based and random selections on synthetic futures needs a further qualification. The
 generator gave each synthetic stock a constant intercept, its 2014--2024 single-index intercept shrunk toward the
@@ -93,7 +96,7 @@ The study has further limits. The trading window covered $420$ trading days with
 of 2025. The universe held only stocks that were members of the S\&P~500 index at the date of the constituent
 snapshot and traded on every day from 2014 to 2026, so it carries survivorship bias~\cite{brownEtAl1992}. Neither
 the portfolios nor SPY earned dividends, so every comparison is in prices alone. The simulated fills charged half the
-bid-ask spread and a linear market-impact term, the turnover limit, a cap on the half-spread cost of the trades at each re-plan, used the half spread alone, and taxes were not
+bid-ask spread and a linear market-impact term, the turnover limit, a cap on the half-spread cost of the solver's share changes at each re-plan, used the half spread alone, and taxes were not
 modeled. A paper-trading deployment of the system is running, but its results are not part of this study. Natural
 extensions are a forecast model with heavy tails and volatility clustering for the controller, runs without the volatility cap to measure its share of the stress-set results, residual
 co-movement across stocks and less persistent intercepts in the synthetic market, and evaluation of selection rules

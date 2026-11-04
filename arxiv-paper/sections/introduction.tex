@@ -36,10 +36,11 @@ recently been falling and negative when it had been rising, so that, among stock
 low-beta stocks scored higher after declines and high-beta stocks after rises, and a hyperbolic tangent kept the score bounded. Utility functions from
 consumer theory, with the scores as preference weights, and three standard portfolios (minimum variance, tangency
 and long-short) set the holdings under shared limits on the budget, each stock's weight, portfolio
-volatility and trading cost. An optional market hedge capped the portfolio's beta more tightly as the market
-weakened and added up to five stocks with zero or negative beta to those the portfolio could hold. A model-predictive controller forecast the value of the
+volatility and trading cost. An optional market hedge capped the portfolio's beta, each time the allocation was
+re-solved, more tightly when the market was weaker and added up to five stocks with zero or negative beta to those the portfolio could hold. A model-predictive controller forecast the value of the
 holdings with a multi-asset geometric Brownian motion and re-solved the allocation from the current holdings when
-its horizon had passed, when the value left a band around the forecast, or when a drawdown limit was reached. We
+its horizon had passed, when the value left a band around the forecast, when a drawdown limit was reached, or when
+a scheduled pick changed the stocks. We
 calibrated the system on a decade of United States equity prices and ran it on the following twenty months, and we
 ran it again on simulated price paths of the same period (synthetic futures) built from per-asset hidden Markov
 generators with jumps, including futures, selected from many simulated paths, with deeper market declines than the
@@ -50,8 +51,10 @@ combinations of rules, on real prices and in the deepest simulated declines, but
 consistently.
 In the deepest simulated declines, every combination of selection and weighting rule ended ahead of both the
 simulated market index and an equal-weight portfolio of all stocks, random selections included, and did so with the
-early re-plans switched off as well, so the margin came from parts of the system that all combinations shared, such
-as the volatility cap, rather than from the choice of stocks or the re-planning triggers. The market hedge cost
+early re-plans switched off as well. The equal-weight portfolio also ended ahead of the index, so part of the margin
+came from the simulated market and the rest from parts of the system that all combinations shared, such as the
+volatility cap, whose separate effect we did not test, rather than from the choice of stocks or the re-planning
+triggers. The market hedge cost
 wealth while markets rose and helped when declines persisted, and the synthetic futures favored score-based
 selection partly because the generator preserved each stock's historical trend. More broadly, the results suggest
 that portfolio systems are best evaluated as a whole, on synthetic as well as historical markets, and that a synthetic

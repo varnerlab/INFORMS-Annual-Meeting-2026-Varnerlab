@@ -142,7 +142,9 @@ the holdings $n^{\mathrm{prev}}$ before the decision, priced at the half spread 
 % config/study.toml [costs] half_spread_bps = 5.0; [limits] turnover_frac = 0.10
 $\bar c = 5 \times 10^{-4}$ and $B = 0.10\,W$ (USD). For a long-only book this budget can bind only when $\bar S$
 % StudySettings.jl docstring: 5e-4 * mean(S) * 2W/min(S) <= 0.10 W unless mean(S)/min(S) > 100
-exceeds $100$ times the cheapest name's price.
+exceeds $100$ times the cheapest name's price. The sum in the budget ran over the names whose shares the solver
+chose; the sale of a name with $\gamma_i \le 0$ down to its floor and the exit of a held name outside $\mathcal{N}$
+were not counted.
 % config/study.toml [limits] s_max = 1.0 (no sector cap)
 The study set no sector limit. With the hedge on, the portfolio's market loading $\sum_i \beta_i w_i$, computed with
 each name's signed online loading (Eq.~\ref{eq:ewls}), was capped at
@@ -151,7 +153,9 @@ $\bar\beta = \max(0,\, 1 - \xi_t)$, where $\xi_t$ is the market state (Eq.~\ref{
 of one at $\xi_t = 0$, tightens as $\xi_t$ rises in a falling market, reaches zero at $\xi_t \ge 1$ and rises above
 % talk/data/market_state.csv: min xi = -0.7999, max xi = 0.8999 over the 420 trading days
 one when $\xi_t < 0$; over the trading window $\xi_t$ ranged from $-0.80$ to $0.90$, so $\bar\beta$ ranged from
-$1.80$ down to $0.10$ (Fig.~\ref{fig:market-state}).
+$1.80$ down to $0.10$ (Fig.~\ref{fig:market-state}). The cap applied to the targets of each re-plan. Between
+re-plans the shares were held, so the book's loading moved with prices and the online loadings and was not held
+under the cap.
 
 % config/study.toml [hedge] pool_H = 5, downday_lookback = 252; HedgePool.jl down_day_beta, hedge_pool
 The hedge pool was refreshed at every pick of the basket. A universe name was eligible when its online market loading
