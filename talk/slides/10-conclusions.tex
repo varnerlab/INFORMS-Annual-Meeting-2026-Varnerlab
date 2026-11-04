@@ -18,8 +18,8 @@
     \item {\fontsize{10.5}{12.6}\selectfont\vnkey{Allocation: stock selection mattered more than the weighting
       rule.}} {\fontsize{10}{12.6}\selectfont With the hedge off, seven weighting rules on one 33-name basket ended at
       \SectorLo–\SectorHi{} times initial wealth; different baskets ended at \BasketLo–\BasketHi.\par}
-    \item {\fontsize{10.5}{12.6}\selectfont\vnkey{Rebalancing: re-plans came at the horizon, a band exit, or a
-      drawdown stop.}} {\fontsize{10}{12.6}\selectfont About \Rebalances{} re-plans in 419 trading days, a third of
+    \item {\fontsize{10.5}{12.6}\selectfont\vnkey{Rebalancing: re-plans came at the horizon, a band exit, a
+      drawdown stop, or a basket change.}} {\fontsize{10}{12.6}\selectfont About \Rebalances{} re-plans in 419 trading days, a third of
       them before the 21-day horizon.\par}
     \item {\fontsize{10.5}{12.6}\selectfont\vnkey{Market generator: the results held up beyond 2025–26.}}
       {\fontsize{10}{12.6}\selectfont In 600 typical simulated futures, 13 stocks picked by γ beat 13 random stocks
@@ -35,12 +35,13 @@
     \vnnotehead{Market generator takeaway: the numbers behind it}
     \vnnoterow{Typical futures}{Top 13 by γ ended above random 13 in 62--71\% of 600 futures, for every weighting
       rule.}
-    \vnnoterow{Slow bear market}{28--38\% for five of the seven rules, so random did as well or better; minimum
+    \vnnoterow{Steady decline}{28--38\% for five of the seven rules, so random did as well or better; minimum
       variance and tangency still about 70\%.}
     \vnnoterow{Why random wins there}{The book with the lower β won in every rule. Mean β, top 13 vs random 13: CD 0.72
       vs 0.46, LS 0.63 vs 0.23, but MinVar 0.64 vs 0.77. Likely cause: in a falling market many random names have
-      $\gamma \le 0$, which the utility rules leave in cash (130/30 shorts them); MinVar and tangency ignore γ.}
-    \vnnoterow{Crash}{Close to a coin flip, 53--57\%, for the utility rules; minimum variance and tangency 67--68\%.}
+      $\gamma \le 0$, which the utility rules, 130/30 included, leave in cash (130/30 shorts a separate list, the most negative
+      γ in each sector); MinVar and tangency ignore γ.}
+    \vnnoterow{Jump bursts}{Close to a coin flip, 53--57\%, for the utility rules; minimum variance and tangency 67--68\%.}
     \vnnoterow{Sell-offs vs SPY}{Every median, hedge off and on, ended above SPY in both sell-off sets (slide 12).}
     \vnnoterow{If asked}{JumpHMM reproduces fat tails, but its volatility clustering fades within a few days, faster
       than SPY's (slide 10). Calm and turbulent stretches are shorter than in real markets.}}

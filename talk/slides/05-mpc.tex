@@ -41,7 +41,8 @@
 \note{\footnotesize
   \vnnotehead{Rebalancing controller: the triggers}
   \vnnoterow{Order of checks}{At each close, the first that holds: cash revisit (the last plan was all cash and 21
-    days have passed), drawdown (wealth more than 8\% below its running peak), horizon (21 trading days), band exit.}
+    days have passed), drawdown (wealth more than 8\% below its peak since the last drawdown stop), horizon (21 trading days), band
+    exit, then a basket change at a timer pick.}
   \vnnoterow{Drawdown reset}{A drawdown re-plan resets the peak to the current wealth, so the stop fires once per
     fresh 8\% loss (88.5\% of decisions were drawdown re-plans without it).}
   \vnnoterow{A re-plan}{Solves the same allocation from the shares held, with that day's estimates. No trigger
@@ -56,9 +57,11 @@
 % Source of the first: the calendar-only reruns, results/calendar_baseline/calendar_vs_triggers.csv (real
 % prices) and synthetic_vs_triggers.csv (sell-offs).
 \note{\textbf{If asked whether the triggers beat a fixed schedule:}\par\medskip
-  We reran everything on a fixed 21-day schedule. Ending wealth is the same. The triggers take about a point off
-  the worst drawdown, on real prices and in simulated sell-offs. The protection relative to SPY comes from the
-  allocation, not from the timing.\par\bigskip
+  We reran everything on a fixed 21-day schedule. Ending wealth is not consistently higher with the triggers: on
+  real prices they raised it in 38 of 70 combinations with the hedge off and 26 of 70 with it on, and some
+  combinations moved by close to 0.2. The triggers take about a point off the worst drawdown, on real prices and
+  in simulated sell-offs. In the sell-offs the margin over SPY holds without the triggers, and part of it belongs
+  to the simulated market itself: the equal-weight universe also beat SPY there.\par\bigskip
   \textbf{If asked whether the forecast's drift and covariance are updated:}\par\medskip
   At every re-plan. Each one rebuilds $\mu_g$ and $\Sigma_g$ from that day's α, β, $\tilde g_M$ and $\sigma_M$ and
   the last 126 days of residuals, and holds them constant over the 21 forecast days. Between re-plans the estimates

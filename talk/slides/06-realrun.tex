@@ -60,8 +60,9 @@
 % crash (burst stress) higher in 34 of 70, median −0.001; typical lower in 59 of 70, median −0.006.
 \note{\footnotesize
   \vnnotehead{Hedge on and off (open and filled dots)}
-  \vnnoterow{Say}{``With the hedge on, we put an upper bound on the portfolio's β, and the bound responds to the
-    market. The optimizer decides how to get under it.''}
+  \vnnoterow{Say}{``With the hedge on, each re-plan puts an upper bound on the portfolio's β, set from the market
+    state. The optimizer decides how to get under it. Between re-plans we hold the book, so its β is not
+    controlled.''}
   \vnnoterow{Hedge on}{Adds $\beta^{\top} w \le \bar\beta$, $\bar\beta = \max(0,\, 1 - \xi_t)$, and a hedge pool. Hedge off has
     neither; everything else is the same.}
   \vnnoterow{The cap}{1 at $\xi = 0$, looser when bullish ($\xi < 0$), tighter when bearish, 0 at $\xi \ge 1$. Over
@@ -73,6 +74,6 @@
   \vnnoterow{Shorts}{Only 130/30 can short, and only names with $\gamma < 0$, held for their own utility term. A
     short of a positive-β name also lowers β, so the solver uses shorts before pool names, up to the 30\% cap.}
   \vnnoterow{On this slide}{Each weighting rule ran both ways. In a mostly rising 2025--26 the hedge usually cost a
-    little: lower in 50 of 70 pairs, by a median 0.033 of $W_0$. In the slow bear it helps (higher in 65 of 70); in
-    the crash it is a wash.}}
+    little: lower in 50 of 70 pairs, by a median 0.033 of $W_0$. In the steady decline it helps (higher in 65 of 70); in
+    the jump bursts it is a wash.}}
 }
