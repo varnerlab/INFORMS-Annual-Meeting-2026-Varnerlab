@@ -22,3 +22,11 @@ The user restarted the design instead of answering these questions. The approved
 ## 2026-10-25: drawdown peak reset adopted
 
 This supersedes the line above that the design keeps the trial's never-reset drawdown peak. With that peak, the drawdown trigger fired on every day the book sat more than 8% under its peak: 88.5% of all Tier 1 decisions. A Tier 1 trial run of the reset cut decisions per run from 158 to 27 (median), left max drawdown unchanged, and cut costs by about 14%. The user adopted it: each drawdown decision sets the peak back to current equity (`drawdown_reset = true` in `config/study.toml`). Every grid is rerun under the new rule.
+
+## 2026-11-04: test Bob's talk feedback here or in a follow-up paper?
+
+Bob (INFORMS 2026 talk and a follow-up email) said the portfolio should move toward a net short position as the
+market turns bearish. He also noted that it holds a possibly high-beta book until a trigger fires, and asked why we
+rebalance every 21 days. His questions, our assessment, the reply we sent and a draft test plan (E1–E4) are in
+`docs/2026-11-04-talk-feedback-bob.md`. Undecided: which tests go in a revision of this paper and which in a
+follow-up paper.
